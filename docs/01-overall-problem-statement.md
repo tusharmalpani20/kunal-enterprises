@@ -25,7 +25,7 @@ The high-level order flow is:
 1. Tally data is synced into a PostgreSQL database using the Tally connector.
 2. Required Tally-derived data is imported or synced into Frappe.
 3. Customer or sales employee logs in with WhatsApp OTP.
-4. User selects allowed item group/category/brand, item, godown stock, and quantity.
+4. User selects allowed Product Group, item, godown stock, and quantity.
 5. User confirms the order request.
 6. Frappe creates an order with a generated portal reference number.
 7. Frappe sends a WhatsApp confirmation with a PDF order summary.
@@ -37,12 +37,17 @@ The high-level order flow is:
 
 The agreed stack is:
 
-- Backend and portal: Frappe
+- Backend and portal: Frappe custom app
+- Frappe database: PostgreSQL
 - Mobile app: Expo / React Native
 - Tally connector: `tally-database-loader` with PostgreSQL
 - WhatsApp: Frappe CRM WhatsApp integration / direct WhatsApp Business Platform capabilities through Frappe
 
 Frappe should expose the business APIs used by the mobile app. The mobile app should not directly read the raw Tally connector database.
+
+ERPNext is not part of the current plan. Inventory, ordering, access control, and Tally sync records will be modelled as custom Frappe DocTypes based on this project's requirements.
+
+Mobile authentication is a custom WhatsApp OTP + JWT/session flow independent of Frappe Desk login. Internal portal users continue using Frappe authentication.
 
 ## Source Of Truth
 
@@ -76,6 +81,8 @@ Frappe is the source of truth for:
 - Reconciliation logs
 
 PostgreSQL connector database is the raw Tally mirror/read replica. It should not become the main application database.
+
+Frappe should also use PostgreSQL as its application database. The Frappe PostgreSQL database and the Tally connector PostgreSQL mirror should remain separate logical stores.
 
 ## Data Movement
 
@@ -113,11 +120,14 @@ Import only the application-facing data that the portal and mobile app require:
 - Units of measure
 - Customers / ledgers needed for ordering
 - Current stock snapshots
+- Current stock by item and godown, through a proper Tally stock snapshot export
 - Delivery challans required for reconciliation
 - Sales invoices required for reconciliation
 - Voucher lines required for matching against order lines
 
 Keep all raw and verbose Tally data in PostgreSQL. Frappe should store cleaned, indexed, app-ready records.
+
+Frappe imports/syncs required PostgreSQL mirror data into DocTypes. The mobile app and portal business rules read from Frappe, not directly from raw PostgreSQL tables.
 
 ## Visibility Filter Decision
 
@@ -132,19 +142,25 @@ Filter configured = only configured values are visible
 
 This applies to both customers and sales employees.
 
-Inclusive filters are preferred because they are safer and easier to explain. If a new item group/category is added in Tally, it will not accidentally become visible to a restricted user unless explicitly included.
+Inclusive filters are preferred because they are safer and easier to explain. If a new Product Group is added from Tally, it will not accidentally become visible to a restricted user unless explicitly included.
 
 ## Filter Dimensions
 
-Filters may be applied on:
+Initial filters apply on:
 
-- Stock group
-- Stock category
-- Item
-- Godown/branch, if needed later
-- Customer access, for sales employees
+- Product Group, backed by root Tally Stock Group
+- Customer assignment, for sales employees
 
-The initial implementation should keep the filter model flexible enough to support multiple dimensions, but the first ordering selector should be a single business concept.
+Stock category, specific item, and godown/branch filters are out of current scope unless added later.
+
+For sales employee orders, effective Product Group access is:
+
+```text
+sales employee Product Group access
+AND customer Product Group access
+```
+
+Blank Product Group access means unrestricted/all Product Groups for that side of the intersection.
 
 ## Brand / Group / Category Decision
 
@@ -156,14 +172,15 @@ The mobile flow needs one first-level selector. The options are:
 
 Tally does not appear to have a reliable native brand table. Because of this, the first-level selector should initially be mapped to Tally stock group or stock category.
 
-Recommended starting decision:
+Decision after inspecting demo Tally data:
 
-- Use Tally Stock Group as the first-level selector.
-- In the UI, this can be labelled as "Brand" if the business uses groups as brands.
-- If actual Tally data shows that Stock Category maps better to brand, switch the selector to Stock Category before implementation.
-- If neither group nor category is clean, create a portal-side Brand Mapping DocType that maps one brand to many groups/categories/items.
+- Use root Tally Stock Group as the first-level selector.
+- In the UI, label this as "Product Group".
+- Immediate stock group is too granular for the first selector.
+- Stock category is not suitable as the primary selector because many items do not have a category.
+- If later the business wants a cleaner commercial brand layer, create a portal-side Brand Mapping DocType that maps one brand to many root groups/groups/categories/items.
 
-This must be validated against real Tally master data before final implementation.
+A root stock group is a stock group row whose parent is blank. The item stores its immediate stock group, and the application derives the root group by walking up the stock group parent hierarchy.
 
 ## Order Placement Principle
 
@@ -173,21 +190,27 @@ Placing an order should not reduce stock in Frappe or Tally. Actual stock moveme
 
 The app should show the latest synced stock. Real-time stock calls to Tally are not required for the initial implementation.
 
+For godown-wise stock, the system should not rely on reconstructing stock from voucher transactions because Delivery Challan and Sales voucher rows can duplicate the same physical movement. The preferred approach is to enhance `tally-database-loader` to export a Tally-computed stock snapshot by item and godown.
+
+Pricing, rates, discounts, tax, and order value are out of scope for Frappe and the mobile app in v1. Orders are quantity-only requests.
+
 ## Order Status Principle
 
 Frappe order status is updated through reconciliation with Tally.
 
 The expected statuses are:
 
-- Draft, if needed before confirmation
 - Placed
 - Processing
 - Partially Processed
 - Completed
-- Cancelled, if needed
+- Partially Closed
+- Cancelled
 - Manual Review, when automatic matching fails
 
 Automatic status updates should happen only when the Tally voucher can be matched confidently to the portal order reference and item lines. If the match is unclear, the order should go to manual review instead of making a risky update.
+
+Confirmed orders are locked for mobile users. Customers and sales employees cannot edit or cancel after confirmation. Owner/admin users can cancel or partially close an order when operationally required.
 
 ## WhatsApp Decision
 
@@ -199,7 +222,8 @@ WhatsApp will be used for:
 - Order confirmation
 - Thank-you message
 - PDF order summary attachment
-- Potential future order status updates
+
+WhatsApp status updates are out of scope for v1. Order Placed is the only order lifecycle event sent over WhatsApp.
 
 Before implementation, verify the exact capabilities and constraints of the Frappe WhatsApp integration being used:
 
@@ -231,6 +255,7 @@ The biggest risks are:
 
 - Tally group/category structure may not match the desired "brand" experience.
 - Stock may be stale because latest synced stock is accepted instead of real-time Tally stock.
+- Godown-wise stock may be wrong if derived naively from voucher transactions because Sales and Delivery Challan rows can duplicate the same movement.
 - Branch users may create Tally vouchers without the correct portal reference number.
 - Tally voucher lines may not match portal order lines cleanly.
 - WhatsApp template approval and document message behavior may affect OTP/order confirmation design.
@@ -238,12 +263,12 @@ The biggest risks are:
 
 ## Open Decisions
 
-The following must be finalized after seeing real Tally data:
+The following must still be finalized or validated:
 
-- Whether first-level item selection uses Stock Group or Stock Category.
-- Whether a portal-side Brand Mapping table is needed.
-- Exact customer/ledger mapping between mobile users and Tally ledgers.
+- Whether a portal-side Brand Mapping table is needed later.
 - Exact branch-to-godown mapping.
-- Exact DC/Sales Invoice matching rules.
-- Whether branch employees can update order status manually or only through reconciliation.
-- Whether cancellation is allowed after order placement.
+- Whether Seetarambagh is a missing godown, a branch, a voucher naming convention, or mapped to another godown.
+- Exact debtor/customer ledger filter for importing Tally customer aliases from `mst_ledger`.
+- Proof test that Tally Reference Number syncs into `trn_voucher.reference_number`.
+- Exact stock-by-godown export implementation in `tally-database-loader`.
+- Connector performance with 5-minute incremental master, stock, and voucher sync.
