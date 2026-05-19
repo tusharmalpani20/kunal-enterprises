@@ -39,8 +39,12 @@ The agreed stack is:
 
 - Backend and portal: Frappe custom app
 - Frappe database: PostgreSQL
-- Mobile app: Expo / React Native
-- Tally connector: `tally-database-loader` with PostgreSQL
+  - "frappe": "15.103.3",	"frappe_whatsapp": "1.0.12",
+  - install guide for frappe https://docs.frappe.io/framework/user/en/installation#macos
+- Mobile app: Expo / React Native 
+  - ~ react-native-reusables for components
+- Tally connector: `tally-database-loader` with PostgreSQL 
+  - ~ repo : https://github.com/amol909/tally-database-loader
 - WhatsApp: Frappe CRM WhatsApp integration / direct WhatsApp Business Platform capabilities through Frappe
 
 Frappe should expose the business APIs used by the mobile app. The mobile app should not directly read the raw Tally connector database.
