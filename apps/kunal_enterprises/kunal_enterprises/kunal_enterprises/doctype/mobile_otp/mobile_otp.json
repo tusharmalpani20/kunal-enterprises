@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:MOTP-{#####}",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "mobile_number",
+  "otp_code",
+  "purpose",
+  "otp_type",
+  "status",
+  "provider",
+  "provider_status",
+  "request_payload",
+  "pending_payload",
+  "provider_response",
+  "verified_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "mobile_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "otp_code",
+   "fieldtype": "Data",
+   "label": "OTP Code",
+   "reqd": 1
+  },
+  {
+   "default": "Customer Signup",
+   "fieldname": "purpose",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Purpose",
+   "options": "Customer Signup\nSales Employee Login",
+   "reqd": 1
+  },
+  {
+   "default": "Account Creation",
+   "fieldname": "otp_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "OTP Type",
+   "options": "Account Creation\nAccount Verification\nLogin",
+   "reqd": 1
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Open\nVerified\nExpired\nFailed",
+   "reqd": 1
+  },
+  {
+   "default": "frappe_whatsapp",
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider",
+   "read_only": 1
+  },
+  {
+   "default": "Queued",
+   "fieldname": "provider_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Provider Status",
+   "options": "Queued\nSent\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "request_payload",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Request Payload",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pending_payload",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Pending Payload",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_response",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Provider Response",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verified_at",
+   "fieldtype": "Datetime",
+   "label": "Verified At",
+   "read_only": 1
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Mobile OTP",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

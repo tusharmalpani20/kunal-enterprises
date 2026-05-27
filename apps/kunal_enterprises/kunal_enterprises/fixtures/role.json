@@ -1,0 +1,34 @@
+[
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "doctype": "Role",
+  "is_custom": 1,
+  "name": "Owner",
+  "role_name": "Owner"
+ },
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "doctype": "Role",
+  "is_custom": 1,
+  "name": "Admin",
+  "role_name": "Admin"
+ },
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "doctype": "Role",
+  "is_custom": 1,
+  "name": "Branch Manager",
+  "role_name": "Branch Manager"
+ },
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "doctype": "Role",
+  "is_custom": 1,
+  "name": "Branch Employee",
+  "role_name": "Branch Employee"
+ }
+]

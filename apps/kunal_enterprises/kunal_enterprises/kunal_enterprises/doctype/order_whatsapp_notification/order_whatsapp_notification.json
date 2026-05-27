@@ -1,0 +1,125 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:OWN-{#####}",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "order",
+  "recipient_type",
+  "recipient_customer",
+  "recipient_sales_employee",
+  "mobile_number",
+  "order_pdf",
+  "status",
+  "request_payload",
+  "provider_response",
+  "created_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "order",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Order",
+   "options": "Order",
+   "reqd": 1
+  },
+  {
+   "default": "Customer",
+   "fieldname": "recipient_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Recipient Type",
+   "options": "Customer\nSales Employee",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recipient_customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Recipient Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "recipient_sales_employee",
+   "fieldtype": "Link",
+   "label": "Recipient Sales Employee",
+   "options": "Sales Employee"
+  },
+  {
+   "fieldname": "mobile_number",
+   "fieldtype": "Data",
+   "label": "Mobile Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "order_pdf",
+   "fieldtype": "Link",
+   "label": "Order PDF",
+   "options": "Order PDF"
+  },
+  {
+   "default": "Queued",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Queued\nSent\nFailed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "request_payload",
+   "fieldtype": "Code",
+   "label": "Request Payload",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "provider_response",
+   "fieldtype": "Code",
+   "label": "Provider Response",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "created_at",
+   "fieldtype": "Datetime",
+   "label": "Created At",
+   "reqd": 1
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Order WhatsApp Notification",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Owner"
+  },
+  {
+   "read": 1,
+   "role": "Admin"
+  }
+ ],
+ "sort_field": "created_at",
+ "sort_order": "DESC",
+ "states": []
+}

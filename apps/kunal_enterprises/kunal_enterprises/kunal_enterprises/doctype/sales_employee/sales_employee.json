@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:SE-{#####}",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "sales_employee_name",
+  "mobile_number",
+  "email_id",
+  "employee_code",
+  "status",
+  "mobile_verified",
+  "mobile_verified_at",
+  "assigned_customers",
+  "product_group_access"
+ ],
+ "fields": [
+  {
+   "fieldname": "sales_employee_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Sales Employee Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mobile_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile Number",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email ID",
+   "options": "Email"
+  },
+  {
+   "fieldname": "employee_code",
+   "fieldtype": "Data",
+   "label": "Employee Code",
+   "unique": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Active\nDisabled",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "mobile_verified",
+   "fieldtype": "Check",
+   "label": "Mobile Verified"
+  },
+  {
+   "fieldname": "mobile_verified_at",
+   "fieldtype": "Datetime",
+   "label": "Mobile Verified At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_customers",
+   "fieldtype": "Table",
+   "label": "Assigned Customers",
+   "options": "Sales Employee Assigned Customer"
+  },
+  {
+   "fieldname": "product_group_access",
+   "fieldtype": "Table",
+   "label": "Product Group Access",
+   "options": "Sales Employee Product Group Access"
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Sales Employee",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Owner",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

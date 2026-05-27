@@ -1,0 +1,179 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:CUS-{#####}",
+ "creation": "2026-05-19 00:00:00",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer_name",
+  "business_legal_name",
+  "gstin",
+  "mobile_number",
+  "email_id",
+  "date_of_birth",
+  "date_of_anniversary",
+  "access_section",
+  "status",
+  "mobile_verified",
+  "mobile_verified_at",
+  "admin_approved",
+  "client_code",
+  "customer_app_access",
+  "product_group_access"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "business_legal_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Business Legal Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "gstin",
+   "fieldtype": "Data",
+   "label": "GSTIN",
+   "unique": 1
+  },
+  {
+   "fieldname": "mobile_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile Number",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email ID",
+   "options": "Email",
+   "unique": 1
+  },
+  {
+   "fieldname": "date_of_birth",
+   "fieldtype": "Date",
+   "label": "Date Of Birth"
+  },
+  {
+   "fieldname": "date_of_anniversary",
+   "fieldtype": "Date",
+   "label": "Date Of Anniversary"
+  },
+  {
+   "fieldname": "access_section",
+   "fieldtype": "Section Break",
+   "label": "Access"
+  },
+  {
+   "default": "Pending OTP",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending OTP\nPending Admin Review\nActive\nRejected\nDisabled",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "mobile_verified",
+   "fieldtype": "Check",
+   "label": "Mobile Verified"
+  },
+  {
+   "fieldname": "mobile_verified_at",
+   "fieldtype": "Datetime",
+   "label": "Mobile Verified At",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "admin_approved",
+   "fieldtype": "Check",
+   "label": "Admin Approved"
+  },
+  {
+   "fieldname": "client_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Client Code",
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_app_access",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Customer App Access",
+   "read_only": 1
+  },
+  {
+   "fieldname": "product_group_access",
+   "fieldtype": "Table",
+   "label": "Product Group Access",
+   "options": "Customer Product Group Access"
+  }
+ ],
+ "links": [],
+ "modified": "2026-05-27 16:56:27.358361",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Customer",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Owner",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "customer_name,business_legal_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "business_legal_name",
+ "track_changes": 1,
+ "track_seen": 1
+}

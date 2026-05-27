@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:{portal_branch}-{godown}",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "portal_branch",
+  "godown",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "portal_branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Portal Branch",
+   "options": "Portal Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "godown",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Godown",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Branch Godown Mapping",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Owner"
+  },
+  {
+   "read": 1,
+   "role": "Admin"
+  },
+  {
+   "read": 1,
+   "role": "Branch Manager"
+  },
+  {
+   "read": 1,
+   "role": "Branch Employee"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

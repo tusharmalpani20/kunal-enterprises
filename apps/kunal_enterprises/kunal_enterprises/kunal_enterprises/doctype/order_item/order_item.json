@@ -1,0 +1,85 @@
+{
+ "actions": [],
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Other",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item",
+  "item_name_at_order",
+  "root_stock_group",
+  "unit",
+  "requested_quantity",
+  "fulfilled_quantity",
+  "pending_quantity",
+  "status"
+ ],
+ "fields": [
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Tally Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_name_at_order",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name At Order",
+   "reqd": 1
+  },
+  {
+   "fieldname": "root_stock_group",
+   "fieldtype": "Link",
+   "label": "Root Stock Group",
+   "options": "Tally Stock Group"
+  },
+  {
+   "fieldname": "unit",
+   "fieldtype": "Data",
+   "label": "Unit"
+  },
+  {
+   "fieldname": "requested_quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Requested Quantity",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "fulfilled_quantity",
+   "fieldtype": "Float",
+   "label": "Fulfilled Quantity"
+  },
+  {
+   "fieldname": "pending_quantity",
+   "fieldtype": "Float",
+   "label": "Pending Quantity",
+   "reqd": 1
+  },
+  {
+   "default": "Placed",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Placed\nPartially Processed\nCompleted\nPartially Closed\nCancelled",
+   "reqd": 1
+  }
+ ],
+ "idx": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Order Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

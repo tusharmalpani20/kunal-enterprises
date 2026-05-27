@@ -1,0 +1,76 @@
+{
+ "actions": [],
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Other",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item",
+  "godown",
+  "requested_quantity",
+  "stock_shown_at_order_time",
+  "stock_snapshot_at",
+  "fulfilled_quantity",
+  "pending_quantity"
+ ],
+ "fields": [
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Tally Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "godown",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Godown",
+   "reqd": 1
+  },
+  {
+   "fieldname": "requested_quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Requested Quantity",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "stock_shown_at_order_time",
+   "fieldtype": "Float",
+   "label": "Stock Shown At Order Time"
+  },
+  {
+   "fieldname": "stock_snapshot_at",
+   "fieldtype": "Datetime",
+   "label": "Stock Snapshot At"
+  },
+  {
+   "default": "0",
+   "fieldname": "fulfilled_quantity",
+   "fieldtype": "Float",
+   "label": "Fulfilled Quantity"
+  },
+  {
+   "fieldname": "pending_quantity",
+   "fieldtype": "Float",
+   "label": "Pending Quantity",
+   "reqd": 1
+  }
+ ],
+ "idx": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Order Godown Allocation",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

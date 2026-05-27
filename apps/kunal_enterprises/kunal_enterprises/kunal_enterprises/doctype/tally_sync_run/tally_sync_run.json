@@ -1,0 +1,106 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:TSR-{#####}",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "sync_type",
+  "status",
+  "started_at",
+  "finished_at",
+  "records_seen",
+  "records_processed",
+  "errors_count",
+  "source_table"
+ ],
+ "fields": [
+  {
+   "fieldname": "sync_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Sync Type",
+   "options": "Masters\nStock\nVouchers\nReconciliation",
+   "reqd": 1
+  },
+  {
+   "default": "Running",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Running\nCompleted\nCompleted With Errors\nFailed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Started At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At"
+  },
+  {
+   "default": "0",
+   "fieldname": "records_seen",
+   "fieldtype": "Int",
+   "label": "Records Seen"
+  },
+  {
+   "default": "0",
+   "fieldname": "records_processed",
+   "fieldtype": "Int",
+   "label": "Records Processed"
+  },
+  {
+   "default": "0",
+   "fieldname": "errors_count",
+   "fieldtype": "Int",
+   "label": "Errors Count"
+  },
+  {
+   "fieldname": "source_table",
+   "fieldtype": "Data",
+   "label": "Source Table"
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Tally Sync Run",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Owner"
+  },
+  {
+   "read": 1,
+   "role": "Admin"
+  }
+ ],
+ "sort_field": "started_at",
+ "sort_order": "DESC",
+ "states": []
+}

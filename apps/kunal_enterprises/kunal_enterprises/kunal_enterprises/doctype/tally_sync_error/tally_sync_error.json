@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:TSE-{#####}",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "sync_run",
+  "source_table",
+  "source_key",
+  "error_message",
+  "raw_payload",
+  "detected_at",
+  "resolved",
+  "resolved_at",
+  "resolution_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "sync_run",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sync Run",
+   "options": "Tally Sync Run",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_table",
+   "fieldtype": "Data",
+   "label": "Source Table"
+  },
+  {
+   "fieldname": "source_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source Key"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Error Message",
+   "reqd": 1
+  },
+  {
+   "fieldname": "raw_payload",
+   "fieldtype": "Code",
+   "label": "Raw Payload",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "detected_at",
+   "fieldtype": "Datetime",
+   "label": "Detected At",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "resolved",
+   "fieldtype": "Check",
+   "label": "Resolved"
+  },
+  {
+   "fieldname": "resolved_at",
+   "fieldtype": "Datetime",
+   "label": "Resolved At"
+  },
+  {
+   "fieldname": "resolution_note",
+   "fieldtype": "Small Text",
+   "label": "Resolution Note"
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Tally Sync Error",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Owner"
+  },
+  {
+   "read": 1,
+   "role": "Admin"
+  }
+ ],
+ "sort_field": "detected_at",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,128 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:group_name",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "group_name",
+  "tally_guid",
+  "parent_stock_group",
+  "root_stock_group",
+  "is_root",
+  "depth",
+  "full_path",
+  "is_active",
+  "last_synced_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "group_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Group Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "tally_guid",
+   "fieldtype": "Data",
+   "label": "Tally GUID",
+   "unique": 1
+  },
+  {
+   "fieldname": "parent_stock_group",
+   "fieldtype": "Link",
+   "label": "Parent Stock Group",
+   "options": "Tally Stock Group"
+  },
+  {
+   "fieldname": "root_stock_group",
+   "fieldtype": "Link",
+   "label": "Root Stock Group",
+   "options": "Tally Stock Group"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_root",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Root"
+  },
+  {
+   "default": "0",
+   "fieldname": "depth",
+   "fieldtype": "Int",
+   "label": "Depth"
+  },
+  {
+   "fieldname": "full_path",
+   "fieldtype": "Small Text",
+   "label": "Full Path"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "last_synced_at",
+   "fieldtype": "Datetime",
+   "label": "Last Synced At",
+   "read_only": 1
+  }
+ ],
+ "idx": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Kunal Enterprises",
+ "name": "Tally Stock Group",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Owner",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
