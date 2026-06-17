@@ -835,6 +835,7 @@ class TestSalesEmployeeAuth(FrappeTestCase):
 				"sales_employee_name": "Send OTP Employee",
 				"mobile_number": "9000000022",
 				"status": "Active",
+				"mobile_verified": 1,
 			}
 		).insert()
 
@@ -842,6 +843,8 @@ class TestSalesEmployeeAuth(FrappeTestCase):
 
 		self.assertTrue(response["success"])
 		self.assertEqual(response["data"]["purpose"], "Sales Employee Login")
+		self.assertEqual(response["data"]["otp_type"], "Login")
+		self.assertFalse(response["data"]["mobile_verification_required"])
 		self.assertEqual(response["data"]["cooldown_seconds"], 45)
 		self.assertTrue(
 			frappe.db.exists(
@@ -849,6 +852,36 @@ class TestSalesEmployeeAuth(FrappeTestCase):
 				{
 					"mobile_number": "9000000022",
 					"purpose": "Sales Employee Login",
+					"otp_type": "Login",
+					"status": "Open",
+				},
+			)
+		)
+
+	def test_send_sales_employee_otp_requires_mobile_verification_for_first_login(self):
+		frappe.get_doc(
+			{
+				"doctype": "Sales Employee",
+				"sales_employee_name": "First Login Verification Employee",
+				"mobile_number": "9000000024",
+				"status": "Active",
+				"mobile_verified": 0,
+			}
+		).insert()
+
+		response = send_otp("9000000024", "Sales Employee")
+
+		self.assertTrue(response["success"])
+		self.assertEqual(response["data"]["purpose"], "Sales Employee Login")
+		self.assertEqual(response["data"]["otp_type"], "Account Verification")
+		self.assertTrue(response["data"]["mobile_verification_required"])
+		self.assertTrue(
+			frappe.db.exists(
+				"Mobile OTP",
+				{
+					"mobile_number": "9000000024",
+					"purpose": "Sales Employee Login",
+					"otp_type": "Account Verification",
 					"status": "Open",
 				},
 			)
@@ -897,6 +930,8 @@ class TestSalesEmployeeAuth(FrappeTestCase):
 		self.assertTrue(active_response["success"])
 		self.assertEqual(active_response["data"]["sales_employee"], active_employee.name)
 		self.assertEqual(active_response["data"]["identity_type"], "Sales Employee")
+		self.assertTrue(active_response["data"]["mobile_verified"])
+		self.assertTrue(active_response["data"]["verification_completed"])
 		self.assertEqual(active_session["data"]["sales_employee"], active_employee.name)
 		self.assertFalse(disabled_response["success"])
 		self.assertIn("Disabled", disabled_response["error"]["message"])

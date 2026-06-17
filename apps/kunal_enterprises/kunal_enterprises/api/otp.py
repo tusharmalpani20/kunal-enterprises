@@ -201,6 +201,7 @@ def verify_sales_employee_otp(mobile_number, otp_code):
 			frappe.throw(_("Invalid or expired OTP Code"))
 
 		now = now_datetime()
+		was_mobile_verified = bool(sales_employee.mobile_verified)
 		sales_employee.mobile_verified = 1
 		sales_employee.mobile_verified_at = now
 		sales_employee.save(ignore_permissions=True)
@@ -208,6 +209,8 @@ def verify_sales_employee_otp(mobile_number, otp_code):
 		data = {
 			"sales_employee": sales_employee.name,
 			"status": sales_employee.status,
+			"mobile_verified": True,
+			"verification_completed": not was_mobile_verified,
 		}
 		data.update(issue_token("Sales Employee", sales_employee.name))
 
@@ -222,11 +225,13 @@ def verify_sales_employee_otp(mobile_number, otp_code):
 
 
 def _otp_response(mobile_number, identity_type, purpose, otp_type=None):
+	otp_type = otp_type or _otp_type_for_identity(mobile_number, identity_type, purpose)
 	return {
 		"mobile_number": mobile_number,
 		"identity_type": identity_type,
 		"purpose": purpose,
-		"otp_type": otp_type or _otp_type_for_identity(mobile_number, identity_type, purpose),
+		"otp_type": otp_type,
+		"mobile_verification_required": otp_type == "Account Verification",
 		"cooldown_seconds": OTP_COOLDOWN_SECONDS,
 		"expires_in_seconds": OTP_EXPIRY_SECONDS,
 		"next_step": "verify_otp",
@@ -353,6 +358,9 @@ def _otp_type_for_purpose(purpose):
 
 def _otp_type_for_identity(mobile_number, identity_type, purpose):
 	if identity_type == "Sales Employee":
+		sales_employee_name = frappe.db.exists("Sales Employee", {"mobile_number": mobile_number})
+		if sales_employee_name and not frappe.db.get_value("Sales Employee", sales_employee_name, "mobile_verified"):
+			return "Account Verification"
 		return "Login"
 	if identity_type == "Customer" and frappe.db.exists("Customer", {"mobile_number": mobile_number}):
 		return "Account Verification"

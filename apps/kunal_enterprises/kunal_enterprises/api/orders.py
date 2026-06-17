@@ -213,6 +213,7 @@ def _serialize_order_summary(order):
 		"portal_reference_number": order.portal_reference_number,
 		"order_source": order.order_source,
 		"customer": order.customer,
+		"customer_name": frappe.db.get_value("Customer", order.customer, "customer_name"),
 		"sales_employee": order.sales_employee,
 		"status": order.status,
 		"display_status": _display_status(order.status),
