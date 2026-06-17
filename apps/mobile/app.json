@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Kunal Enterprises",
+    "slug": "kunal-enterprises-mobile",
+    "scheme": "kunalenterprises",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amol909.kunal-enterprises-mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f7f3ea"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "experiments": {
+      "reactCompiler": true
+    },
+    "plugins": [
+      "expo-router",
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}
