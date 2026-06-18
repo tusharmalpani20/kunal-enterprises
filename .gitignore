@@ -1,0 +1,10 @@
+.DS_Store
+.venv-bench/
+frappe-bench/
+ke-frappe-bench/
+__pycache__/
+*.py[cod]
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/.metro/

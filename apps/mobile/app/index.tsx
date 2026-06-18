@@ -433,11 +433,11 @@ export default function CustomerOrderScreen() {
     const payload =
       mode === 'Sales Employee'
         ? buildSalesEmployeeOrderPayload({
-            salesEmployee: activeSalesEmployeeIdentity(),
-            customer: activeCustomer(),
-            note: salesNote,
-            allocations: cart,
-          })
+          salesEmployee: activeSalesEmployeeIdentity(),
+          customer: activeCustomer(),
+          note: salesNote,
+          allocations: cart,
+        })
         : buildCustomerOrderPayload({ customer: activeCustomerIdentity(), allocations: cart });
     const stockPreparation = await prepareStockReviewBeforeSubmit({
       cart,
@@ -799,7 +799,7 @@ export default function CustomerOrderScreen() {
                   : 'Sign in to order'}
             </Text>
             {step === 'pending' && (
-              <Text style={styles.authSubtitle}>Ordering unlocks after approval and Client Code mapping in Frappe.</Text>
+              <Text style={styles.authSubtitle}>Ordering unlocks after approval.</Text>
             )}
           </View>
         ) : (
@@ -808,7 +808,7 @@ export default function CustomerOrderScreen() {
               <View style={styles.appHeaderText}>
                 <Text style={styles.kicker}>{mode === 'Customer' ? 'Customer order' : 'Sales employee order'}</Text>
                 <Text style={styles.title}>Kunal Enterprises</Text>
-                <Text style={styles.subtitle}>{orderHeaderSubtitle({ mode, selectedCustomer })}</Text>
+                {/* <Text style={styles.subtitle}>{orderHeaderSubtitle({ mode, selectedCustomer })}</Text> */}
               </View>
               {appSection === 'profile' && (
                 <Pressable style={styles.iconOnlyButton} onPress={revokeAndLogout}>
@@ -1139,8 +1139,8 @@ export default function CustomerOrderScreen() {
             )}
             {cart.map((row) => (
               <View key={`${row.item}:${row.godown}`} style={styles.summaryLine}>
-                <View>
-                  <Text style={styles.rowTitle}>{row.itemName}</Text>
+                <View style={styles.summaryItemText}>
+                  <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{row.itemName}</Text>
                   <Text style={styles.rowDetail}>{row.godown}</Text>
                 </View>
                 <View style={styles.cartControls}>
@@ -1942,8 +1942,17 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e6e6e6',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
+  },
+  summaryItemText: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: 2,
+  },
+  summaryItemTitle: {
+    lineHeight: 20,
+    flexWrap: 'wrap',
   },
   contextBlock: {
     gap: 10,
@@ -1959,8 +1968,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cartControls: {
+    width: 154,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 6,
   },
   iconButton: {
