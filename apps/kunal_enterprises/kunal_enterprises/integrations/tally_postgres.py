@@ -13,7 +13,7 @@ from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_m
 
 
 DEFAULT_SCHEMA = "public"
-STOCK_SNAPSHOT_TABLE = "rpt_stock_godown_balance"
+STOCK_SNAPSHOT_TABLE = "stock_godown_summary"
 
 
 def import_all(voucher_limit=None, run_reconciliation_after=True):
@@ -61,14 +61,13 @@ def ensure_stock_snapshot_table():
 				sql.SQL(
 					"""
 					create table if not exists {} (
-						item varchar(1024),
-						godown varchar(1024),
-						batch_name varchar(1024),
-						quantity decimal(15,4),
-						rate decimal(15,4),
-						value decimal(17,2),
-						uom varchar(32),
-						as_on_date date
+						item text,
+						godown text,
+						closing_qty numeric,
+						uom text,
+						closing_rate numeric,
+						closing_value numeric,
+						imported_at timestamp with time zone
 					)
 					"""
 				).format(_table(STOCK_SNAPSHOT_TABLE))
@@ -134,7 +133,7 @@ def seed_dev_stock_snapshots(
 					)
 			insert_query = sql.SQL(
 				"""
-				insert into {} (item, godown, batch_name, quantity, rate, value, uom, as_on_date)
+				insert into {} (item, godown, closing_qty, uom, closing_rate, closing_value, imported_at)
 				values %s
 				"""
 			).format(_table(STOCK_SNAPSHOT_TABLE)).as_string(connection)
@@ -146,11 +145,10 @@ def seed_dev_stock_snapshots(
 						(
 							row["item"],
 							row["godown"],
-							"DEV-SEED",
 							row["quantity"],
-							0,
-							0,
 							row["uom"],
+							0,
+							0,
 							row["as_on_date"],
 						)
 						for row in batch
@@ -446,9 +444,9 @@ def _fetch_stock_snapshots(connection):
 				select
 					item,
 					godown,
-					sum(coalesce(quantity, 0)) as quantity,
+					sum(coalesce(closing_qty, 0)) as quantity,
 					max(uom) as uom,
-					max(as_on_date) as as_on_date
+					max(imported_at)::date as as_on_date
 				from {}
 				where coalesce(item, '') != '' and coalesce(godown, '') != ''
 				group by item, godown
