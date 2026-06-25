@@ -5,7 +5,7 @@ import { Search } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
 import { ItemSearchRow, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/orderScreen';
+import { styles } from '../../src/styles/appStyles';
 import { cartQuantityForItem } from '../../src/utils/orderFormatting';
 import type { TallyItem } from '../../src/types';
 

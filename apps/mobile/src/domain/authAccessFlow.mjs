@@ -84,6 +84,7 @@ export function sessionFromOtpResponse(response) {
     accessToken: response.access_token,
     identityType: response.identity_type,
     identity: response.identity,
+    displayName: response.customer_name || '',
   };
 }
 
@@ -95,6 +96,7 @@ export function salesEmployeeSessionFromOtpResponse(response) {
     accessToken: response.access_token,
     identityType: response.identity_type,
     identity: response.identity,
+    displayName: response.sales_employee_name || '',
   };
 }
 

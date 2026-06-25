@@ -140,6 +140,7 @@ const otpResponses = {
     token: 'MAT-MOCK-001',
     identity_type: 'Customer',
     identity: '9000000003',
+    customer_name: 'Asha Textiles',
   },
 };
 
@@ -151,6 +152,7 @@ const salesEmployeeOtpResponses = {
     token: 'MAT-MOCK-SE-001',
     identity_type: 'Sales Employee',
     identity: 'SE-001',
+    sales_employee_name: 'Ravi Sales',
   },
   '9000000102': {
     sales_employee: 'SE-002',

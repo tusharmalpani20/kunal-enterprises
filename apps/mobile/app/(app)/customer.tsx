@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
 import { DraftCartRow, RowButton, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/orderScreen';
+import { styles } from '../../src/styles/appStyles';
 
 export default function CustomerScreen() {
   const {

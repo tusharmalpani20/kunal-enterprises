@@ -3,7 +3,7 @@ import { Modal, Platform, Pressable, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useOrderFlow } from '../flow/OrderFlowProvider';
-import { styles } from '../styles/orderScreen';
+import { styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
 
 export function GlobalDateModal() {

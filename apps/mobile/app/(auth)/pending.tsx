@@ -5,7 +5,7 @@ import { Check } from 'lucide-react-native';
 import { AuthShell } from '../../src/components/AuthShell';
 import { Workspace } from '../../src/components/orderUi';
 import { pendingAccessMessage } from '../../src/domain/screenCopy.mjs';
-import { styles } from '../../src/styles/orderScreen';
+import { styles } from '../../src/styles/appStyles';
 
 export default function PendingScreen() {
   return (

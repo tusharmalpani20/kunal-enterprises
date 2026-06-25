@@ -723,6 +723,7 @@ function useOrderFlowState() {
   }
 
   const isAuthSurface = isAuthSurfaceStep(step);
+  const greetingName = (session?.displayName || '').trim().split(/\s+/)[0] || '';
   const appSection = appSectionForStep(step);
   const isOrderSection = appSection === 'order';
   const showCartControls = computeShowCartControls({ mode, step });
@@ -838,6 +839,7 @@ function useOrderFlowState() {
     renderedItems,
     resend,
     isAuthSurface,
+    greetingName,
     appSection,
     isOrderSection,
     showCartControls,

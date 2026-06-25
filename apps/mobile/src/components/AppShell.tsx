@@ -4,7 +4,7 @@ import { History, LogOut, ShoppingBag, ShoppingCart, UserRound } from 'lucide-re
 
 import { requestBanner } from '../domain/sharedStateFlow.mjs';
 import { useOrderFlow } from '../flow/OrderFlowProvider';
-import { styles } from '../styles/orderScreen';
+import { styles } from '../styles/appStyles';
 import { godownStockDetailForSelection } from '../utils/orderFormatting';
 import { RowButton, TopLevelTab } from './orderUi';
 
@@ -12,6 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const {
     mode,
     totals,
+    greetingName,
     appSection,
     showCartControls,
     showFloatingCartBar,
@@ -43,8 +44,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <View style={styles.appHeader}>
           <View style={styles.appHeaderText}>
-            <Text style={styles.kicker}>{mode === 'Customer' ? 'Customer order' : 'Sales employee order'}</Text>
-            <Text style={styles.title}>Kunal Enterprises</Text>
+            <Text style={styles.kicker}>Kunal Enterprises</Text>
+            <Text style={styles.title}>{greetingName ? `Hi, ${greetingName}` : 'Welcome'}</Text>
           </View>
           {appSection === 'profile' && (
             <Pressable style={styles.iconOnlyButton} onPress={revokeAndLogout}>
@@ -57,54 +58,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <TopLevelTab
             label="Order"
             active={appSection === 'order'}
-            icon={<ShoppingBag size={16} color={appSection === 'order' ? '#ffffff' : '#111111'} />}
+            icon={<ShoppingBag size={16} color={appSection === 'order' ? '#FFAF00' : '#111111'} />}
             onPress={showOrder}
           />
           <TopLevelTab
             label="History"
             active={appSection === 'history'}
-            icon={<History size={16} color={appSection === 'history' ? '#ffffff' : '#111111'} />}
+            icon={<History size={16} color={appSection === 'history' ? '#FFAF00' : '#111111'} />}
             onPress={showHistory}
           />
           <TopLevelTab
             label="Profile"
             active={appSection === 'profile'}
-            icon={<UserRound size={16} color={appSection === 'profile' ? '#ffffff' : '#111111'} />}
+            icon={<UserRound size={16} color={appSection === 'profile' ? '#FFAF00' : '#111111'} />}
             onPress={showProfile}
           />
         </View>
 
-        {showCartControls && (
-          <View style={styles.statusStrip}>
-            <View>
-              <Text style={styles.metricLabel}>Cart quantity</Text>
-              <Text style={styles.metric}>{totals.totalQuantity}</Text>
-            </View>
-            <View>
-              <Text style={styles.metricLabel}>Rows</Text>
-              <Text style={styles.metric}>{totals.rowCount}</Text>
-            </View>
-          </View>
-        )}
-        {showCartControls && (
+        {showCartControls && mode === 'Sales Employee' && selectedCustomer && (
           <View style={styles.actionRow}>
-            {mode === 'Sales Employee' && selectedCustomer && (
-              <Pressable style={styles.secondaryAction} onPress={switchCustomer}>
-                <UserRound size={16} color="#111111" />
-                <Text style={styles.secondaryActionText}>Switch customer</Text>
-              </Pressable>
-            )}
-            <Pressable
-              style={[styles.secondaryAction, totals.rowCount === 0 && styles.disabledAction]}
-              disabled={totals.rowCount === 0}
-              onPress={() => setStep('summary')}
-            >
-              <ShoppingCart size={16} color={totals.rowCount === 0 ? '#8a8a8a' : '#111111'} />
-              <Text style={[styles.secondaryActionText, totals.rowCount === 0 && styles.disabledActionText]}>
-                {totals.rowCount === 0 ? 'Cart is empty' : 'Review order'}
-              </Text>
+            <Pressable style={styles.secondaryAction} onPress={switchCustomer}>
+              <UserRound size={16} color="#111111" />
+              <Text style={styles.secondaryActionText}>Switch customer</Text>
             </Pressable>
           </View>
+        )}
+
+        {showCartControls && totals.rowCount === 0 && (
+          <Text style={styles.cartHint}>
+            Search for an item below and tap Add to start building this order.
+          </Text>
         )}
 
         {children}
@@ -126,11 +109,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Pressable style={styles.modalScrim} onPress={() => setGodownSelectorOpen(false)} />
           <View style={styles.bottomSheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.workspaceTitle}>{selectedItem?.item_name || 'Select godown'}</Text>
-            <Text style={styles.rowDetail}>{selectedItem?.root_stock_group} · {selectedItem?.uom}</Text>
-            <Text style={styles.fieldLabel}>Quantity</Text>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.kicker}>Add to order</Text>
+              <Text style={styles.workspaceTitle}>{selectedItem?.item_name || 'Select godown'}</Text>
+              <Text style={styles.rowDetail}>{selectedItem?.root_stock_group} · {selectedItem?.uom}</Text>
+            </View>
+            <Text style={styles.fieldLabel}>Quantity to order</Text>
             <TextInput value={quantity} onChangeText={setQuantity} keyboardType="numeric" style={styles.input} />
-            <Text style={styles.fieldLabel}>Godown stock</Text>
+            <View style={styles.sheetSectionHeading}>
+              <Text style={styles.fieldLabel}>Choose godown to order from</Text>
+              <Text style={styles.helperText}>
+                Tap a godown to add {Number(quantity) > 0 ? quantity : 0} {selectedItem?.uom || 'units'} to your cart.
+              </Text>
+            </View>
             {stockRows.map((stock) => (
               <RowButton
                 key={stock.godown}
@@ -138,8 +129,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 detail={godownStockDetailForSelection(stock, quantity)}
                 onPress={() => addFromGodown(stock)}
                 tone={Number(quantity) > stock.quantity ? 'warn' : 'default'}
+                actionLabel="Add"
               />
             ))}
+            <View style={styles.sheetFooterSpace} />
           </View>
         </View>
       </Modal>

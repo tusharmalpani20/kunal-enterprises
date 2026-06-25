@@ -6,6 +6,14 @@ export const fonts = {
   semibold: 'Figtree_600SemiBold',
 };
 
+export const colors = {
+  primary: '#FFAF00',
+  onPrimary: '#111111', // black text/icons on amber surfaces
+  ink: '#111111', // primary text
+  surface: '#ffffff',
+  dark: '#111111', // large dark panels (status strip, cart bar)
+};
+
 export const styles = StyleSheet.create({
   shell: {
     flex: 1,
@@ -16,10 +24,21 @@ export const styles = StyleSheet.create({
     gap: 24,
   },
   authPage: {
-    minHeight: '100%',
-    justifyContent: 'center',
+    flexGrow: 1,
     paddingTop: 40,
     paddingBottom: 40,
+  },
+  authLogoWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingTop: 64,
+  },
+  authCenter: {
+    flex: 1,
+    justifyContent: 'center',
     gap: 34,
   },
   banner: {
@@ -47,10 +66,11 @@ export const styles = StyleSheet.create({
     alignSelf: 'center',
     gap: 10,
   },
-  brandMark: {
-    color: '#111111',
-    fontSize: 16,
-    fontFamily: fonts.semibold,
+  brandLogo: {
+    width: 210,
+    height: 60, // preserves the logo's ~3.5:1 aspect ratio
+    alignSelf: 'center',
+    marginBottom: 2,
   },
   authTitle: {
     color: '#111111',
@@ -96,13 +116,6 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     lineHeight: 22,
   },
-  statusStrip: {
-    backgroundColor: '#111111',
-    borderRadius: 8,
-    padding: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
   tabBar: {
     flexDirection: 'row',
     gap: 8,
@@ -122,8 +135,8 @@ export const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   tabButtonActive: {
-    backgroundColor: '#111111',
-    borderColor: '#111111',
+    backgroundColor: colors.dark,
+    borderColor: colors.dark,
   },
   tabButtonText: {
     color: '#111111',
@@ -131,7 +144,7 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   tabButtonTextActive: {
-    color: '#ffffff',
+    color: colors.primary,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -160,23 +173,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
-  },
-  metricLabel: {
-    color: '#b8b8b8',
-    fontSize: 11,
-    fontFamily: fonts.medium,
-    textTransform: 'uppercase',
-  },
-  metric: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontFamily: fonts.semibold,
-  },
-  metricSmall: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontFamily: fonts.medium,
-    marginTop: 7,
   },
   workspace: {
     gap: 12,
@@ -217,6 +213,22 @@ export const styles = StyleSheet.create({
     width: 22,
     alignItems: 'flex-end',
     justifyContent: 'center',
+  },
+  rowAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#111111',
+    backgroundColor: '#ffffff',
+  },
+  rowAddButtonText: {
+    color: '#111111',
+    fontSize: 13,
+    fontFamily: fonts.medium,
   },
   warningRow: {
     borderColor: '#f59e0b',
@@ -360,8 +372,8 @@ export const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   groupChipActive: {
-    borderColor: '#111111',
-    backgroundColor: '#111111',
+    borderColor: colors.dark,
+    backgroundColor: colors.dark,
   },
   groupChipText: {
     color: '#555555',
@@ -369,7 +381,7 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.regular,
   },
   groupChipTextActive: {
-    color: '#ffffff',
+    color: colors.primary,
   },
   itemRow: {
     borderWidth: 1,
@@ -390,13 +402,14 @@ export const styles = StyleSheet.create({
     minHeight: 36,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#111111',
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
   },
   itemAddPillActive: {
-    backgroundColor: '#111111',
+    backgroundColor: colors.dark,
+    borderColor: colors.dark,
   },
   itemAddPillText: {
     color: '#111111',
@@ -404,10 +417,16 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   itemAddPillTextActive: {
-    color: '#ffffff',
+    color: colors.primary,
   },
   helperText: {
     color: '#666666',
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    lineHeight: 19,
+  },
+  cartHint: {
+    color: '#777777',
     fontSize: 13,
     fontFamily: fonts.regular,
     lineHeight: 19,
@@ -470,7 +489,7 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
   },
   primaryAction: {
-    backgroundColor: '#111111',
+    backgroundColor: colors.dark,
     borderRadius: 8,
     padding: 15,
     minHeight: 54,
@@ -515,20 +534,14 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1,
   },
-  disabledAction: {
-    backgroundColor: '#f7f7f7',
-  },
-  disabledActionText: {
-    color: '#8a8a8a',
-  },
   actionRow: {
     flexDirection: 'row',
     gap: 10,
   },
   primaryActionText: {
-    color: '#ffffff',
+    color: colors.primary,
     fontSize: 15,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
   },
   textAction: {
     paddingVertical: 8,
@@ -562,7 +575,7 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   cartBarTitle: {
-    color: '#ffffff',
+    color: colors.primary,
     fontSize: 15,
     fontFamily: fonts.medium,
   },
@@ -591,11 +604,13 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
   },
   bottomSheet: {
-    maxHeight: '82%',
+    maxHeight: '88%',
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    padding: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
     gap: 12,
   },
   sheetHandle: {
@@ -604,6 +619,19 @@ export const styles = StyleSheet.create({
     height: 4,
     borderRadius: 999,
     backgroundColor: '#d8d8d8',
-    marginBottom: 2,
+    marginBottom: 8,
+  },
+  sheetHeader: {
+    gap: 4,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eeeeee',
+  },
+  sheetSectionHeading: {
+    gap: 4,
+    marginTop: 4,
+  },
+  sheetFooterSpace: {
+    height: 16,
   },
 });

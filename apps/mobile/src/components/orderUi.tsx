@@ -1,8 +1,8 @@
 import React from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 
-import { styles } from '../styles/orderScreen';
+import { styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
 import type { TallyItem } from '../types';
 
@@ -124,11 +124,13 @@ export function RowButton({
   detail,
   onPress,
   tone = 'default',
+  actionLabel,
 }: {
   title: string;
   detail: string;
   onPress: () => void;
   tone?: 'default' | 'warn';
+  actionLabel?: string;
 }) {
   return (
     <Pressable style={[styles.rowButton, tone === 'warn' && styles.warningRow]} onPress={onPress}>
@@ -136,9 +138,16 @@ export function RowButton({
         <Text style={[styles.rowTitle, tone === 'warn' && styles.warningTitle]}>{title}</Text>
         <Text style={[styles.rowDetail, tone === 'warn' && styles.warningDetail]}>{detail}</Text>
       </View>
-      <View style={styles.rowChevron}>
-        <ChevronRight size={18} color={tone === 'warn' ? '#c2410c' : '#111111'} />
-      </View>
+      {actionLabel ? (
+        <View style={styles.rowAddButton}>
+          <Plus size={14} color={tone === 'warn' ? '#c2410c' : '#111111'} />
+          <Text style={[styles.rowAddButtonText, tone === 'warn' && styles.warningTitle]}>{actionLabel}</Text>
+        </View>
+      ) : (
+        <View style={styles.rowChevron}>
+          <ChevronRight size={18} color={tone === 'warn' ? '#c2410c' : '#111111'} />
+        </View>
+      )}
     </Pressable>
   );
 }

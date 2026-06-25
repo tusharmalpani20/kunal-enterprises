@@ -5,7 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { AuthShell } from '../../src/components/AuthShell';
 import { DatePickerButton, RequiredFieldLabel } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/orderScreen';
+import { styles } from '../../src/styles/appStyles';
 
 export default function SignInScreen() {
   const {

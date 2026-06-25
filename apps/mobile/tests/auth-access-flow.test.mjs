@@ -97,6 +97,7 @@ test('customer OTP with app access creates a customer session', () => {
     access_token: 'token-123',
     identity_type: 'Customer',
     identity: '9000000001',
+    customer_name: 'Asha Textiles',
   };
 
   assert.equal(nextAuthStepFromCustomerOtp(response), 'authenticated');
@@ -104,6 +105,7 @@ test('customer OTP with app access creates a customer session', () => {
     accessToken: 'token-123',
     identityType: 'Customer',
     identity: '9000000001',
+    displayName: 'Asha Textiles',
   });
 });
 
@@ -121,6 +123,7 @@ test('active customer OTP routes to order home from the verified OTP response', 
       access_token: 'token-123',
       identity_type: 'Customer',
       identity: 'CUST-001',
+      customer_name: 'Asha Textiles',
     },
     customerAccessStatus: async () => {
       checkedAccessStatus = true;
@@ -134,6 +137,7 @@ test('active customer OTP routes to order home from the verified OTP response', 
     accessToken: 'token-123',
     identityType: 'Customer',
     identity: 'CUST-001',
+    displayName: 'Asha Textiles',
   });
 });
 
@@ -144,6 +148,7 @@ test('sales employee OTP with active status creates a sales employee session', (
     access_token: 'token-se',
     identity_type: 'Sales Employee',
     identity: 'SE-001',
+    sales_employee_name: 'Ravi Sales',
   };
 
   assert.equal(nextAuthStepFromSalesEmployeeOtp(response), 'authenticated');
@@ -151,6 +156,7 @@ test('sales employee OTP with active status creates a sales employee session', (
     accessToken: 'token-se',
     identityType: 'Sales Employee',
     identity: 'SE-001',
+    displayName: 'Ravi Sales',
   });
 });
 

@@ -19,6 +19,7 @@ interface MobileSession {
   accessToken: string;
   identityType: string;
   identity: string;
+  displayName?: string;
 }
 
 export const AuthContext = createContext<AuthContextType>({
