@@ -1,8 +1,27 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { orderHeaderSubtitle, pendingAccessMessage } from '../src/domain/screenCopy.mjs';
+
+const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+
+function filesUnder(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(path) : [path];
+  });
+}
+
+function combinedMobileSource() {
+  return filesUnder(join(projectRoot, 'app'))
+    .concat(filesUnder(join(projectRoot, 'src')))
+    .filter((file) => /\.(mjs|ts|tsx)$/.test(file))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+}
 
 function assertNoInternalAccessTerms(text) {
   assert.equal(/client code/i.test(text), false);
@@ -32,7 +51,7 @@ test('sales employee selected customer copy stays concise', () => {
 });
 
 test('visible mobile UI copy does not mention pricing fields', () => {
-	const source = readFileSync(new URL('../app/index.tsx', import.meta.url), 'utf8');
+	const source = combinedMobileSource();
 	const visibleCopy = [
 		...source.matchAll(/<Text[^>]*>([^<{]+)<\/Text>/g),
 		...source.matchAll(/title="([^"]+)"/g),
@@ -45,7 +64,10 @@ test('visible mobile UI copy does not mention pricing fields', () => {
 });
 
 test('customer signup screen captures required fields without fixture defaults', () => {
-	const source = readFileSync(new URL('../app/index.tsx', import.meta.url), 'utf8');
+	const flowSource = readFileSync(new URL('../src/flow/OrderFlowProvider.tsx', import.meta.url), 'utf8');
+	// The signup UI surface: the sign-in route holds the labels/inputs and the
+	// provider holds the signup field state + payload construction.
+	const uiSource = readFileSync(new URL('../app/(auth)/sign-in.tsx', import.meta.url), 'utf8') + '\n' + flowSource;
 
 	for (const label of [
 		'Customer Name',
@@ -55,14 +77,14 @@ test('customer signup screen captures required fields without fixture defaults',
 		'Date of Birth',
 		'Date of Anniversary',
 	]) {
-		assert.match(source, new RegExp(label.replace('/', '\\/')));
+		assert.match(uiSource, new RegExp(label.replace('/', '\\/')));
 	}
 
 	for (const fixtureValue of ['Asha Textiles', '27ABCDE1234F1Z5', 'asha@example.com']) {
-		assert.equal(source.includes(fixtureValue), false, fixtureValue);
+		assert.equal(uiSource.includes(fixtureValue), false, fixtureValue);
 	}
 
-	assert.match(source, /customerName: signupCustomerName/);
-	assert.match(source, /businessLegalName: signupBusinessLegalName/);
-	assert.match(source, /emailId: signupEmailId/);
+	assert.match(flowSource, /customerName: signupCustomerName/);
+	assert.match(flowSource, /businessLegalName: signupBusinessLegalName/);
+	assert.match(flowSource, /emailId: signupEmailId/);
 });

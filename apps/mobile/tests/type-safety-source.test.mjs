@@ -19,8 +19,20 @@ const reactNativeFontWeights = new Set([
   '900',
 ]);
 
+function mobileSourceFiles() {
+  return filesUnder(join(projectRoot, 'app'))
+    .concat(filesUnder(join(projectRoot, 'src')))
+    .filter((file) => /\.(mjs|ts|tsx)$/.test(file));
+}
+
+function combinedMobileSource() {
+  return mobileSourceFiles()
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+}
+
 test('React Native styles use TypeScript-compatible font weights', () => {
-  const source = readFileSync(join(projectRoot, 'app/index.tsx'), 'utf8');
+  const source = combinedMobileSource();
   const invalidWeights = [...source.matchAll(/fontWeight:\s*['"]([^'"]+)['"]/g)]
     .map((match) => match[1])
     .filter((weight) => !reactNativeFontWeights.has(weight));
@@ -100,7 +112,7 @@ test('auth provider validates stored sessions through the Frappe SDK by default'
 });
 
 test('sales employee item and stock requests include sales employee context', () => {
-  const source = readFileSync(join(projectRoot, 'app/index.tsx'), 'utf8');
+  const source = combinedMobileSource();
 
   assert.match(source, /catalogApi\.allowedItems\(customer, group\.name, salesEmployee\)/);
   assert.match(source, /api\.itemStock\(activeCustomer\(\), item\.name, activeSalesEmployeeContext\(\)\)/);
@@ -109,7 +121,7 @@ test('sales employee item and stock requests include sales employee context', ()
 });
 
 test('customer order screen keeps continuous catalog search, group filters, godown selection, and cart review', () => {
-  const source = readFileSync(join(projectRoot, 'app/index.tsx'), 'utf8');
+  const source = combinedMobileSource();
 
   for (const phrase of [
     'Search products',
@@ -133,7 +145,7 @@ test('customer order screen keeps continuous catalog search, group filters, godo
 
 test('mobile package records React Native Reusables CLI without importing missing runtime package', () => {
   const packageJson = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'));
-  const appSource = readFileSync(join(projectRoot, 'app/index.tsx'), 'utf8');
+  const appSource = combinedMobileSource();
 
   assert.equal(packageJson.devDependencies['@react-native-reusables/cli'], '^0.7.1');
   assert.equal(Object.hasOwn(packageJson.dependencies, 'react-native-reusables'), false);

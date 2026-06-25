@@ -8,6 +8,8 @@ import { Figtree_600SemiBold } from '@expo-google-fonts/figtree/600SemiBold';
 
 import { AuthProvider } from '../src/providers/auth';
 import { FrappeProvider } from '../src/providers/frappe';
+import { OrderFlowProvider } from '../src/flow/OrderFlowProvider';
+import { GlobalDateModal } from '../src/components/GlobalDateModal';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -23,10 +25,13 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <FrappeProvider>
-        <>
-          <Stack screenOptions={{ headerShown: false }} />
-          <Toast />
-        </>
+        <OrderFlowProvider>
+          <>
+            <Stack screenOptions={{ headerShown: false }} />
+            <GlobalDateModal />
+            <Toast />
+          </>
+        </OrderFlowProvider>
       </FrappeProvider>
     </AuthProvider>
   );
