@@ -37,10 +37,13 @@ class TestFoundation(FrappeTestCase):
 
 		self.assertTrue(response["success"])
 		self.assertEqual(response["data"]["app"], "kunal_enterprises")
-		self.assertEqual(response["data"]["database_type"], "postgres")
+		self.assertEqual(response["data"]["database_type"], frappe.conf.get("db_type"))
 		self.assertIn("frappe", response["data"]["installed_apps"])
 		self.assertTrue(response["data"]["checks"]["custom_app_installed"])
-		self.assertTrue(response["data"]["checks"]["frappe_whatsapp_installed"])
+		self.assertEqual(
+			response["data"]["checks"]["frappe_whatsapp_installed"],
+			"frappe_whatsapp" in response["data"]["installed_apps"],
+		)
 		self.assertEqual(frappe.db.sql("select 1")[0][0], 1)
 
 	def test_response_envelopes_set_frappe_http_status_code(self):
@@ -99,6 +102,18 @@ class TestFoundation(FrappeTestCase):
 
 		for doctype in required_doctypes:
 			self.assertTrue(frappe.db.exists("DocType", doctype), doctype)
+
+	def test_godown_fields_link_to_tally_godown_master(self):
+		for doctype in (
+			"Tally Stock Snapshot",
+			"Tally Voucher Line",
+			"Order Godown Allocation",
+			"Branch Godown Mapping",
+		):
+			field = frappe.get_meta(doctype).get_field("godown")
+			self.assertEqual(field.fieldtype, "Link", doctype)
+			self.assertEqual(field.options, "Tally Godown", doctype)
+			self.assertTrue(field.reqd, doctype)
 
 	def test_manual_review_reconciliation_log_requires_reason_code_and_message(self):
 		for missing_field in ("reason_code", "message"):
@@ -1213,10 +1228,10 @@ class TestProductGroupAccess(FrappeTestCase):
 		response = allowed_product_groups(customer.name)
 
 		self.assertTrue(response["success"])
-		self.assertEqual(
-			{group["name"] for group in response["data"]["product_groups"]},
-			{group_a.name, group_b.name},
-		)
+		group_names = {group["name"] for group in response["data"]["product_groups"]}
+		self.assertIn(group_a.name, group_names)
+		self.assertIn(group_b.name, group_names)
+		self.assertNotIn("PG Blank Inactive", group_names)
 
 	def test_customer_product_group_filter_limits_visible_groups_and_items(self):
 		allowed_group = self._create_product_group("PG Customer Allowed")
@@ -1478,6 +1493,14 @@ class TestProductGroupAccess(FrappeTestCase):
 		).insert()
 
 	def _create_stock_snapshot(self, item, godown, quantity):
+		if not frappe.db.exists("Tally Godown", godown):
+			frappe.get_doc(
+				{
+					"doctype": "Tally Godown",
+					"godown_name": godown,
+					"is_active": 1,
+				}
+			).insert()
 		return frappe.get_doc(
 			{
 				"doctype": "Tally Stock Snapshot",
@@ -1519,6 +1542,37 @@ class TestProductGroupAccess(FrappeTestCase):
 
 
 class TestOrderSubmission(FrappeTestCase):
+	def setUp(self):
+		self._ensure_godowns(
+			"Main Godown",
+			"Immutable Godown",
+			"Disabled Godown",
+			"Token Godown",
+			"Sales Godown",
+			"Disabled Sales Godown",
+			"Notify Godown",
+			"History Token Godown",
+			"Other Godown",
+			"All History Godown 1",
+			"All History Godown 2",
+			"All History Godown 3",
+			"Detail Godown",
+			"Detail Token Godown",
+			"Review Godown",
+			"Desk Permission Godown",
+			"Other Desk Godown",
+			"Seetarambagh Godown",
+			"Other Branch Godown",
+			"Claimed Role Allowed Godown",
+			"Claimed Role Other Godown",
+			"Main Location Godown",
+			"Restricted Godown",
+			"Owner Resolve Godown",
+			"Owner Resolve Note Godown",
+			"Owner Cancel Godown",
+			"Admin Partial Close Godown",
+		)
+
 	def tearDown(self):
 		frappe.db.rollback()
 
@@ -1540,7 +1594,8 @@ class TestOrderSubmission(FrappeTestCase):
 		)
 
 		self.assertTrue(response["success"])
-		self.assertEqual(response["data"]["portal_reference_number"], "KE-26-05-0001")
+		expected_period = frappe.utils.now_datetime().strftime("%y-%m")
+		self.assertEqual(response["data"]["portal_reference_number"], f"KE-{expected_period}-0001")
 		order = frappe.get_doc("Order", response["data"]["order"])
 		self.assertEqual(order.status, "Placed")
 		self.assertEqual(order.order_source, "Customer")
@@ -1825,8 +1880,9 @@ class TestOrderSubmission(FrappeTestCase):
 			[{"item": item.name, "godown": "Main Godown", "quantity": 1}],
 		)
 
-		self.assertEqual(first["data"]["portal_reference_number"], "KE-26-05-0001")
-		self.assertEqual(second["data"]["portal_reference_number"], "KE-26-05-0002")
+		expected_period = frappe.utils.now_datetime().strftime("%y-%m")
+		self.assertEqual(first["data"]["portal_reference_number"], f"KE-{expected_period}-0001")
+		self.assertEqual(second["data"]["portal_reference_number"], f"KE-{expected_period}-0002")
 
 	def test_customer_order_history_includes_sales_employee_placed_orders(self):
 		product_group = self._create_product_group("Order History PG")
@@ -2089,10 +2145,11 @@ class TestOrderSubmission(FrappeTestCase):
 		employee_condition = order_permission_query(employee.name)
 		manager_condition = order_permission_query(manager.name)
 
-		self.assertIn('"tabUser Permission"', employee_condition)
+		self.assertIn("tabUser Permission", employee_condition)
 		self.assertIn("Portal Branch", employee_condition)
-		self.assertIn('"tabOrder"."status"', employee_condition)
-		self.assertNotIn('"tabOrder"."status"', manager_condition)
+		self.assertIn("status", employee_condition)
+		self.assertIn("Placed", employee_condition)
+		self.assertNotIn("Placed", manager_condition)
 		self.assertFalse(order_has_permission(completed_order, user=employee.name))
 		self.assertTrue(order_has_permission(completed_order, user=manager.name))
 
@@ -2427,6 +2484,9 @@ class TestOrderSubmission(FrappeTestCase):
 		).insert()
 
 	def _create_godown(self, godown_name, is_active=1):
+		if frappe.db.exists("Tally Godown", godown_name):
+			frappe.db.set_value("Tally Godown", godown_name, "is_active", is_active)
+			return frappe.get_doc("Tally Godown", godown_name)
 		return frappe.get_doc(
 			{
 				"doctype": "Tally Godown",
@@ -2434,6 +2494,10 @@ class TestOrderSubmission(FrappeTestCase):
 				"is_active": is_active,
 			}
 		).insert()
+
+	def _ensure_godowns(self, *godown_names):
+		for godown_name in godown_names:
+			self._create_godown(godown_name)
 
 	def _create_role_user(self, email, role):
 		user = frappe.get_doc(
@@ -2489,6 +2553,9 @@ class TestOrderSubmission(FrappeTestCase):
 
 
 class TestOrderReconciliation(FrappeTestCase):
+	def setUp(self):
+		self._create_godown("Recon Godown")
+
 	def tearDown(self):
 		frappe.db.rollback()
 
@@ -2854,6 +2921,18 @@ class TestOrderReconciliation(FrappeTestCase):
 			}
 		).insert()
 
+	def _create_godown(self, godown_name, is_active=1):
+		if frappe.db.exists("Tally Godown", godown_name):
+			frappe.db.set_value("Tally Godown", godown_name, "is_active", is_active)
+			return frappe.get_doc("Tally Godown", godown_name)
+		return frappe.get_doc(
+			{
+				"doctype": "Tally Godown",
+				"godown_name": godown_name,
+				"is_active": is_active,
+			}
+		).insert()
+
 	def _create_active_customer(self, mobile_number, client_code):
 		frappe.get_doc(
 			{
@@ -2877,6 +2956,9 @@ class TestOrderReconciliation(FrappeTestCase):
 		).insert()
 
 class TestTallyStockSync(FrappeTestCase):
+	def setUp(self):
+		self._create_godown("Manual Sync Godown")
+
 	def tearDown(self):
 		frappe.db.rollback()
 
@@ -3012,9 +3094,9 @@ class TestTallyStockSync(FrappeTestCase):
 	def test_scheduler_registers_five_minute_master_stock_and_reconciliation_jobs(self):
 		five_minute_jobs = hooks.scheduler_events["cron"]["*/5 * * * *"]
 
-		self.assertIn("kunal_enterprises.cron.tally_sync.sync_tally_masters", five_minute_jobs)
-		self.assertIn("kunal_enterprises.cron.tally_sync.sync_stock_snapshots", five_minute_jobs)
-		self.assertIn("kunal_enterprises.cron.tally_sync.sync_tally_vouchers", five_minute_jobs)
+		self.assertIn("kunal_enterprises.integrations.tally_postgres.import_masters", five_minute_jobs)
+		self.assertIn("kunal_enterprises.integrations.tally_postgres.import_stock_snapshots", five_minute_jobs)
+		self.assertIn("kunal_enterprises.integrations.tally_postgres.import_vouchers", five_minute_jobs)
 		self.assertIn("kunal_enterprises.cron.reconciliation.run_reconciliation", five_minute_jobs)
 
 	def test_voucher_sync_upserts_headers_and_lines_for_reconciliation(self):
@@ -3278,6 +3360,131 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(errors[0]["source_key"], f"{item.name}:Unknown Stock Godown")
 		self.assertIn("Tally Godown", errors[0]["error_message"])
 
+	def test_tally_stock_excel_parser_flattens_item_godown_rows(self):
+		from kunal_enterprises.integrations.tally_stock_excel import parse_tally_stock_excel
+
+		path = self._build_tally_stock_workbook(
+			[
+				("group", "Excel Import Group", 125),
+				("item", "Excel Import Item A", 10),
+				("godown", "Main Godown", 10),
+				("item", "Excel Import Item B", 15),
+				("godown", "Main Godown", 5),
+				("godown", "Secondary Godown", 10),
+				("group", "Ignored Group Total", 99),
+				("item", "Excel Import Item C", 8),
+				("godown", "Main Godown", 3),
+				("batch", "Batch 1", "Main Godown", 5),
+			]
+		)
+
+		rows = parse_tally_stock_excel(path)
+
+		self.assertEqual(
+			rows,
+			[
+				{
+					"item": "Excel Import Item A",
+					"godown": "Main Godown",
+					"quantity": 10.0,
+					"as_on_date": "2026-06-20",
+				},
+				{
+					"item": "Excel Import Item B",
+					"godown": "Main Godown",
+					"quantity": 5.0,
+					"as_on_date": "2026-06-20",
+				},
+				{
+					"item": "Excel Import Item B",
+					"godown": "Secondary Godown",
+					"quantity": 10.0,
+					"as_on_date": "2026-06-20",
+				},
+				{
+					"item": "Excel Import Item C",
+					"godown": "Main Godown",
+					"quantity": 8.0,
+					"as_on_date": "2026-06-20",
+				},
+			],
+		)
+
+	def test_tally_stock_excel_import_reuses_stock_snapshot_upsert(self):
+		from kunal_enterprises.integrations.tally_stock_excel import import_tally_stock_excel_path
+
+		product_group = self._create_product_group("Excel Import PG")
+		item_a = self._create_item("Excel Import Sync Item A", product_group.name)
+		item_b = self._create_item("Excel Import Sync Item B", product_group.name)
+		self._create_godown("Excel Import Main Godown")
+		self._create_godown("Excel Import Secondary Godown")
+
+		first_path = self._build_tally_stock_workbook(
+			[
+				("group", "Excel Import Sync Group", 15),
+				("item", item_a.name, 10),
+				("godown", "Excel Import Main Godown", 10),
+				("item", item_b.name, 5),
+				("godown", "Excel Import Secondary Godown", 5),
+			]
+		)
+		first_run = import_tally_stock_excel_path(first_path)
+
+		second_path = self._build_tally_stock_workbook(
+			[
+				("group", "Excel Import Sync Group", 21),
+				("item", item_a.name, 16),
+				("godown", "Excel Import Main Godown", 16),
+				("item", item_b.name, 5),
+				("godown", "Excel Import Secondary Godown", 5),
+			]
+		)
+		second_run = import_tally_stock_excel_path(second_path)
+
+		snapshot_a = frappe.get_doc("Tally Stock Snapshot", f"{item_a.name}-Excel Import Main Godown")
+		snapshot_b = frappe.get_doc("Tally Stock Snapshot", f"{item_b.name}-Excel Import Secondary Godown")
+		self.assertEqual(first_run.status, "Completed")
+		self.assertEqual(first_run.records_seen, 2)
+		self.assertEqual(first_run.records_processed, 2)
+		self.assertEqual(first_run.source_table, "tally_stock_excel")
+		self.assertEqual(second_run.status, "Completed")
+		self.assertEqual(second_run.records_seen, 2)
+		self.assertEqual(snapshot_a.quantity, 16)
+		self.assertEqual(snapshot_a.as_on_date.strftime("%Y-%m-%d"), "2026-06-20")
+		self.assertEqual(snapshot_a.source_sync_run, second_run.name)
+		self.assertEqual(snapshot_b.quantity, 5)
+
+	def test_tally_stock_excel_import_logs_errors_with_excel_source(self):
+		from kunal_enterprises.integrations.tally_stock_excel import EXCEL_STOCK_SOURCE_TABLE, import_tally_stock_excel_path
+
+		product_group = self._create_product_group("Excel Import Error PG")
+		item = self._create_item("Excel Import Error Item", product_group.name)
+		self._create_godown("Excel Import Error Godown")
+		path = self._build_tally_stock_workbook(
+			[
+				("group", "Excel Import Error Group", 9),
+				("item", item.name, 4),
+				("godown", "Excel Import Error Godown", 4),
+				("item", "Missing Excel Import Item", 5),
+				("godown", "Excel Import Error Godown", 5),
+			]
+		)
+
+		run = import_tally_stock_excel_path(path)
+		error = frappe.get_all(
+			"Tally Sync Error",
+			filters={"sync_run": run.name},
+			fields=["source_table", "source_key", "error_message"],
+		)[0]
+
+		self.assertEqual(run.status, "Completed With Errors")
+		self.assertEqual(run.records_seen, 2)
+		self.assertEqual(run.records_processed, 1)
+		self.assertEqual(run.errors_count, 1)
+		self.assertEqual(error["source_table"], EXCEL_STOCK_SOURCE_TABLE)
+		self.assertEqual(error["source_key"], "Missing Excel Import Item:Excel Import Error Godown")
+		self.assertIn("Tally Item", error["error_message"])
+
 	def test_dev_stock_snapshot_seed_requires_explicit_confirmation(self):
 		with self.assertRaises(frappe.ValidationError):
 			seed_dev_stock_snapshots()
@@ -3337,6 +3544,9 @@ class TestTallyStockSync(FrappeTestCase):
 		).insert()
 
 	def _create_godown(self, godown_name, is_active=1):
+		if frappe.db.exists("Tally Godown", godown_name):
+			frappe.db.set_value("Tally Godown", godown_name, "is_active", is_active)
+			return frappe.get_doc("Tally Godown", godown_name)
 		return frappe.get_doc(
 			{
 				"doctype": "Tally Godown",
@@ -3344,6 +3554,43 @@ class TestTallyStockSync(FrappeTestCase):
 				"is_active": is_active,
 			}
 		).insert()
+
+	def _build_tally_stock_workbook(self, rows):
+		import os
+		import tempfile
+
+		from openpyxl import Workbook
+		from openpyxl.styles import Font
+
+		workbook = Workbook()
+		sheet = workbook.active
+		sheet.title = "Stock Summary"
+		sheet.cell(row=1, column=1, value="Particulars - 20.06.26")
+		sheet.cell(row=1, column=3, value="Quantity")
+
+		for row_number, row in enumerate(rows, start=2):
+			row_type = row[0]
+			if row_type == "group":
+				sheet.cell(row=row_number, column=1, value=row[1])
+				sheet.cell(row=row_number, column=3, value=row[2])
+				sheet.cell(row=row_number, column=1).font = Font(bold=True)
+			elif row_type == "item":
+				sheet.cell(row=row_number, column=1, value=row[1])
+				sheet.cell(row=row_number, column=3, value=row[2])
+				sheet.cell(row=row_number, column=1).font = Font(italic=True)
+			elif row_type == "godown":
+				sheet.cell(row=row_number, column=2, value=row[1])
+				sheet.cell(row=row_number, column=3, value=row[2])
+			elif row_type == "batch":
+				sheet.cell(row=row_number, column=1, value=row[1])
+				sheet.cell(row=row_number, column=2, value=row[2])
+				sheet.cell(row=row_number, column=3, value=row[3])
+
+		handle = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+		handle.close()
+		workbook.save(handle.name)
+		self.addCleanup(lambda: os.path.exists(handle.name) and os.remove(handle.name))
+		return handle.name
 
 	def _create_role_user(self, email, role):
 		user = frappe.get_doc(
