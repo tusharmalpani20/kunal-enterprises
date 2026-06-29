@@ -22,8 +22,10 @@
   },
   {
    "fieldname": "godown",
-   "fieldtype": "Data",
-   "label": "Godown"
+   "fieldtype": "Link",
+   "label": "Godown",
+   "options": "Tally Godown",
+   "reqd": 1
   },
   {
    "fieldname": "quantity",
