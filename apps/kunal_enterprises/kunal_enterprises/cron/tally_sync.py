@@ -43,7 +43,7 @@ def sync_tally_masters(records=None):
 	return run
 
 
-def sync_stock_snapshots(records=None):
+def sync_stock_snapshots(records=None, source_table=STOCK_SNAPSHOT_SOURCE_TABLE):
 	started_at = now_datetime()
 	run = frappe.get_doc(
 		{
@@ -51,7 +51,7 @@ def sync_stock_snapshots(records=None):
 			"sync_type": "Stock",
 			"status": "Running",
 			"started_at": started_at,
-			"source_table": STOCK_SNAPSHOT_SOURCE_TABLE,
+			"source_table": source_table,
 		}
 	).insert(ignore_permissions=True)
 
@@ -65,7 +65,7 @@ def sync_stock_snapshots(records=None):
 			processed += 1
 		except Exception as error:
 			errors += 1
-			_log_sync_error(run.name, record, error, STOCK_SNAPSHOT_SOURCE_TABLE)
+			_log_sync_error(run.name, record, error, source_table)
 
 	run.records_seen = len(records)
 	run.records_processed = processed
@@ -122,20 +122,41 @@ def _upsert_stock_snapshot(record, sync_run):
 		frappe.throw(f"Tally Godown {godown} does not exist or is inactive")
 
 	name = f"{item}-{godown}"
+	uom = record.get("uom")
+	if not uom:
+		uom = frappe.db.get_value("Tally Item", item, "uom")
 	values = {
 		"item": item,
 		"godown": godown,
 		"quantity": float(record.get("quantity") or 0),
-		"uom": record.get("uom"),
+		"uom": uom,
 		"as_on_date": record.get("as_on_date"),
 		"source_company": record.get("source_company"),
 		"synced_at": record.get("synced_at") or now_datetime(),
 		"source_sync_run": sync_run,
 	}
 	if frappe.db.exists("Tally Stock Snapshot", name):
-		frappe.db.set_value("Tally Stock Snapshot", name, values)
+		if _stock_snapshot_changed(name, values):
+			frappe.db.set_value("Tally Stock Snapshot", name, values)
 	else:
 		frappe.get_doc({"doctype": "Tally Stock Snapshot", **values}).insert(ignore_permissions=True)
+
+
+def _stock_snapshot_changed(name, values):
+	existing = frappe.db.get_value(
+		"Tally Stock Snapshot",
+		name,
+		["quantity", "uom", "as_on_date", "source_company"],
+		as_dict=True,
+	)
+	if not existing:
+		return True
+	return (
+		float(existing.quantity or 0) != float(values.get("quantity") or 0)
+		or (existing.uom or "") != (values.get("uom") or "")
+		or str(existing.as_on_date or "") != str(values.get("as_on_date") or "")
+		or (existing.source_company or "") != (values.get("source_company") or "")
+	)
 
 
 def _upsert_tally_voucher(record):
