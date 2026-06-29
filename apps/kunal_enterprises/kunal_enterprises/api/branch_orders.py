@@ -107,6 +107,8 @@ def _get_visible_orders(godowns, role):
 	if role == "Branch Employee":
 		status_filter = 'and o.status in %(statuses)s'
 		values["statuses"] = BRANCH_EMPLOYEE_VISIBLE_STATUSES
+	order_table = _table("Order")
+	allocation_table = _table("Order Godown Allocation")
 
 	return frappe.db.sql(
 		f"""
@@ -117,8 +119,8 @@ def _get_visible_orders(godowns, role):
 			o.confirmation_datetime,
 			o.total_item_count,
 			o.total_quantity
-		from "tabOrder" o
-		inner join "tabOrder Godown Allocation" allocation
+		from {order_table} o
+		inner join {allocation_table} allocation
 			on allocation.parent = o.name
 		where allocation.godown in %(godowns)s
 			{status_filter}
@@ -138,13 +140,15 @@ def _order_is_visible_for_branch(order, branch, role):
 	if role == "Branch Employee":
 		status_filter = 'and o.status in %(statuses)s'
 		values["statuses"] = BRANCH_EMPLOYEE_VISIBLE_STATUSES
+	order_table = _table("Order")
+	allocation_table = _table("Order Godown Allocation")
 
 	return bool(
 		frappe.db.sql(
 			f"""
 			select o.name
-			from "tabOrder" o
-			inner join "tabOrder Godown Allocation" allocation
+			from {order_table} o
+			inner join {allocation_table} allocation
 				on allocation.parent = o.name
 			where o.name = %(order)s
 				and allocation.godown in %(godowns)s
@@ -154,6 +158,11 @@ def _order_is_visible_for_branch(order, branch, role):
 			values,
 		)
 	)
+
+
+def _table(doctype):
+	quote = '"' if frappe.db.db_type == "postgres" else "`"
+	return f"{quote}tab{doctype}{quote}"
 
 
 def _serialize_order(order):

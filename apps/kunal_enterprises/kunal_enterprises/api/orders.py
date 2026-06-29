@@ -476,13 +476,14 @@ def _validate_active_godowns(godown_names):
 
 def _next_reference_number(confirmation_datetime):
 	period = confirmation_datetime.strftime("%y-%m")
-	sequence = frappe.db.sql(
-		'select current_number from "tabOrder Reference Sequence" where name = %s for update',
-		(period,),
-		as_dict=True,
+	current_number = frappe.db.get_value(
+		"Order Reference Sequence",
+		period,
+		"current_number",
+		for_update=True,
 	)
-	if sequence:
-		next_number = int(sequence[0].current_number) + 1
+	if current_number is not None:
+		next_number = int(current_number) + 1
 		frappe.db.set_value("Order Reference Sequence", period, "current_number", next_number)
 	else:
 		next_number = 1

@@ -18,25 +18,30 @@ def get_permission_query_conditions(user=None):
 
 	user_sql = frappe.db.escape(user)
 	status_condition = ""
+	order_table = _table("Order")
+	allocation_table = _table("Order Godown Allocation")
+	mapping_table = _table("Branch Godown Mapping")
+	branch_table = _table("Portal Branch")
+	permission_table = _table("User Permission")
 	if "Branch Employee" in roles and "Branch Manager" not in roles:
 		statuses = ", ".join(frappe.db.escape(status) for status in BRANCH_EMPLOYEE_VISIBLE_STATUSES)
-		status_condition = f'and "tabOrder"."status" in ({statuses})'
+		status_condition = f"and {order_table}.{_column('status')} in ({statuses})"
 
 	return f"""
 		exists (
 			select 1
-			from "tabOrder Godown Allocation" allocation
-			inner join "tabBranch Godown Mapping" mapping
+			from {allocation_table} allocation
+			inner join {mapping_table} mapping
 				on mapping.godown = allocation.godown
 				and mapping.is_active = 1
-			inner join "tabPortal Branch" branch
+			inner join {branch_table} branch
 				on branch.name = mapping.portal_branch
 				and branch.is_active = 1
-			inner join "tabUser Permission" permission
+			inner join {permission_table} permission
 				on permission.allow = 'Portal Branch'
 				and permission.for_value = mapping.portal_branch
 				and permission.user = {user_sql}
-			where allocation.parent = "tabOrder"."name"
+			where allocation.parent = {order_table}.{_column('name')}
 			{status_condition}
 		)
 	"""
@@ -83,3 +88,13 @@ def _allowed_godowns_for_user(user):
 			fields=["godown"],
 		)
 	]
+
+
+def _table(doctype):
+	quote = '"' if frappe.db.db_type == "postgres" else "`"
+	return f"{quote}tab{doctype}{quote}"
+
+
+def _column(fieldname):
+	quote = '"' if frappe.db.db_type == "postgres" else "`"
+	return f"{quote}{fieldname}{quote}"
