@@ -1,5 +1,6 @@
 app_name = "kunal_enterprises"
 app_title = "Kunal Enterprises"
+app_logo_url = "/assets/kunal_enterprises/images/kunal_enterprises_logo.svg"
 app_publisher = "Kunal Enterprises"
 app_description = "Kunal Enterprise Tally-connected order system"
 app_email = "admin@kunal-enterprises.local"
@@ -43,15 +44,19 @@ scheduler_events = {
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "kunal_enterprises",
-# 		"logo": "/assets/kunal_enterprises/logo.png",
-# 		"title": "Kunal Enterprises",
-# 		"route": "/kunal_enterprises",
-# 		"has_permission": "kunal_enterprises.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "kunal_enterprises",
+		"logo": "/assets/kunal_enterprises/images/kunal_enterprises_logo.svg",
+		"title": "Kunal Enterprises",
+		"route": "/kunal_enterprises",
+		"has_permission": "kunal_enterprises.api.permission.has_app_permission"
+	}
+]
+
+website_context = {
+	"favicon": "/assets/kunal_enterprises/images/kunal_enterprises_favicon.png"
+}
 
 # Includes in <head>
 # ------------------
