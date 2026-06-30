@@ -1,8 +1,8 @@
 import frappe
 
 
-KUNAL_OPERATIONS_WORKSPACE = "Kunal Operations"
-KUNAL_ADMIN_WORKSPACE = "Kunal Admin"
+KUNAL_OPERATIONS_WORKSPACE = "Operation"
+KUNAL_ADMIN_WORKSPACE = "Admin"
 
 OWNER_ROLE = "Owner"
 ADMIN_ROLE = "Admin"
