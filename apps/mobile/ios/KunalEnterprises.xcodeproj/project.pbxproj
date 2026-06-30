@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		09C6E945600D4A33AC18CDE8 /* libPods-KunalEnterprises.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3590B45DD41B4C4C816D1E9A /* libPods-KunalEnterprises.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		2CE979F2574308A01087BC8A /* libPods-KunalEnterprises.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B430ED9D9198492E9FAB915B /* libPods-KunalEnterprises.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		5BDC3C28BE40A802FEFFBF14 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9FE8FE64599A8EFC8627417 /* ExpoModulesProvider.swift */; };
-		AA29F1607E1995ACF7FB1D4E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A448ECDE9F6D2F71CE9C804D /* PrivacyInfo.xcprivacy */; };
+		A650510F6DC8454AA9C021AD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1DF3A2F39E04AB261CBAB00F /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		C6A2CDC50DA2D8DED705E896 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55211F9DDB22BBF453A19F97 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -20,16 +20,16 @@
 		13B07F961A680F5B00A75B9A /* KunalEnterprises.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KunalEnterprises.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = KunalEnterprises/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = KunalEnterprises/Info.plist; sourceTree = "<group>"; };
-		1C416B5FBFECEC517457DEE5 /* Pods-KunalEnterprises.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KunalEnterprises.release.xcconfig"; path = "Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises.release.xcconfig"; sourceTree = "<group>"; };
-		3590B45DD41B4C4C816D1E9A /* libPods-KunalEnterprises.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-KunalEnterprises.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A448ECDE9F6D2F71CE9C804D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = KunalEnterprises/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		A9FE8FE64599A8EFC8627417 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-KunalEnterprises/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		1DF3A2F39E04AB261CBAB00F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = KunalEnterprises/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		2CCA4726A9C02E2DC8A57FB8 /* Pods-KunalEnterprises.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KunalEnterprises.debug.xcconfig"; path = "Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises.debug.xcconfig"; sourceTree = "<group>"; };
+		55211F9DDB22BBF453A19F97 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-KunalEnterprises/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = KunalEnterprises/SplashScreen.storyboard; sourceTree = "<group>"; };
+		B430ED9D9198492E9FAB915B /* libPods-KunalEnterprises.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-KunalEnterprises.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		DB42BB2E4EB0E2E746276975 /* Pods-KunalEnterprises.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KunalEnterprises.debug.xcconfig"; path = "Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = KunalEnterprises/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* KunalEnterprises-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "KunalEnterprises-Bridging-Header.h"; path = "KunalEnterprises/KunalEnterprises-Bridging-Header.h"; sourceTree = "<group>"; };
+		F26802979BF7BEB1D5471132 /* Pods-KunalEnterprises.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KunalEnterprises.release.xcconfig"; path = "Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				09C6E945600D4A33AC18CDE8 /* libPods-KunalEnterprises.a in Frameworks */,
+				2CE979F2574308A01087BC8A /* libPods-KunalEnterprises.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				A448ECDE9F6D2F71CE9C804D /* PrivacyInfo.xcprivacy */,
+				1DF3A2F39E04AB261CBAB00F /* PrivacyInfo.xcprivacy */,
 			);
 			name = KunalEnterprises;
 			sourceTree = "<group>";
@@ -62,17 +62,9 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				3590B45DD41B4C4C816D1E9A /* libPods-KunalEnterprises.a */,
+				B430ED9D9198492E9FAB915B /* libPods-KunalEnterprises.a */,
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		34DBC8ECA733EE31E3594E8B /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				A5BFC036683535AE1055DEDE /* KunalEnterprises */,
-			);
-			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -89,8 +81,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				9F4E9454D86671BAEE9CA96F /* Pods */,
-				34DBC8ECA733EE31E3594E8B /* ExpoModulesProviders */,
+				D3C16CCFDF3E18A9EB3CEDF6 /* Pods */,
+				D02C805A9A5F9F41BA96C783 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,20 +97,10 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		9F4E9454D86671BAEE9CA96F /* Pods */ = {
+		B4A5D7E162A37EFB6B5D6B4B /* KunalEnterprises */ = {
 			isa = PBXGroup;
 			children = (
-				DB42BB2E4EB0E2E746276975 /* Pods-KunalEnterprises.debug.xcconfig */,
-				1C416B5FBFECEC517457DEE5 /* Pods-KunalEnterprises.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		A5BFC036683535AE1055DEDE /* KunalEnterprises */ = {
-			isa = PBXGroup;
-			children = (
-				A9FE8FE64599A8EFC8627417 /* ExpoModulesProvider.swift */,
+				55211F9DDB22BBF453A19F97 /* ExpoModulesProvider.swift */,
 			);
 			name = KunalEnterprises;
 			sourceTree = "<group>";
@@ -132,6 +114,24 @@
 			path = KunalEnterprises/Supporting;
 			sourceTree = "<group>";
 		};
+		D02C805A9A5F9F41BA96C783 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				B4A5D7E162A37EFB6B5D6B4B /* KunalEnterprises */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
+		D3C16CCFDF3E18A9EB3CEDF6 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				2CCA4726A9C02E2DC8A57FB8 /* Pods-KunalEnterprises.debug.xcconfig */,
+				F26802979BF7BEB1D5471132 /* Pods-KunalEnterprises.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "KunalEnterprises" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				ACCD5B1EF79202A442130329 /* [Expo] Configure project */,
+				C45DA9FC4EFF9455A3DDB4B0 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				F182C7754B7B43BADC8243AC /* [CP] Embed Pods Frameworks */,
+				9E872FB0FDE32E0076A329CA /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				AA29F1607E1995ACF7FB1D4E /* PrivacyInfo.xcprivacy in Resources */,
+				A650510F6DC8454AA9C021AD /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -272,7 +272,29 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		ACCD5B1EF79202A442130329 /* [Expo] Configure project */ = {
+		9E872FB0FDE32E0076A329CA /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		C45DA9FC4EFF9455A3DDB4B0 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -296,28 +318,6 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-KunalEnterprises/expo-configure-project.sh\"\n";
 		};
-		F182C7754B7B43BADC8243AC /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-KunalEnterprises/Pods-KunalEnterprises-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -326,7 +326,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				5BDC3C28BE40A802FEFFBF14 /* ExpoModulesProvider.swift in Sources */,
+				C6A2CDC50DA2D8DED705E896 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -335,7 +335,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DB42BB2E4EB0E2E746276975 /* Pods-KunalEnterprises.debug.xcconfig */;
+			baseConfigurationReference = 2CCA4726A9C02E2DC8A57FB8 /* Pods-KunalEnterprises.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -371,7 +371,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 1C416B5FBFECEC517457DEE5 /* Pods-KunalEnterprises.release.xcconfig */;
+			baseConfigurationReference = F26802979BF7BEB1D5471132 /* Pods-KunalEnterprises.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

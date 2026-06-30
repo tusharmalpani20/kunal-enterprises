@@ -1,9 +1,8 @@
 import React from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Search } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { ItemSearchRow, Workspace } from '../../src/components/orderUi';
+import { ItemSearchRow } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
 import { cartQuantityForItem } from '../../src/utils/orderFormatting';
@@ -24,7 +23,7 @@ export default function OrderScreen() {
 
   return (
     <AppShell>
-      <Workspace title="Order" icon={<Search size={18} color="#111111" />}>
+      <View style={styles.workspace}>
         <View style={styles.searchPanel}>
           <Text style={styles.fieldLabel}>Search products</Text>
           <TextInput
@@ -67,7 +66,7 @@ export default function OrderScreen() {
             Showing {renderedItems.length} of {visibleItems.length} matches. Refine search to narrow results.
           </Text>
         )}
-      </Workspace>
+      </View>
     </AppShell>
   );
 }

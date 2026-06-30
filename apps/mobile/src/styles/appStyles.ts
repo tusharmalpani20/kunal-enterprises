@@ -25,21 +25,17 @@ export const styles = StyleSheet.create({
   },
   authPage: {
     flexGrow: 1,
-    paddingTop: 40,
+    paddingTop: 32,
     paddingBottom: 40,
   },
   authLogoWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     alignItems: 'center',
-    paddingTop: 64,
+    marginBottom: 4,
   },
   authCenter: {
     flex: 1,
-    justifyContent: 'center',
-    gap: 34,
+    justifyContent: 'flex-start',
+    gap: 24,
   },
   banner: {
     backgroundColor: '#f7f7f7',
@@ -70,7 +66,6 @@ export const styles = StyleSheet.create({
     width: 210,
     height: 60, // preserves the logo's ~3.5:1 aspect ratio
     alignSelf: 'center',
-    marginBottom: 2,
   },
   authTitle: {
     color: '#111111',
@@ -96,12 +91,26 @@ export const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
+  appHeaderBackButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  appName: {
+    color: '#111111',
+    fontSize: 24,
+    fontFamily: fonts.semibold,
+    letterSpacing: 0,
+    lineHeight: 30,
+  },
   kicker: {
     color: '#777777',
     fontSize: 12,
     fontFamily: fonts.medium,
     letterSpacing: 0,
-    textTransform: 'uppercase',
   },
   title: {
     color: '#111111',
@@ -255,7 +264,6 @@ export const styles = StyleSheet.create({
     color: '#555555',
     fontSize: 12,
     fontFamily: fonts.medium,
-    textTransform: 'uppercase',
   },
   requiredAsterisk: {
     color: '#b42318',

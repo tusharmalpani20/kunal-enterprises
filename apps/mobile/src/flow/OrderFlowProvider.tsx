@@ -33,7 +33,7 @@ import {
 } from '../domain/mobileFlow.mjs';
 import { buildSalesEmployeeOrderPayload, salesEmployeeOrderGuard } from '../domain/salesEmployeeFlow.mjs';
 import { loadProfileForMobile, saveCustomerProfileForMobile } from '../domain/profileHistoryFlow.mjs';
-import { classifyApiFailure } from '../domain/sharedStateFlow.mjs';
+import { classifyApiFailure, requestBanner } from '../domain/sharedStateFlow.mjs';
 import {
   appSectionForStep,
   isAuthSurface as isAuthSurfaceStep,
@@ -132,6 +132,14 @@ function useOrderFlowState() {
   const hasActiveModeSession = canUseProtectedMobileApi({ mode, session });
   const protectedCallReady = !session?.accessToken || callAccessToken === session.accessToken;
 
+  useEffect(() => {
+    const banner = requestBanner(systemState);
+    if (!banner || systemState.kind === 'loading') {
+      return;
+    }
+    showToast(systemState.kind === 'validation_error' || systemState.kind === 'no_network' || systemState.kind === 'expired_session' || systemState.kind === 'access_removed' ? 'error' : 'info', banner.title, banner.message);
+  }, [systemState]);
+
   const loadCatalogForCustomer = useCallback(
     async (customer: string, salesEmployee?: string) => {
       const catalogKey = `${customer}:${salesEmployee || ''}`;
@@ -160,7 +168,6 @@ function useOrderFlowState() {
           setStep('auth');
           return;
         }
-        showToast('error', 'Unable to load catalog', failure.message || 'Try again after checking your connection.');
       }
     },
     [api, logout],
@@ -307,7 +314,6 @@ function useOrderFlowState() {
     } catch (error) {
       const failure = classifyApiFailure(error);
       setSystemState(failure);
-      showToast('error', 'Unable to load godowns', failure.message || 'Try again after checking your connection.');
     }
   }
 
@@ -341,7 +347,6 @@ function useOrderFlowState() {
     } catch (error) {
       const failure = classifyApiFailure(error);
       setSystemState(failure);
-      showToast('error', 'Unable to open draft cart', failure.message || 'Try again after checking your connection.');
     }
   }
 
@@ -514,7 +519,6 @@ function useOrderFlowState() {
       const validation = validateCustomerSignupInput(signupInput);
       if (!validation.ok) {
         setSystemState({ kind: 'validation_error', message: validation.message });
-        showToast('error', 'Signup details missing', validation.message);
         return;
       }
       const response = await api.startCustomerSignup(buildCustomerSignupPayload(signupInput));
@@ -529,7 +533,6 @@ function useOrderFlowState() {
     } catch (error) {
       const failure = classifyApiFailure(error);
       setSystemState(failure);
-      showToast('error', 'OTP request failed', failure.message || 'Try again after checking the details.');
     }
   }
 
@@ -569,7 +572,6 @@ function useOrderFlowState() {
     } catch (error) {
       const failure = classifyApiFailure(error);
       setSystemState(failure);
-      showToast('error', 'OTP verification failed', failure.message || 'Check the code and try again.');
     }
   }
 
@@ -713,6 +715,7 @@ function useOrderFlowState() {
     }
     await clearAllCarts(AsyncStorage);
     await logout();
+    resetOtpAfterLogout();
     setStep('auth');
     setCart([]);
     setCatalogLoadedKey(null);
@@ -722,8 +725,17 @@ function useOrderFlowState() {
     setOrderDetail(null);
   }
 
+  function resetOtpAfterLogout() {
+    setOtpCode('');
+    setOtpIdentityType(null);
+    setSignupDetailsReview(false);
+    setOtpSentAtMs(null);
+    setLastOtpRequestKey(null);
+    setOtpCooldownSeconds(45);
+    setSystemState({ kind: 'idle' });
+  }
+
   const isAuthSurface = isAuthSurfaceStep(step);
-  const greetingName = (session?.displayName || '').trim().split(/\s+/)[0] || '';
   const appSection = appSectionForStep(step);
   const isOrderSection = appSection === 'order';
   const showCartControls = computeShowCartControls({ mode, step });
@@ -839,7 +851,6 @@ function useOrderFlowState() {
     renderedItems,
     resend,
     isAuthSurface,
-    greetingName,
     appSection,
     isOrderSection,
     showCartControls,

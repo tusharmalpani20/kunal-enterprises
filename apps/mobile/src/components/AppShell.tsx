@@ -1,18 +1,19 @@
 import React from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
-import { History, LogOut, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
+import { ChevronLeft, History, LogOut, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
+import { useNavigation } from 'expo-router';
 
-import { requestBanner } from '../domain/sharedStateFlow.mjs';
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { styles } from '../styles/appStyles';
 import { godownStockDetailForSelection } from '../utils/orderFormatting';
 import { RowButton, TopLevelTab } from './orderUi';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const navigation = useNavigation();
+  const canGoBack = navigation.canGoBack();
   const {
     mode,
     totals,
-    greetingName,
     appSection,
     showCartControls,
     showFloatingCartBar,
@@ -21,7 +22,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     stockRows,
     quantity, setQuantity,
     godownSelectorOpen, setGodownSelectorOpen,
-    systemState,
     revokeAndLogout,
     showOrder,
     showHistory,
@@ -30,22 +30,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setStep,
     addFromGodown,
   } = useOrderFlow();
-  const banner = requestBanner(systemState);
 
   return (
     <SafeAreaView style={styles.shell}>
       <ScrollView contentContainerStyle={styles.page}>
-        {banner && (
-          <View style={styles.banner}>
-            <Text style={styles.bannerTitle}>{banner.title}</Text>
-            <Text style={styles.bannerText}>{banner.message}</Text>
-          </View>
-        )}
-
         <View style={styles.appHeader}>
           <View style={styles.appHeaderText}>
-            <Text style={styles.kicker}>Kunal Enterprises</Text>
-            <Text style={styles.title}>{greetingName ? `Hi, ${greetingName}` : 'Welcome'}</Text>
+            <Text style={styles.appName}>Kunal Enterprises</Text>
+            {canGoBack && (
+              <Pressable style={styles.appHeaderBackButton} onPress={() => navigation.goBack()}>
+                <ChevronLeft size={17} color="#111111" />
+                <Text style={styles.backButtonText}>Back</Text>
+              </Pressable>
+            )}
           </View>
           {appSection === 'profile' && (
             <Pressable style={styles.iconOnlyButton} onPress={revokeAndLogout}>
@@ -82,12 +79,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Text style={styles.secondaryActionText}>Switch customer</Text>
             </Pressable>
           </View>
-        )}
-
-        {showCartControls && totals.rowCount === 0 && (
-          <Text style={styles.cartHint}>
-            Search for an item below and tap Add to start building this order.
-          </Text>
         )}
 
         {children}
