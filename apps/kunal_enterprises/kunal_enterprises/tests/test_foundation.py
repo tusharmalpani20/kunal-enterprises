@@ -1,4 +1,5 @@
 import json
+import inspect
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -9,7 +10,13 @@ from kunal_enterprises.api.branch_orders import mark_processing as branch_mark_p
 from kunal_enterprises.api.branch_orders import visible_orders as branch_visible_orders
 from kunal_enterprises.api.health import smoke
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
-from kunal_enterprises.api.sync_admin import run_reconciliation_now, sync_masters_now, sync_stock_now, sync_vouchers_now
+from kunal_enterprises.api.sync_admin import (
+	import_stock_excel_now,
+	run_reconciliation_now,
+	sync_masters_now,
+	sync_stock_now,
+	sync_vouchers_now,
+)
 from kunal_enterprises.api.order_controls import cancel_order, partially_close_order, resolve_manual_review
 from kunal_enterprises.api.otp import resend_otp, send_otp, start_customer_signup, verify_customer_otp, verify_sales_employee_otp
 from kunal_enterprises.api.product_groups import allowed as allowed_product_groups
@@ -228,6 +235,51 @@ class TestFoundation(FrappeTestCase):
 				self.assertFalse(permissions[role].write, f"{doctype} should not grant {role} write")
 				self.assertFalse(permissions[role].create, f"{doctype} should not grant {role} create")
 				self.assertFalse(permissions[role].delete, f"{doctype} should not grant {role} delete")
+
+	def test_sensitive_internal_doctypes_are_not_exposed_to_branch_or_admin_roles(self):
+		no_desk_doctypes = (
+			"Mobile OTP",
+			"Mobile Auth Token",
+			"Order Reference Sequence",
+		)
+		operational_read_only_doctypes = (
+			"Tally Sync Run",
+			"Tally Sync Error",
+			"Tally Voucher",
+			"Order WhatsApp Notification",
+			"Order Reconciliation Log",
+		)
+		for doctype in no_desk_doctypes:
+			permissions = self._permissions_for(doctype)
+			self.assertEqual(set(permissions), {"System Manager"}, doctype)
+			for role in ("Owner", "Admin", "Branch Manager", "Branch Employee", "Guest", "All"):
+				self.assertNotIn(role, permissions, f"{doctype} should not expose {role}")
+
+		for doctype in operational_read_only_doctypes:
+			permissions = self._permissions_for(doctype)
+			for role in ("Owner", "Admin"):
+				self.assertTrue(permissions[role].read, f"{doctype} missing {role} read")
+				self.assertFalse(permissions[role].write, f"{doctype} should not grant {role} write")
+				self.assertFalse(permissions[role].create, f"{doctype} should not grant {role} create")
+				self.assertFalse(permissions[role].delete, f"{doctype} should not grant {role} delete")
+			for role in ("Branch Manager", "Branch Employee", "Guest", "All"):
+				self.assertNotIn(role, permissions, f"{doctype} should not expose {role}")
+
+		self.assertEqual(frappe.get_meta("Tally Voucher Line").istable, 1)
+		self.assertEqual(self._permissions_for("Tally Voucher Line"), {})
+
+	def test_sync_admin_apis_do_not_allow_guest_access(self):
+		admin_methods = (
+			"kunal_enterprises.api.sync_admin.sync_masters_now",
+			"kunal_enterprises.api.sync_admin.sync_stock_now",
+			"kunal_enterprises.api.sync_admin.sync_vouchers_now",
+			"kunal_enterprises.api.sync_admin.import_stock_excel_now",
+			"kunal_enterprises.api.sync_admin.run_reconciliation_now",
+		)
+		for method in admin_methods:
+			method_fn = frappe.get_attr(method)
+			self.assertTrue(method_fn in frappe.whitelisted, method)
+			self.assertFalse(method_fn in frappe.guest_methods, method)
 
 	def _permissions_for(self, doctype):
 		return {permission.role: permission for permission in frappe.get_meta(doctype).permissions}
@@ -3406,6 +3458,7 @@ class TestTallyStockSync(FrappeTestCase):
 	def test_owner_manual_sync_actions_wrap_master_stock_and_reconciliation_jobs(self):
 		product_group = self._create_product_group("Manual Sync PG")
 		item = self._create_item("Manual Sync Item", product_group.name)
+		branch_user = self._create_role_user("manual.sync.branch@example.com", "Branch Manager")
 
 		masters_response = sync_masters_now(
 			role="Owner",
@@ -3418,10 +3471,14 @@ class TestTallyStockSync(FrappeTestCase):
 			records=[{"item": item.name, "godown": "Manual Sync Godown", "quantity": 9}],
 		)
 		reconciliation_response = run_reconciliation_now(role="Owner")
-		branch_response = sync_stock_now(
-			role="Branch Manager",
-			records=[{"item": item.name, "godown": "Manual Sync Godown", "quantity": 9}],
-		)
+		try:
+			frappe.set_user(branch_user.name)
+			branch_response = sync_stock_now(
+				role="Branch Manager",
+				records=[{"item": item.name, "godown": "Manual Sync Godown", "quantity": 9}],
+			)
+		finally:
+			frappe.set_user("Administrator")
 
 		self.assertTrue(masters_response["success"])
 		self.assertTrue(stock_response["success"])
@@ -3454,6 +3511,148 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertTrue(owner_response["success"])
 		self.assertFalse(frappe.db.exists("Tally Unit", "CLAIMED-OWNER-PCS"))
 		self.assertTrue(frappe.db.exists("Tally Unit", "REAL-OWNER-PCS"))
+
+	def test_manual_admin_api_role_hints_are_optional_compatibility_metadata(self):
+		for method in (sync_masters_now, sync_stock_now, sync_vouchers_now, import_stock_excel_now, run_reconciliation_now):
+			parameters = inspect.signature(method).parameters
+			self.assertIn("role", parameters, method.__name__)
+			role_parameter = parameters["role"]
+			self.assertIsNone(role_parameter.default, method.__name__)
+
+	def test_owner_admin_manual_sync_actions_authorize_from_session_without_role_hint(self):
+		product_group = self._create_product_group("Session Manual Sync PG")
+		item = self._create_item("Session Manual Sync Item", product_group.name)
+		self._create_godown("Session Manual Sync Godown")
+		owner_user = self._create_role_user("session.sync.owner@example.com", "Owner")
+		admin_user = self._create_role_user("session.sync.admin@example.com", "Admin")
+
+		try:
+			frappe.set_user(owner_user.name)
+			masters_response = sync_masters_now(
+				records={
+					"units": [{"unit_name": "SESSION-OWNER-PCS", "symbol": "PCS", "is_active": 1}],
+				}
+			)
+			stock_response = sync_stock_now(
+				records=[{"item": item.name, "godown": "Session Manual Sync Godown", "quantity": 11}]
+			)
+
+			frappe.set_user(admin_user.name)
+			voucher_response = sync_vouchers_now(
+				records=[
+					{
+						"voucher_type": "Delivery Challan",
+						"voucher_number": "DC-SESSION-ADMIN",
+						"reference_number": "KE-26-05-9994",
+						"party_client_code": "SESSION-CUSTOMER",
+						"tracking_number": "TRACK-SESSION-ADMIN",
+						"lines": [
+							{
+								"item": item.name,
+								"godown": "Session Manual Sync Godown",
+								"quantity": 1,
+							}
+						],
+					}
+				],
+			)
+			reconciliation_response = run_reconciliation_now()
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertTrue(masters_response["success"])
+		self.assertTrue(stock_response["success"])
+		self.assertTrue(voucher_response["success"])
+		self.assertTrue(reconciliation_response["success"])
+		self.assertTrue(frappe.db.exists("Tally Unit", "SESSION-OWNER-PCS"))
+		self.assertTrue(frappe.db.exists("Tally Voucher", "DC-SESSION-ADMIN"))
+
+	def test_branch_and_guest_users_cannot_forge_role_for_any_manual_admin_api(self):
+		product_group = self._create_product_group("Forbidden Manual Sync PG")
+		item = self._create_item("Forbidden Manual Sync Item", product_group.name)
+		self._create_godown("Forbidden Manual Sync Godown")
+		branch_manager = self._create_role_user("sync.branch.manager@example.com", "Branch Manager")
+		branch_employee = self._create_role_user("sync.branch.employee@example.com", "Branch Employee")
+
+		def call_all_admin_apis():
+			api_calls = (
+				(
+					sync_masters_now,
+					{
+						"role": "Owner",
+						"records": {"units": [{"unit_name": "FORGED-PCS", "symbol": "PCS", "is_active": 1}]},
+					},
+				),
+				(
+					sync_stock_now,
+					{
+						"role": "Owner",
+						"records": [{"item": item.name, "godown": "Forbidden Manual Sync Godown", "quantity": 5}],
+					},
+				),
+				(
+					sync_vouchers_now,
+					{
+						"role": "Owner",
+						"records": [
+							{
+								"voucher_type": "Delivery Challan",
+								"voucher_number": "DC-FORGED-SYNC",
+								"reference_number": "KE-26-05-9993",
+								"party_client_code": "FORGED-CUSTOMER",
+								"tracking_number": "TRACK-FORGED",
+								"lines": [
+									{
+										"item": item.name,
+										"godown": "Forbidden Manual Sync Godown",
+										"quantity": 1,
+									}
+								],
+							}
+						],
+					},
+				),
+				(run_reconciliation_now, {"role": "Owner"}),
+				(import_stock_excel_now, {"file_url": "/files/missing-forbidden-stock.xlsx", "role": "Owner"}),
+			)
+			responses = []
+			for method, kwargs in api_calls:
+				try:
+					responses.append(method(**kwargs))
+				except TypeError as error:
+					self.fail(f"{method.__name__} should accept compatibility role hints: {error}")
+			return responses
+
+		try:
+			for user in (branch_manager.name, branch_employee.name, "Guest"):
+				frappe.set_user(user)
+				for response in call_all_admin_apis():
+					self.assertFalse(response["success"], user)
+					self.assertIn("Owner/Admin", response["error"]["message"], user)
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertFalse(frappe.db.exists("Tally Unit", "FORGED-PCS"))
+		self.assertFalse(frappe.db.exists("Tally Voucher", "DC-FORGED-SYNC"))
+
+	def test_mixed_branch_role_does_not_remove_owner_admin_manual_api_access(self):
+		product_group = self._create_product_group("Mixed Manual Sync PG")
+		item = self._create_item("Mixed Manual Sync Item", product_group.name)
+		self._create_godown("Mixed Manual Sync Godown")
+		mixed_user = self._create_role_user("sync.mixed@example.com", "Owner")
+		mixed_user.add_roles("Branch Manager")
+
+		try:
+			frappe.set_user(mixed_user.name)
+			response = sync_stock_now(
+				role="Branch Manager",
+				records=[{"item": item.name, "godown": "Mixed Manual Sync Godown", "quantity": 7}],
+			)
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertTrue(response["success"])
+		self.assertTrue(frappe.db.exists("Tally Stock Snapshot", f"{item.name}-Mixed Manual Sync Godown"))
 
 	def test_scheduler_registers_five_minute_master_stock_and_reconciliation_jobs(self):
 		five_minute_jobs = hooks.scheduler_events["cron"]["*/5 * * * *"]
@@ -3818,6 +4017,31 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(snapshot_a.source_sync_run, second_run.name)
 		self.assertEqual(snapshot_b.quantity, 5)
 
+	def test_owner_manual_excel_stock_import_action_uses_controlled_file_record(self):
+		product_group = self._create_product_group("Manual Excel Import PG")
+		item = self._create_item("Manual Excel Import Item", product_group.name)
+		self._create_godown("Manual Excel Import Godown")
+		file_doc = self._save_tally_stock_workbook_file(
+			[
+				("group", "Manual Excel Import Group", 13),
+				("item", item.name, 13),
+				("godown", "Manual Excel Import Godown", 13),
+			],
+			"manual-excel-stock-import.xlsx",
+		)
+		owner_user = self._create_role_user("excel.import.owner@example.com", "Owner")
+
+		try:
+			frappe.set_user(owner_user.name)
+			response = import_stock_excel_now(file_doc.file_url)
+		finally:
+			frappe.set_user("Administrator")
+
+		snapshot = frappe.get_doc("Tally Stock Snapshot", f"{item.name}-Manual Excel Import Godown")
+		self.assertTrue(response["success"])
+		self.assertEqual(response["data"]["sync_type"], "Stock")
+		self.assertEqual(snapshot.quantity, 13)
+
 	def test_tally_stock_excel_import_logs_errors_with_excel_source(self):
 		from kunal_enterprises.integrations.tally_stock_excel import EXCEL_STOCK_SOURCE_TABLE, import_tally_stock_excel_path
 
@@ -3955,6 +4179,18 @@ class TestTallyStockSync(FrappeTestCase):
 		workbook.save(handle.name)
 		self.addCleanup(lambda: os.path.exists(handle.name) and os.remove(handle.name))
 		return handle.name
+
+	def _save_tally_stock_workbook_file(self, rows, filename):
+		import os
+
+		from frappe.utils.file_manager import get_file_path, save_file
+
+		path = self._build_tally_stock_workbook(rows)
+		with open(path, "rb") as workbook_file:
+			file_doc = save_file(filename, workbook_file.read(), None, None, is_private=1)
+		file_path = get_file_path(file_doc.file_url)
+		self.addCleanup(lambda: os.path.exists(file_path) and os.remove(file_path))
+		return file_doc
 
 	def _create_role_user(self, email, role):
 		user = frappe.get_doc(

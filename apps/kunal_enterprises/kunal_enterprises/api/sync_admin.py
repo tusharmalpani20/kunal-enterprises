@@ -10,9 +10,9 @@ OWNER_ADMIN_ROLES = ("Owner", "Admin")
 
 
 @frappe.whitelist(methods=["POST"])
-def sync_masters_now(role, records=None):
+def sync_masters_now(role=None, records=None):
 	try:
-		_require_owner_admin(role)
+		_require_owner_admin()
 		run = sync_tally_masters(records)
 		return create_success_response("Master sync completed", _serialize_run(run))
 	except Exception as error:
@@ -20,9 +20,9 @@ def sync_masters_now(role, records=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def sync_stock_now(role, records=None):
+def sync_stock_now(role=None, records=None):
 	try:
-		_require_owner_admin(role)
+		_require_owner_admin()
 		run = sync_stock_snapshots(records)
 		return create_success_response("Stock sync completed", _serialize_run(run))
 	except Exception as error:
@@ -30,9 +30,9 @@ def sync_stock_now(role, records=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def sync_vouchers_now(role, records=None):
+def sync_vouchers_now(role=None, records=None):
 	try:
-		_require_owner_admin(role)
+		_require_owner_admin()
 		run = sync_tally_vouchers(records)
 		return create_success_response("Voucher sync completed", _serialize_run(run))
 	except Exception as error:
@@ -40,7 +40,7 @@ def sync_vouchers_now(role, records=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def import_stock_excel_now(file_url):
+def import_stock_excel_now(file_url, role=None):
 	try:
 		_require_owner_admin()
 		run = import_tally_stock_excel_file(file_url)
@@ -50,30 +50,20 @@ def import_stock_excel_now(file_url):
 
 
 @frappe.whitelist(methods=["POST"])
-def run_reconciliation_now(role):
+def run_reconciliation_now(role=None):
 	try:
-		_require_owner_admin(role)
+		_require_owner_admin()
 		run = run_reconciliation()
 		return create_success_response("Reconciliation completed", _serialize_run(run))
 	except Exception as error:
 		return handle_error_response(error, "Unable to run reconciliation")
 
 
-def _require_owner_admin(role=None):
-	if role:
-		if role not in OWNER_ADMIN_ROLES or not _current_user_has_role(role):
-			frappe.throw("Only Owner/Admin can run sync actions", title="Owner/Admin Required")
-		return
+def _require_owner_admin():
 	if frappe.session.user == "Administrator":
 		return
 	if not set(OWNER_ADMIN_ROLES).intersection(frappe.get_roles(frappe.session.user)):
 		frappe.throw("Only Owner/Admin can run sync actions", title="Owner/Admin Required")
-
-
-def _current_user_has_role(role):
-	if frappe.session.user == "Administrator":
-		return True
-	return role in frappe.get_roles(frappe.session.user)
 
 
 def _serialize_run(run):
