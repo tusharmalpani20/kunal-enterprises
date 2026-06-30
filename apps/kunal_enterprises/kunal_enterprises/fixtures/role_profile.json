@@ -1,0 +1,62 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Role Profile",
+  "modified": "2026-06-30 09:40:13.185422",
+  "name": "Owner",
+  "role_profile": "Owner",
+  "roles": [
+   {
+    "parent": "Owner",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Owner"
+   }
+  ]
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Role Profile",
+  "modified": "2026-06-30 09:40:13.188288",
+  "name": "Admin",
+  "role_profile": "Admin",
+  "roles": [
+   {
+    "parent": "Admin",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Admin"
+   }
+  ]
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Role Profile",
+  "modified": "2026-06-30 09:40:13.190229",
+  "name": "Branch Manager",
+  "role_profile": "Branch Manager",
+  "roles": [
+   {
+    "parent": "Branch Manager",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Branch Manager"
+   }
+  ]
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Role Profile",
+  "modified": "2026-06-30 09:40:13.197649",
+  "name": "Branch Employee",
+  "role_profile": "Branch Employee",
+  "roles": [
+   {
+    "parent": "Branch Employee",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Branch Employee"
+   }
+  ]
+ }
+]

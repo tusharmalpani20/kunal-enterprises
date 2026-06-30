@@ -5,10 +5,16 @@ app_description = "Kunal Enterprise Tally-connected order system"
 app_email = "admin@kunal-enterprises.local"
 app_license = "mit"
 
+KUNAL_ROLES = ["Owner", "Admin", "Branch Manager", "Branch Employee"]
+
 fixtures = [
 	{
 		"dt": "Role",
-		"filters": [["role_name", "in", ["Owner", "Admin", "Branch Manager", "Branch Employee"]]],
+		"filters": [["role_name", "in", KUNAL_ROLES]],
+	},
+	{
+		"dt": "Role Profile",
+		"filters": [["name", "in", KUNAL_ROLES]],
 	}
 ]
 
