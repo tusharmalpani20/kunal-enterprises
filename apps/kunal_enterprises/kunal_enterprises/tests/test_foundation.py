@@ -3,6 +3,7 @@ import json
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from kunal_enterprises.api import order_controls as owner_admin_order_controls
 from kunal_enterprises.api.customer_access import status
 from kunal_enterprises.api.branch_orders import mark_processing as branch_mark_processing
 from kunal_enterprises.api.branch_orders import visible_orders as branch_visible_orders
@@ -2251,6 +2252,70 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertIn(visible_order["data"]["order"], manager_orders)
 		self.assertNotIn(hidden_order["data"]["order"], manager_orders)
 
+	def test_branch_user_with_multiple_branch_permissions_sees_union(self):
+		product_group = self._create_product_group("Multi Branch Permission PG")
+		item = self._create_item("Multi Branch Permission Item", product_group.name)
+		customer = self._create_active_customer("9000000922", "ORDER-MULTI-BRANCH-001")
+		branches = []
+		for branch_name, godown in (
+			("Multi Permission Branch A", "Multi Permission Godown A"),
+			("Multi Permission Branch B", "Multi Permission Godown B"),
+			("Multi Permission Branch Hidden", "Multi Permission Godown Hidden"),
+		):
+			branch = frappe.get_doc(
+				{
+					"doctype": "Portal Branch",
+					"branch_name": branch_name,
+					"is_active": 1,
+				}
+			).insert()
+			self._create_godown(godown)
+			frappe.get_doc(
+				{
+					"doctype": "Branch Godown Mapping",
+					"portal_branch": branch.name,
+					"godown": godown,
+					"is_active": 1,
+				}
+			).insert()
+			branches.append(branch)
+		order_a = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Multi Permission Godown A", "quantity": 1}],
+		)
+		order_b = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Multi Permission Godown B", "quantity": 1}],
+		)
+		hidden_order = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Multi Permission Godown Hidden", "quantity": 1}],
+		)
+		manager = self._create_branch_user(
+			"branch.multi.permission@example.com",
+			"Branch Manager",
+			branches[0].name,
+		)
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": manager.name,
+				"allow": "Portal Branch",
+				"for_value": branches[1].name,
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+
+		try:
+			frappe.set_user(manager.name)
+			visible_orders = {row.name for row in frappe.get_list("Order", fields=["name"], order_by="name asc")}
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertIn(order_a["data"]["order"], visible_orders)
+		self.assertIn(order_b["data"]["order"], visible_orders)
+		self.assertNotIn(hidden_order["data"]["order"], visible_orders)
+
 	def test_branch_manager_sees_orders_for_mapped_godowns_across_statuses(self):
 		product_group = self._create_product_group("Branch Visibility PG")
 		item = self._create_item("Branch Visibility Item", product_group.name)
@@ -2305,6 +2370,91 @@ class TestOrderSubmission(FrappeTestCase):
 			response["data"]["orders"][0]["manual_review_reason_code"],
 			"CUSTOMER_CLIENT_CODE_MISMATCH",
 		)
+
+	def test_mixed_branch_manager_employee_visibility_uses_manager_scope(self):
+		product_group = self._create_product_group("Mixed Branch Role PG")
+		item = self._create_item("Mixed Branch Role Item", product_group.name)
+		customer = self._create_active_customer("9000000916", "ORDER-BRANCH-MIXED-001")
+		branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Mixed Role Branch",
+				"is_active": 1,
+			}
+		).insert()
+		self._create_godown("Mixed Role Godown")
+		frappe.get_doc(
+			{
+				"doctype": "Branch Godown Mapping",
+				"portal_branch": branch.name,
+				"godown": "Mixed Role Godown",
+				"is_active": 1,
+			}
+		).insert()
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Mixed Role Godown", "quantity": 2}],
+		)
+		frappe.db.set_value("Order", order_response["data"]["order"], "status", "Completed")
+		mixed_user = self._create_branch_user(
+			"branch.mixed.role@example.com",
+			"Branch Manager",
+			branch.name,
+		)
+		mixed_user.add_roles("Branch Employee")
+
+		try:
+			frappe.set_user(mixed_user.name)
+			response = branch_visible_orders(branch.name, role="Branch Employee")
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertTrue(response["success"])
+		self.assertEqual([order["name"] for order in response["data"]["orders"]], [order_response["data"]["order"]])
+
+	def test_branch_manager_can_move_visible_placed_order_to_processing_with_status_log(self):
+		product_group = self._create_product_group("Branch Manager Processing PG")
+		item = self._create_item("Branch Manager Processing Item", product_group.name)
+		customer = self._create_active_customer("9000000917", "ORDER-BRANCH-MANAGER-001")
+		branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Manager Processing Branch",
+				"is_active": 1,
+			}
+		).insert()
+		self._create_godown("Manager Processing Godown")
+		frappe.get_doc(
+			{
+				"doctype": "Branch Godown Mapping",
+				"portal_branch": branch.name,
+				"godown": "Manager Processing Godown",
+				"is_active": 1,
+			}
+		).insert()
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Manager Processing Godown", "quantity": 2}],
+		)
+		manager = self._create_branch_user(
+			"branch.manager.processing@example.com",
+			"Branch Manager",
+			branch.name,
+		)
+
+		try:
+			frappe.set_user(manager.name)
+			response = branch_mark_processing(branch.name, order_response["data"]["order"], role="Branch Manager")
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertTrue(response["success"])
+		order = frappe.get_doc("Order", order_response["data"]["order"])
+		status_log = frappe.get_last_doc("Order Status Log", filters={"order": order.name})
+		self.assertEqual(order.status, "Processing")
+		self.assertEqual(status_log.from_status, "Placed")
+		self.assertEqual(status_log.to_status, "Processing")
+		self.assertEqual(status_log.role, "Branch Manager")
 
 	def test_branch_order_apis_do_not_trust_claimed_role_or_branch(self):
 		product_group = self._create_product_group("Branch Claimed Role PG")
@@ -2402,6 +2552,143 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertEqual(status_log.from_status, "Placed")
 		self.assertEqual(status_log.to_status, "Processing")
 		self.assertEqual(status_log.role, "Branch Employee")
+
+	def test_owner_and_admin_can_move_placed_order_to_processing_with_status_log(self):
+		process_order = getattr(owner_admin_order_controls, "mark_processing", None)
+		self.assertIsNotNone(process_order)
+
+		for role, email, mobile, client_code in (
+			("Owner", "owner.processing@example.com", "9000000918", "ORDER-OWNER-PROCESS-001"),
+			("Admin", "admin.processing@example.com", "9000000919", "ORDER-ADMIN-PROCESS-001"),
+		):
+			with self.subTest(role=role):
+				product_group = self._create_product_group(f"{role} Processing PG")
+				item = self._create_item(f"{role} Processing Item", product_group.name)
+				customer = self._create_active_customer(mobile, client_code)
+				self._create_godown(f"{role} Processing Godown")
+				order_response = submit_order(
+					customer.name,
+					[{"item": item.name, "godown": f"{role} Processing Godown", "quantity": 2}],
+				)
+				user = self._create_role_user(email, role)
+
+				try:
+					frappe.set_user(user.name)
+					response = process_order(order_response["data"]["order"], role=role)
+				finally:
+					frappe.set_user("Administrator")
+
+				order = frappe.get_doc("Order", order_response["data"]["order"])
+				status_log = frappe.get_last_doc("Order Status Log", filters={"order": order.name})
+				self.assertTrue(response["success"])
+				self.assertEqual(order.status, "Processing")
+				self.assertEqual(status_log.from_status, "Placed")
+				self.assertEqual(status_log.to_status, "Processing")
+				self.assertEqual(status_log.role, role)
+
+	def test_processing_actions_reject_non_placed_orders_without_status_log(self):
+		process_order = getattr(owner_admin_order_controls, "mark_processing", None)
+		self.assertIsNotNone(process_order)
+		product_group = self._create_product_group("Processing Reject PG")
+		item = self._create_item("Processing Reject Item", product_group.name)
+		customer = self._create_active_customer("9000000920", "ORDER-PROCESS-REJECT-001")
+		branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Processing Reject Branch",
+				"is_active": 1,
+			}
+		).insert()
+		self._create_godown("Processing Reject Godown")
+		frappe.get_doc(
+			{
+				"doctype": "Branch Godown Mapping",
+				"portal_branch": branch.name,
+				"godown": "Processing Reject Godown",
+				"is_active": 1,
+			}
+		).insert()
+		branch_order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Processing Reject Godown", "quantity": 2}],
+		)
+		owner_order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Processing Reject Godown", "quantity": 1}],
+		)
+		frappe.db.set_value("Order", branch_order_response["data"]["order"], "status", "Processing")
+		frappe.db.set_value("Order", owner_order_response["data"]["order"], "status", "Processing")
+		branch_user = self._create_branch_user(
+			"branch.processing.reject@example.com",
+			"Branch Employee",
+			branch.name,
+		)
+		owner_user = self._create_role_user("owner.processing.reject@example.com", "Owner")
+
+		try:
+			frappe.set_user(branch_user.name)
+			branch_response = branch_mark_processing(
+				branch.name,
+				branch_order_response["data"]["order"],
+				role="Branch Employee",
+			)
+			frappe.set_user(owner_user.name)
+			owner_response = process_order(owner_order_response["data"]["order"], role="Owner")
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertFalse(branch_response["success"])
+		self.assertFalse(owner_response["success"])
+		self.assertEqual(
+			frappe.db.count("Order Status Log", {"order": branch_order_response["data"]["order"]}),
+			0,
+		)
+		self.assertEqual(
+			frappe.db.count("Order Status Log", {"order": owner_order_response["data"]["order"]}),
+			0,
+		)
+
+	def test_branch_processing_rejects_order_without_mapped_godown(self):
+		product_group = self._create_product_group("Unmapped Branch Processing PG")
+		item = self._create_item("Unmapped Branch Processing Item", product_group.name)
+		customer = self._create_active_customer("9000000921", "ORDER-BRANCH-UNMAPPED-001")
+		branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Unmapped Processing Branch",
+				"is_active": 1,
+			}
+		).insert()
+		self._create_godown("Mapped Processing Godown")
+		self._create_godown("Unmapped Processing Godown")
+		frappe.get_doc(
+			{
+				"doctype": "Branch Godown Mapping",
+				"portal_branch": branch.name,
+				"godown": "Mapped Processing Godown",
+				"is_active": 1,
+			}
+		).insert()
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Unmapped Processing Godown", "quantity": 2}],
+		)
+		branch_user = self._create_branch_user(
+			"branch.processing.unmapped@example.com",
+			"Branch Employee",
+			branch.name,
+		)
+
+		try:
+			frappe.set_user(branch_user.name)
+			response = branch_mark_processing(branch.name, order_response["data"]["order"], role="Branch Employee")
+		finally:
+			frappe.set_user("Administrator")
+
+		order = frappe.get_doc("Order", order_response["data"]["order"])
+		self.assertFalse(response["success"])
+		self.assertEqual(order.status, "Placed")
+		self.assertEqual(frappe.db.count("Order Status Log", {"order": order.name}), 0)
 
 	def test_branch_roles_cannot_cancel_partially_close_or_resolve_manual_review(self):
 		product_group = self._create_product_group("Branch Restricted Control PG")
