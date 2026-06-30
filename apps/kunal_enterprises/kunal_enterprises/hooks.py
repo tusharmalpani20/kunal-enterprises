@@ -15,6 +15,14 @@ fixtures = [
 	{
 		"dt": "Role Profile",
 		"filters": [["name", "in", KUNAL_ROLES]],
+	},
+	{
+		"dt": "Custom DocPerm",
+		"filters": [["parent", "in", ["User", "Role", "Role Profile"]], ["role", "in", ["Owner", "Admin"]]],
+	},
+	{
+		"dt": "Workspace",
+		"filters": [["name", "in", ["Kunal Operations", "Kunal Admin"]]],
 	}
 ]
 
@@ -67,6 +75,9 @@ scheduler_events = {
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
+doctype_js = {
+	"User": "public/js/user.js",
+}
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -87,6 +98,8 @@ scheduler_events = {
 # role_home_page = {
 # 	"Role": "home_page"
 # }
+
+boot_session = ["kunal_enterprises.desk_navigation.limit_workspaces"]
 
 # Generators
 # ----------
@@ -225,6 +238,7 @@ override_whitelisted_methods = {
 	"frappe.core.doctype.user.user.get_roles": "kunal_enterprises.permission_guards.owner_admin.get_roles",
 	"frappe.core.doctype.user.user.get_role_profile": "kunal_enterprises.permission_guards.owner_admin.get_role_profile",
 	"frappe.core.doctype.user.user.reset_password": "kunal_enterprises.permission_guards.owner_admin.reset_password",
+	"frappe.desk.desktop.get_workspace_sidebar_items": "kunal_enterprises.desk_navigation.get_workspace_sidebar_items",
 }
 #
 # each overriding function accepts a `data` argument;

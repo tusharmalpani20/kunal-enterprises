@@ -357,7 +357,7 @@ def _is_builtin_user(user):
 def _roles_from_user_doc(doc):
 	return {
 		row.role
-		for row in doc.get("roles", [])
+		for row in (doc.get("roles") or [])
 		if getattr(row, "role", None)
 	}
 
@@ -365,7 +365,7 @@ def _roles_from_user_doc(doc):
 def _roles_from_profile_doc(doc):
 	return {
 		row.role
-		for row in doc.get("roles", [])
+		for row in (doc.get("roles") or [])
 		if getattr(row, "role", None)
 	}
 
