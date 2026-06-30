@@ -154,6 +154,83 @@ class TestFoundation(FrappeTestCase):
 			for role in roles:
 				self.assertIn(role, permission_roles, f"{doctype} missing {role} permission")
 
+	def test_required_role_profiles_are_installed_without_extra_roles(self):
+		expected_profiles = {
+			"Owner": {"Owner"},
+			"Admin": {"Admin"},
+			"Branch Manager": {"Branch Manager"},
+			"Branch Employee": {"Branch Employee"},
+		}
+
+		for profile, expected_roles in expected_profiles.items():
+			self.assertTrue(frappe.db.exists("Role Profile", profile), profile)
+			role_profile = frappe.get_doc("Role Profile", profile)
+			self.assertEqual(role_profile.role_profile, profile)
+			self.assertEqual({row.role for row in role_profile.roles}, expected_roles)
+			self.assertNotIn("System Manager", {row.role for row in role_profile.roles})
+
+	def test_hooks_export_only_kunal_roles_and_role_profiles(self):
+		fixture_filters = {fixture["dt"]: fixture.get("filters") for fixture in hooks.fixtures}
+		expected_roles = ["Owner", "Admin", "Branch Manager", "Branch Employee"]
+
+		self.assertIn("Role", fixture_filters)
+		self.assertIn("Role Profile", fixture_filters)
+		self.assertEqual(fixture_filters["Role"], [["role_name", "in", expected_roles]])
+		self.assertEqual(fixture_filters["Role Profile"], [["name", "in", expected_roles]])
+
+	def test_branch_roles_only_have_direct_order_read_until_row_hooks_exist(self):
+		branch_roles = {"Branch Manager", "Branch Employee"}
+		unsafe_without_row_hooks = ("Portal Branch", "Branch Godown Mapping", "Order Status Log")
+
+		for doctype in unsafe_without_row_hooks:
+			permissions = self._permissions_for(doctype)
+			read_roles = {role for role, permission in permissions.items() if permission.read}
+			self.assertTrue(
+				branch_roles.isdisjoint(read_roles),
+				f"{doctype} should not grant direct branch-role read without row-level hooks",
+			)
+
+		order_permissions = self._permissions_for("Order")
+		for role in branch_roles:
+			self.assertTrue(order_permissions[role].read)
+			self.assertFalse(order_permissions[role].write)
+			self.assertFalse(order_permissions[role].create)
+			self.assertFalse(order_permissions[role].delete)
+
+	def test_owner_admin_can_manage_branch_setup_doctypes(self):
+		for doctype in ("Portal Branch", "Branch Godown Mapping"):
+			permissions = self._permissions_for(doctype)
+			for role in ("Owner", "Admin"):
+				self.assertTrue(permissions[role].read, f"{doctype} missing {role} read")
+				self.assertTrue(permissions[role].write, f"{doctype} missing {role} write")
+				self.assertTrue(permissions[role].create, f"{doctype} missing {role} create")
+				self.assertTrue(permissions[role].delete, f"{doctype} missing {role} delete")
+
+	def test_tally_derived_doctypes_are_read_only_for_owner_admin(self):
+		tally_derived_doctypes = (
+			"Tally Customer Ledger",
+			"Tally Stock Group",
+			"Tally Item",
+			"Tally Stock Category",
+			"Tally Godown",
+			"Tally Unit",
+			"Tally Stock Snapshot",
+			"Tally Voucher",
+			"Tally Sync Run",
+			"Tally Sync Error",
+		)
+
+		for doctype in tally_derived_doctypes:
+			permissions = self._permissions_for(doctype)
+			for role in ("Owner", "Admin"):
+				self.assertTrue(permissions[role].read, f"{doctype} missing {role} read")
+				self.assertFalse(permissions[role].write, f"{doctype} should not grant {role} write")
+				self.assertFalse(permissions[role].create, f"{doctype} should not grant {role} create")
+				self.assertFalse(permissions[role].delete, f"{doctype} should not grant {role} delete")
+
+	def _permissions_for(self, doctype):
+		return {permission.role: permission for permission in frappe.get_meta(doctype).permissions}
+
 	def test_mobile_token_api_endpoints_allow_guest_for_custom_auth_token_verification(self):
 		mobile_token_methods = (
 			"kunal_enterprises.api.customer_access.status",

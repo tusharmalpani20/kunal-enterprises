@@ -57,20 +57,28 @@
    "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
    "read": 1,
-   "role": "Owner"
+   "report": 1,
+   "role": "Owner",
+   "share": 1,
+   "write": 1
   },
   {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
    "read": 1,
-   "role": "Admin"
-  },
-  {
-   "read": 1,
-   "role": "Branch Manager"
-  },
-  {
-   "read": 1,
-   "role": "Branch Employee"
+   "report": 1,
+   "role": "Admin",
+   "share": 1,
+   "write": 1
   }
  ],
  "sort_field": "modified",

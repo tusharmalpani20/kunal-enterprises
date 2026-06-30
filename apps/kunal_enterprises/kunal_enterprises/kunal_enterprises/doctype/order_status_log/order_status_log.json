@@ -82,14 +82,6 @@
   {
    "read": 1,
    "role": "Admin"
-  },
-  {
-   "read": 1,
-   "role": "Branch Manager"
-  },
-  {
-   "read": 1,
-   "role": "Branch Employee"
   }
  ],
  "sort_field": "created_at",
