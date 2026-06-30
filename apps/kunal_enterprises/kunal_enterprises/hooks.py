@@ -143,10 +143,18 @@ scheduler_events = {
 
 permission_query_conditions = {
 	"Order": "kunal_enterprises.permission_query_conditions.orders.get_permission_query_conditions",
+	"User": "kunal_enterprises.permission_guards.owner_admin.user_query",
+	"User Permission": "kunal_enterprises.permission_guards.owner_admin.user_permission_query",
+	"Role": "kunal_enterprises.permission_guards.owner_admin.role_query",
+	"Role Profile": "kunal_enterprises.permission_guards.owner_admin.role_profile_query",
 }
 
 has_permission = {
 	"Order": "kunal_enterprises.permission_query_conditions.orders.has_permission",
+	"User": "kunal_enterprises.permission_guards.owner_admin.has_user_permission",
+	"User Permission": "kunal_enterprises.permission_guards.owner_admin.has_user_permission_doc",
+	"Role": "kunal_enterprises.permission_guards.owner_admin.has_role_permission",
+	"Role Profile": "kunal_enterprises.permission_guards.owner_admin.has_role_profile_permission",
 }
 
 # DocType Class
@@ -161,13 +169,27 @@ has_permission = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"User": {
+		"before_insert": "kunal_enterprises.permission_guards.owner_admin.guard_user_write",
+		"before_save": "kunal_enterprises.permission_guards.owner_admin.guard_user_write",
+		"before_rename": "kunal_enterprises.permission_guards.owner_admin.guard_user_rename",
+		"on_trash": "kunal_enterprises.permission_guards.owner_admin.guard_user_delete",
+	},
+	"Role": {
+		"before_save": "kunal_enterprises.permission_guards.owner_admin.guard_role_write",
+		"on_trash": "kunal_enterprises.permission_guards.owner_admin.guard_role_delete",
+	},
+	"Role Profile": {
+		"before_save": "kunal_enterprises.permission_guards.owner_admin.guard_role_profile_write",
+		"on_trash": "kunal_enterprises.permission_guards.owner_admin.guard_role_profile_delete",
+	},
+	"User Permission": {
+		"before_insert": "kunal_enterprises.permission_guards.owner_admin.guard_user_permission_write",
+		"before_save": "kunal_enterprises.permission_guards.owner_admin.guard_user_permission_write",
+		"on_trash": "kunal_enterprises.permission_guards.owner_admin.guard_user_permission_delete",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
@@ -198,9 +220,12 @@ has_permission = {
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "kunal_enterprises.event.get_events"
-# }
+override_whitelisted_methods = {
+	"frappe.core.doctype.user.user.get_all_roles": "kunal_enterprises.permission_guards.owner_admin.get_all_roles",
+	"frappe.core.doctype.user.user.get_roles": "kunal_enterprises.permission_guards.owner_admin.get_roles",
+	"frappe.core.doctype.user.user.get_role_profile": "kunal_enterprises.permission_guards.owner_admin.get_role_profile",
+	"frappe.core.doctype.user.user.reset_password": "kunal_enterprises.permission_guards.owner_admin.reset_password",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
