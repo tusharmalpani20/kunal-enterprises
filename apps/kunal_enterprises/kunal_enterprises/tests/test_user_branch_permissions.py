@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import frappe
 from frappe.desk.form.load import getdoc
@@ -27,6 +28,31 @@ class TestUserBranchPermissions(FrappeTestCase):
 
 	def test_user_form_script_is_registered_for_existing_user_doctype(self):
 		self.assertEqual(hooks.doctype_js["User"], "public/js/user.js")
+
+	def test_user_form_script_removes_email_account_actions(self):
+		script = self._user_form_script()
+
+		self.assertIn("disable_user_email_delivery(frm)", script)
+		self.assertIn("remove_email_account_actions(frm)", script)
+		self.assertIn('frm.remove_custom_button(__("Create User Email"))', script)
+		self.assertIn('frm.remove_custom_button(__("Reset Password"), __("Password"))', script)
+
+	def test_user_form_script_renders_branch_assignment_table(self):
+		script = self._user_form_script()
+
+		self.assertIn("render_branch_assignment_table", script)
+		self.assertIn("data-branch-action", script)
+		self.assertIn('__("Assign")', script)
+		self.assertIn('__("Unassign")', script)
+		self.assertNotIn('fieldtype: "MultiSelectList"', script)
+
+	def test_user_form_script_shows_branch_button_only_for_branch_users(self):
+		script = self._user_form_script()
+
+		self.assertIn("can_manage_target_branches(frm)", script)
+		self.assertIn("BRANCH_ASSIGNABLE_ROLES", script)
+		self.assertIn("GLOBAL_USER_ROLES", script)
+		self.assertIn("if (!data.can_edit) {", script)
 
 	def test_owner_and_admin_can_open_guarded_kunal_user_forms(self):
 		self.assertTrue(
@@ -78,6 +104,19 @@ class TestUserBranchPermissions(FrappeTestCase):
 			self._portal_branch_permissions(self.branch_manager.name),
 			[self.branch_a.name],
 		)
+
+	def test_get_user_branches_returns_assignment_table_rows(self):
+		frappe.set_user(self.owner.name)
+		set_user_branches(self.branch_manager.name, [self.branch_a.name])
+
+		result = get_user_branches(self.branch_manager.name)
+		branches_by_name = {row["name"]: row for row in result["branch_options"]}
+
+		self.assertEqual(result["branches"], [self.branch_a.name])
+		self.assertTrue({self.branch_a.name, self.branch_b.name}.issubset(branches_by_name))
+		self.assertTrue(branches_by_name[self.branch_a.name]["assigned"])
+		self.assertFalse(branches_by_name[self.branch_b.name]["assigned"])
+		self.assertTrue(branches_by_name[self.branch_a.name]["is_active"])
 
 	def test_admin_can_assign_branch_users_but_cannot_view_or_mutate_owner_users(self):
 		frappe.set_user(self.admin.name)
@@ -251,6 +290,10 @@ class TestUserBranchPermissions(FrappeTestCase):
 		).insert(ignore_permissions=True)
 		user.add_roles(role)
 		return user
+
+	def _user_form_script(self):
+		script_path = Path(__file__).parents[1] / "public" / "js" / "user.js"
+		return script_path.read_text()
 
 	def _create_branch(self, branch_name, is_active=1):
 		return frappe.get_doc(

@@ -1,6 +1,15 @@
+const BRANCH_ASSIGNABLE_ROLES = ["Branch Manager", "Branch Employee"];
+const GLOBAL_USER_ROLES = ["Owner", "Admin"];
+
 frappe.ui.form.on("User", {
+	onload(frm) {
+		disable_user_email_delivery(frm);
+	},
 	refresh(frm) {
-		if (frm.is_new() || !can_manage_user_branches()) {
+		disable_user_email_delivery(frm);
+		remove_email_account_actions(frm);
+
+		if (frm.is_new() || !can_manage_user_branches(frm)) {
 			return;
 		}
 
@@ -10,9 +19,39 @@ frappe.ui.form.on("User", {
 	},
 });
 
-function can_manage_user_branches() {
+function disable_user_email_delivery(frm) {
+	if (frm.is_new()) {
+		frm.set_value("send_welcome_email", 0);
+	}
+}
+
+function remove_email_account_actions(frm) {
+	frm.remove_custom_button(__("Create User Email"));
+	frm.remove_custom_button(__("Reset Password"), __("Password"));
+
+	setTimeout(() => {
+		frm.remove_custom_button(__("Create User Email"));
+		frm.remove_custom_button(__("Reset Password"), __("Password"));
+	}, 0);
+}
+
+function can_manage_user_branches(frm) {
 	const roles = frappe.user_roles || [];
-	return frappe.session.user === "Administrator" || roles.includes("Owner") || roles.includes("Admin");
+	const can_manage = frappe.session.user === "Administrator" || roles.includes("Owner") || roles.includes("Admin");
+	return can_manage && can_manage_target_branches(frm);
+}
+
+function can_manage_target_branches(frm) {
+	const target_roles = get_target_roles(frm);
+	const is_global_user = target_roles.some((role) => GLOBAL_USER_ROLES.includes(role));
+	const is_branch_user = target_roles.some((role) => BRANCH_ASSIGNABLE_ROLES.includes(role));
+	return is_branch_user && !is_global_user;
+}
+
+function get_target_roles(frm) {
+	const role_profile = frm.doc.role_profile_name ? [frm.doc.role_profile_name] : [];
+	const assigned_roles = (frm.doc.roles || []).map((row) => row.role).filter(Boolean);
+	return [...role_profile, ...assigned_roles];
 }
 
 function show_user_branch_dialog(frm) {
@@ -32,64 +71,39 @@ function show_user_branch_dialog(frm) {
 }
 
 function render_user_branch_dialog(frm, data) {
-	const current_branches = data.branches || [];
 	const inactive_branches = (data.branch_details || []).filter((branch) => !branch.is_active);
 	const summary = build_branch_dialog_summary(data, inactive_branches);
+	const fields = [
+		{
+			fieldname: "summary",
+			fieldtype: "HTML",
+			options: summary,
+		},
+	];
+
+	if (data.can_edit) {
+		fields.push({
+			fieldname: "branch_table",
+			fieldtype: "HTML",
+			label: __("Branches"),
+		});
+	}
 
 	const dialog = new frappe.ui.Dialog({
 		title: __("Branches - {0}", [frm.doc.full_name || frm.doc.name]),
 		size: "large",
-		fields: [
-			{
-				fieldname: "summary",
-				fieldtype: "HTML",
-				options: summary,
-			},
-			{
-				fieldname: "branches",
-				fieldtype: "MultiSelectList",
-				label: __("Branches"),
-				read_only: data.can_edit ? 0 : 1,
-				get_data(txt) {
-					return frappe.db.get_link_options("Portal Branch", txt, {
-						is_active: 1,
-					});
-				},
-			},
-		],
-		primary_action_label: data.can_edit ? __("Save") : __("Close"),
-		primary_action(values) {
-			if (!data.can_edit) {
-				dialog.hide();
-				return;
-			}
-
-			frappe.call({
-				method: "kunal_enterprises.api.user_branch_permissions.set_user_branches",
-				args: {
-					user: frm.doc.name,
-					branches: JSON.stringify(values.branches || []),
-				},
-				freeze: true,
-				freeze_message: __("Saving branch assignments..."),
-				callback(save_response) {
-					const result = save_response.message;
-					if (!result) {
-						return;
-					}
-					frappe.show_alert({
-						message: __("Branch assignments updated"),
-						indicator: "green",
-					});
-					dialog.hide();
-					show_user_branch_dialog(frm);
-				},
-			});
+		fields,
+		primary_action_label: __("Close"),
+		primary_action() {
+			dialog.hide();
 		},
 	});
 
 	dialog.show();
-	dialog.set_value("branches", current_branches);
+	if (!data.can_edit) {
+		return;
+	}
+	render_branch_assignment_table(dialog, frm, data);
 }
 
 function build_branch_dialog_summary(data, inactive_branches) {
@@ -113,4 +127,112 @@ function build_branch_dialog_summary(data, inactive_branches) {
 			${inactive_message}
 		</div>
 	`;
+}
+
+function render_branch_assignment_table(dialog, frm, data) {
+	const wrapper = dialog.fields_dict.branch_table.$wrapper;
+	const branch_options = data.branch_options || build_branch_options_from_details(data);
+
+	if (!branch_options.length) {
+		wrapper.html(`<p class="text-muted">${__("No active branches found.")}</p>`);
+		return;
+	}
+
+	const rows = branch_options.map((branch) => build_branch_assignment_row(branch, data.can_edit)).join("");
+	wrapper.html(`
+		<div class="table-responsive">
+			<table class="table table-bordered table-sm branch-assignment-table">
+				<thead>
+					<tr>
+						<th>${__("Branch")}</th>
+						<th class="text-center" style="width: 150px;">${__("Status")}</th>
+						<th class="text-right" style="width: 120px;">${__("Action")}</th>
+					</tr>
+				</thead>
+				<tbody>${rows}</tbody>
+			</table>
+		</div>
+	`);
+
+	wrapper.find("[data-branch-action]").on("click", function () {
+		const button = $(this);
+		update_branch_assignment(dialog, frm, data, button.attr("data-branch"), button.attr("data-branch-action"));
+	});
+}
+
+function build_branch_assignment_row(branch, can_edit) {
+	const assigned = Boolean(branch.assigned);
+	const action = assigned ? "unassign" : "assign";
+	const action_label = assigned ? __("Unassign") : __("Assign");
+	const active_label = branch.is_active ? __("Active") : __("Inactive");
+	const assigned_label = assigned ? __("Assigned") : __("Not Assigned");
+	const can_update = can_edit && (branch.is_active || assigned);
+	const disabled = can_update ? "" : "disabled";
+	const button = can_edit
+		? `<button class="btn btn-xs btn-default" data-branch="${frappe.utils.escape_html(branch.name)}" data-branch-action="${action}" ${disabled}>
+			${action_label}
+		</button>`
+		: `<span class="text-muted">-</span>`;
+
+	return `
+		<tr>
+			<td>
+				<div class="font-weight-bold">${frappe.utils.escape_html(branch.branch_name || branch.name)}</div>
+				<div class="text-muted small">${frappe.utils.escape_html(branch.name)}</div>
+			</td>
+			<td class="text-center">
+				<span class="indicator-pill ${assigned ? "green" : "gray"}" style="white-space: nowrap;">${assigned_label}</span>
+				<div class="text-muted small">${active_label}</div>
+			</td>
+			<td class="text-right">${button}</td>
+		</tr>
+	`;
+}
+
+function update_branch_assignment(dialog, frm, data, branch, action) {
+	const assigned = new Set(data.branches || []);
+	if (action === "assign") {
+		assigned.add(branch);
+	} else {
+		assigned.delete(branch);
+	}
+
+	const branch_options = data.branch_options || [];
+	const branches = branch_options.map((row) => row.name).filter((name) => assigned.has(name));
+
+	frappe.call({
+		method: "kunal_enterprises.api.user_branch_permissions.set_user_branches",
+		args: {
+			user: frm.doc.name,
+			branches: JSON.stringify(branches),
+		},
+		freeze: true,
+		freeze_message: __("Saving branch assignment..."),
+		callback(response) {
+			const result = response.message;
+			if (!result) {
+				return;
+			}
+
+			data.branches = result.branches || [];
+			const updated = new Set(data.branches);
+			data.branch_options = branch_options.map((row) => ({
+				...row,
+				assigned: updated.has(row.name),
+			})).filter((row) => row.is_active || row.assigned);
+			render_branch_assignment_table(dialog, frm, data);
+			frappe.show_alert({
+				message: __("Branch assignment updated"),
+				indicator: "green",
+			});
+		},
+	});
+}
+
+function build_branch_options_from_details(data) {
+	const assigned = new Set(data.branches || []);
+	return (data.branch_details || []).map((branch) => ({
+		...branch,
+		assigned: assigned.has(branch.name),
+	}));
 }

@@ -50,6 +50,17 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 			"kunal_enterprises.permission_guards.owner_admin.reset_password",
 		)
 
+	def test_overridden_user_rpc_methods_are_whitelisted(self):
+		for method in (
+			owner_admin.get_all_roles,
+			owner_admin.get_roles,
+			owner_admin.get_role_profile,
+			owner_admin.reset_password,
+		):
+			self.assertIn(method, frappe.whitelisted)
+
+		self.assertIn(owner_admin.reset_password, frappe.guest_methods)
+
 	def test_role_lookup_methods_are_filtered_for_admin(self):
 		frappe.set_user(self.admin.name)
 
@@ -70,6 +81,20 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 				owner_admin.get_roles()
 		finally:
 			frappe.local.form_dict = original_form_dict
+
+	def test_role_lookup_methods_show_only_portal_roles_for_administrator(self):
+		frappe.set_user("Administrator")
+
+		self.assertEqual(owner_admin.get_all_roles(), ["Owner", "Admin", "Branch Manager", "Branch Employee"])
+
+	def test_user_guard_suppresses_welcome_email_delivery(self):
+		user = self._new_user("guard.no.email@example.com", roles=["Branch Employee"])
+		user.send_welcome_email = 1
+
+		owner_admin.guard_user_write(user)
+
+		self.assertEqual(user.send_welcome_email, 0)
+		self.assertTrue(user.flags.no_welcome_mail)
 
 	def test_admin_cannot_create_or_mutate_owner_users(self):
 		frappe.set_user(self.admin.name)

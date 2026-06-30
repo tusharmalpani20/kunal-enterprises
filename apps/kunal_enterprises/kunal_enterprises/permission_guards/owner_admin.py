@@ -13,6 +13,8 @@ BRANCH_ROLES = (BRANCH_MANAGER_ROLE, BRANCH_EMPLOYEE_ROLE)
 
 
 def guard_user_write(doc, method=None):
+	_disable_user_email_delivery(doc)
+
 	if _is_unrestricted_context():
 		return
 
@@ -84,6 +86,14 @@ def guard_role_profile_write(doc, method=None):
 
 def guard_role_profile_delete(doc, method=None):
 	guard_role_profile_write(doc, method)
+
+
+def _disable_user_email_delivery(doc):
+	if doc.doctype != "User":
+		return
+
+	doc.send_welcome_email = 0
+	doc.flags.no_welcome_mail = True
 
 
 def guard_user_permission_write(doc, method=None):
@@ -221,11 +231,10 @@ def has_role_profile_permission(doc, user=None, permission_type=None):
 	return False
 
 
+@frappe.whitelist()
 def get_all_roles():
 	if _is_unrestricted_context():
-		from frappe.core.doctype.user.user import get_all_roles as frappe_get_all_roles
-
-		return frappe_get_all_roles()
+		return list(KUNAL_ROLES)
 
 	actor = _actor_class()
 	if actor == OWNER_ROLE:
@@ -235,6 +244,7 @@ def get_all_roles():
 	return []
 
 
+@frappe.whitelist()
 def get_role_profile(role_profile):
 	if _is_unrestricted_context():
 		return frappe.get_doc("Role Profile", {"role_profile": role_profile}).roles
@@ -247,6 +257,7 @@ def get_role_profile(role_profile):
 	_deny("You cannot access this role profile.")
 
 
+@frappe.whitelist()
 def get_roles(arg=None):
 	target_user = arg or frappe.form_dict.get("uid")
 	if _is_unrestricted_context():
@@ -260,6 +271,7 @@ def get_roles(arg=None):
 	_deny("You cannot access roles for this user.")
 
 
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def reset_password(user):
 	if not _is_unrestricted_context() and frappe.session.user != "Guest":
 		actor = _actor_class()

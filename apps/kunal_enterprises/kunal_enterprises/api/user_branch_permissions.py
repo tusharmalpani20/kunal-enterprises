@@ -25,6 +25,7 @@ def get_user_branches(user):
 		"role_profile": state["role_profile"],
 		"branches": branches,
 		"branch_details": _branch_details(branches),
+		"branch_options": _branch_options(branches),
 		"can_edit": _can_edit_target(state),
 		"is_global_user": state["is_global_user"],
 	}
@@ -226,4 +227,39 @@ def _branch_details(branches):
 			"is_active": bool(by_name[branch].is_active) if branch in by_name else False,
 		}
 		for branch in branches
+	]
+
+
+def _branch_options(assigned_branches):
+	assigned_set = set(assigned_branches)
+	rows_by_name = {
+		row.name: row
+		for row in frappe.get_all(
+			PORTAL_BRANCH_DOCTYPE,
+			filters={"is_active": 1},
+			fields=["name", "branch_name", "is_active"],
+		)
+	}
+
+	if assigned_branches:
+		rows_by_name.update(
+			{
+				row.name: row
+				for row in frappe.get_all(
+					PORTAL_BRANCH_DOCTYPE,
+					filters={"name": ("in", assigned_branches)},
+					fields=["name", "branch_name", "is_active"],
+				)
+			}
+		)
+
+	rows = sorted(rows_by_name.values(), key=lambda row: (row.branch_name or row.name).lower())
+	return [
+		{
+			"name": row.name,
+			"branch_name": row.branch_name or row.name,
+			"is_active": bool(row.is_active),
+			"assigned": row.name in assigned_set,
+		}
+		for row in rows
 	]
