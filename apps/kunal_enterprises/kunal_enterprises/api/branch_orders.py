@@ -1,6 +1,7 @@
 import frappe
 from frappe.utils import now_datetime
 
+from kunal_enterprises.api.order_authorization import BRANCH_ROLES, effective_order_role
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
 
 
@@ -10,10 +11,10 @@ BRANCH_EMPLOYEE_VISIBLE_STATUSES = ("Placed", "Processing", "Manual Review")
 @frappe.whitelist(methods=["GET"])
 def visible_orders(branch, role):
 	try:
-		_require_branch_access(branch, role)
+		effective_role = _require_branch_access(branch, role)
 
 		godowns = _active_branch_godowns(branch)
-		orders = [_serialize_order(order) for order in _get_visible_orders(godowns, role)]
+		orders = [_serialize_order(order) for order in _get_visible_orders(godowns, effective_role)]
 		return create_success_response("Branch visible orders", {"orders": orders})
 	except Exception as error:
 		return handle_error_response(error, "Unable to load branch orders")
@@ -22,8 +23,8 @@ def visible_orders(branch, role):
 @frappe.whitelist(methods=["POST"])
 def mark_processing(branch, order, role):
 	try:
-		_require_branch_access(branch, role, allowed_roles=("Branch Employee",))
-		if not _order_is_visible_for_branch(order, branch, role):
+		effective_role = _require_branch_access(branch, role, allowed_roles=BRANCH_ROLES)
+		if not _order_is_visible_for_branch(order, branch, effective_role):
 			frappe.throw("Order is not visible for this Branch", title="Branch Access Required")
 
 		order_doc = frappe.get_doc("Order", order)
@@ -32,7 +33,7 @@ def mark_processing(branch, order, role):
 		from_status = order_doc.status
 		order_doc.status = "Processing"
 		order_doc.save(ignore_permissions=True)
-		_create_status_log(order_doc.name, from_status, order_doc.status, role)
+		_create_status_log(order_doc.name, from_status, order_doc.status, effective_role)
 		return create_success_response(
 			"Order moved to Processing",
 			{"order": order_doc.name, "status": order_doc.status},
@@ -42,20 +43,12 @@ def mark_processing(branch, order, role):
 
 
 def _require_branch_access(branch, role, allowed_roles=("Branch Manager", "Branch Employee")):
-	if role not in allowed_roles:
-		frappe.throw("Branch role is required", title="Branch Access Required")
-	if not _current_user_has_role(role):
-		frappe.throw("Branch role is required", title="Branch Access Required")
+	effective_role = effective_order_role(allowed_roles, role, "Branch role is required", "Branch Access Required")
 	if not frappe.db.exists("Portal Branch", {"name": branch, "is_active": 1}):
 		frappe.throw("Active Portal Branch is required", title="Branch Access Required")
 	if not _current_user_has_branch_permission(branch):
 		frappe.throw("User is not allowed for this Branch", title="Branch Access Required")
-
-
-def _current_user_has_role(role):
-	if frappe.session.user == "Administrator":
-		return True
-	return role in frappe.get_roles(frappe.session.user)
+	return effective_role
 
 
 def _current_user_has_branch_permission(branch):
@@ -81,7 +74,7 @@ def _create_status_log(order, from_status, to_status, role):
 			"from_status": from_status,
 			"to_status": to_status,
 			"role": role,
-			"note": "Branch Employee moved visible order to Processing",
+			"note": f"{role} moved visible order to Processing",
 			"created_at": now_datetime(),
 		}
 	).insert(ignore_permissions=True)

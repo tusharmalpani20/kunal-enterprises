@@ -1,17 +1,15 @@
 import frappe
 from frappe.utils import now_datetime
 
+from kunal_enterprises.api.order_authorization import OWNER_ADMIN_ROLES, effective_order_role
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
-
-
-OWNER_ADMIN_ROLES = ("Owner", "Admin")
 
 
 @frappe.whitelist(methods=["POST"])
 def cancel_order(order, role, note):
 	try:
-		order_doc = _load_owner_admin_order(order, role)
-		_transition_order(order_doc, "Cancelled", role, note)
+		order_doc, effective_role = _load_owner_admin_order(order, role)
+		_transition_order(order_doc, "Cancelled", effective_role, note)
 		return create_success_response("Order cancelled", {"order": order_doc.name, "status": order_doc.status})
 	except Exception as error:
 		return handle_error_response(error, "Unable to cancel order")
@@ -20,8 +18,8 @@ def cancel_order(order, role, note):
 @frappe.whitelist(methods=["POST"])
 def partially_close_order(order, role, note):
 	try:
-		order_doc = _load_owner_admin_order(order, role)
-		_transition_order(order_doc, "Partially Closed", role, note)
+		order_doc, effective_role = _load_owner_admin_order(order, role)
+		_transition_order(order_doc, "Partially Closed", effective_role, note)
 		return create_success_response(
 			"Order partially closed",
 			{"order": order_doc.name, "status": order_doc.status},
@@ -33,12 +31,12 @@ def partially_close_order(order, role, note):
 @frappe.whitelist(methods=["POST"])
 def resolve_manual_review(order, role, resolution_note):
 	try:
-		order_doc = _load_owner_admin_order(order, role)
+		order_doc, effective_role = _load_owner_admin_order(order, role)
 		if order_doc.status != "Manual Review":
 			frappe.throw("Only Manual Review orders can be resolved", title="Invalid Order Status")
 		if not (resolution_note or "").strip():
 			frappe.throw("Resolution note is required", title="Resolution Note Required")
-		_transition_order(order_doc, "Processing", role, resolution_note)
+		_transition_order(order_doc, "Processing", effective_role, resolution_note)
 		return create_success_response(
 			"Manual Review resolved",
 			{"order": order_doc.name, "status": order_doc.status},
@@ -47,16 +45,29 @@ def resolve_manual_review(order, role, resolution_note):
 		return handle_error_response(error, "Unable to resolve Manual Review")
 
 
-def _load_owner_admin_order(order, role):
-	if role not in OWNER_ADMIN_ROLES or not _current_user_has_role(role):
-		frappe.throw("Only Owner/Admin can perform this order action", title="Owner/Admin Required")
-	return frappe.get_doc("Order", order)
+@frappe.whitelist(methods=["POST"])
+def mark_processing(order, role=None):
+	try:
+		order_doc, effective_role = _load_owner_admin_order(order, role)
+		if order_doc.status != "Placed":
+			frappe.throw("Only Placed orders can move to Processing", title="Invalid Order Status")
+		_transition_order(order_doc, "Processing", effective_role, f"{effective_role} moved order to Processing")
+		return create_success_response(
+			"Order moved to Processing",
+			{"order": order_doc.name, "status": order_doc.status},
+		)
+	except Exception as error:
+		return handle_error_response(error, "Unable to move order to Processing")
 
 
-def _current_user_has_role(role):
-	if frappe.session.user == "Administrator":
-		return True
-	return role in frappe.get_roles(frappe.session.user)
+def _load_owner_admin_order(order, role=None):
+	effective_role = effective_order_role(
+		OWNER_ADMIN_ROLES,
+		role,
+		"Only Owner/Admin can perform this order action",
+		"Owner/Admin Required",
+	)
+	return frappe.get_doc("Order", order), effective_role
 
 
 def _transition_order(order, to_status, role, note):
