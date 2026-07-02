@@ -108,6 +108,14 @@ class TestWorkspaceNavigation(FrappeTestCase):
 			"kunal_enterprises.desk_navigation.get_workspace_sidebar_items",
 		)
 
+	def test_app_launcher_permission_hook_is_importable_and_callable(self):
+		app_detail = hooks.add_to_apps_screen[0]
+
+		has_permission = frappe.get_attr(app_detail["has_permission"])
+
+		self.assertTrue(callable(has_permission))
+		self.assertIsInstance(has_permission(), bool)
+
 	def test_workspace_fixture_contains_expected_records_and_metadata(self):
 		workspaces = self._workspace_fixtures()
 
