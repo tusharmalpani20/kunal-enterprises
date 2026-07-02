@@ -32,7 +32,12 @@ function add_customer_access_buttons(frm) {
 		approve_button.addClass("btn-primary");
 	}
 
-	if (frm.doc.status !== "Rejected") {
+	if (frm.doc.status === "Active") {
+		const disable_button = frm.add_custom_button(__("Disable"), () => {
+			update_customer_access(frm, "disable_customer", __("Disable Customer?"));
+		});
+		disable_button.addClass("btn-danger");
+	} else if (frm.doc.status === "Pending Admin Review") {
 		const reject_button = frm.add_custom_button(__("Reject"), () => {
 			update_customer_access(frm, "reject_customer", __("Reject Customer?"));
 		});

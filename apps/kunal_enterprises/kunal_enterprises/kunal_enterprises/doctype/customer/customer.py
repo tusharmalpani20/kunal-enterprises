@@ -196,6 +196,16 @@ def reject_customer(customer_name):
 
 
 @frappe.whitelist()
+def disable_customer(customer_name):
+	customer = frappe.get_doc("Customer", customer_name)
+	if not customer.mobile_verified:
+		frappe.throw(_("Customer mobile number must be verified before disabling"))
+	customer.status = "Disabled"
+	customer.save()
+	return get_access_status(customer.name)
+
+
+@frappe.whitelist()
 def set_customer_client_code(customer_name, client_code):
 	customer = frappe.get_doc("Customer", customer_name)
 	client_code = (client_code or "").strip()

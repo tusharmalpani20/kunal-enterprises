@@ -351,6 +351,53 @@ class TestCustomerAppAccess(FrappeTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 
+	def test_customer_form_uses_disable_label_for_active_customer_action(self):
+		script = (
+			Path(__file__).parents[1]
+			/ "kunal_enterprises"
+			/ "doctype"
+			/ "customer"
+			/ "customer.js"
+		).read_text()
+
+		self.assertIn('frm.doc.status === "Active"', script)
+		self.assertIn('__("Disable")', script)
+		self.assertIn('__("Disable Customer?")', script)
+		self.assertIn('"disable_customer"', script)
+
+	def test_disable_customer_removes_app_access_without_removing_admin_approval(self):
+		frappe.get_doc(
+			{
+				"doctype": "Tally Customer Ledger",
+				"client_code": "DISABLE-CUSTOMER-001",
+				"ledger_name": "Disable Customer Business",
+				"is_active": 1,
+			}
+		).insert()
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Disable Customer",
+				"business_legal_name": "Disable Customer Business",
+				"mobile_number": "9000000041",
+				"mobile_verified": 1,
+				"admin_approved": 1,
+				"status": "Active",
+				"client_code": "DISABLE-CUSTOMER-001",
+			}
+		).insert()
+
+		response = frappe.get_attr(
+			"kunal_enterprises.kunal_enterprises.doctype.customer.customer.disable_customer"
+		)(customer.name)
+		customer.reload()
+
+		self.assertEqual(customer.status, "Disabled")
+		self.assertTrue(customer.admin_approved)
+		self.assertFalse(customer.customer_app_access)
+		self.assertFalse(response["customer_app_access"])
+		self.assertIn("account_active", response["missing_requirements"])
+
 	def test_customer_signup_stores_pending_details_in_otp_and_blocks_rejected_mobile_reuse(self):
 		response = start_customer_signup(
 			{
