@@ -62,10 +62,10 @@ def approve_sales_employee(sales_employee_name):
 
 
 @frappe.whitelist()
-def reject_sales_employee(sales_employee_name):
+def disable_sales_employee(sales_employee_name):
 	sales_employee = frappe.get_doc("Sales Employee", sales_employee_name)
 	if not sales_employee.mobile_verified:
-		frappe.throw(_("Sales Employee mobile number must be verified before rejection"))
+		frappe.throw(_("Sales Employee mobile number must be verified before disabling"))
 	sales_employee.status = "Disabled"
 	sales_employee.save()
 	return {
@@ -73,3 +73,8 @@ def reject_sales_employee(sales_employee_name):
 		"status": sales_employee.status,
 		"mobile_verified": bool(sales_employee.mobile_verified),
 	}
+
+
+@frappe.whitelist()
+def reject_sales_employee(sales_employee_name):
+	return disable_sales_employee(sales_employee_name)

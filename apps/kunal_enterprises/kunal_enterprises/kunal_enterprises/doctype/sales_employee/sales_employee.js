@@ -33,10 +33,10 @@ function add_sales_employee_access_buttons(frm) {
 	}
 
 	if (frm.doc.status !== "Disabled") {
-		const reject_button = frm.add_custom_button(__("Reject"), () => {
-			update_sales_employee_access(frm, "reject_sales_employee", __("Reject Sales Employee?"));
+		const disable_button = frm.add_custom_button(__("Disable"), () => {
+			update_sales_employee_access(frm, "disable_sales_employee", __("Disable Sales Employee?"));
 		});
-		reject_button.addClass("btn-danger");
+		disable_button.addClass("btn-danger");
 	}
 }
 

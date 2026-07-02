@@ -1,5 +1,6 @@
 import json
 import inspect
+from pathlib import Path
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -972,6 +973,22 @@ class TestCustomerAppAccess(FrappeTestCase):
 class TestSalesEmployeeAuth(FrappeTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
+
+	def test_sales_employee_form_uses_disable_label_for_disabled_status_action(self):
+		script = (
+			Path(__file__).parents[1]
+			/ "kunal_enterprises"
+			/ "doctype"
+			/ "sales_employee"
+			/ "sales_employee.js"
+		).read_text()
+
+		self.assertIn('__("Disable")', script)
+		self.assertIn('__("Disable Sales Employee?")', script)
+		self.assertIn('"disable_sales_employee"', script)
+		self.assertNotIn('__("Reject")', script)
+		self.assertNotIn('__("Reject Sales Employee?")', script)
+		self.assertNotIn('"reject_sales_employee"', script)
 
 	def test_send_sales_employee_otp_creates_login_otp_for_active_employee(self):
 		frappe.get_doc(
