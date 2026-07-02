@@ -42,6 +42,23 @@ def mark_processing(branch, order, role):
 		return handle_error_response(error, "Unable to move order to Processing")
 
 
+@frappe.whitelist(methods=["POST"])
+def mark_visible_order_processing(order):
+	try:
+		effective_role = effective_order_role(
+			BRANCH_ROLES,
+			message="Branch role is required",
+			title="Branch Access Required",
+		)
+		branch = _visible_branch_for_order(order, effective_role)
+		if not branch:
+			frappe.throw("Order is not visible for this Branch", title="Branch Access Required")
+
+		return mark_processing(branch, order, effective_role)
+	except Exception as error:
+		return handle_error_response(error, "Unable to move order to Processing")
+
+
 def _require_branch_access(branch, role, allowed_roles=("Branch Manager", "Branch Employee")):
 	effective_role = effective_order_role(allowed_roles, role, "Branch role is required", "Branch Access Required")
 	if not frappe.db.exists("Portal Branch", {"name": branch, "is_active": 1}):
@@ -64,6 +81,31 @@ def _current_user_has_branch_permission(branch):
 			},
 		)
 	)
+
+
+def _visible_branch_for_order(order, role):
+	for branch in _current_user_active_branches():
+		if _order_is_visible_for_branch(order, branch, role):
+			return branch
+	return None
+
+
+def _current_user_active_branches():
+	if frappe.session.user == "Administrator":
+		return frappe.get_all("Portal Branch", filters={"is_active": 1}, pluck="name")
+
+	return [
+		row.for_value
+		for row in frappe.get_all(
+			"User Permission",
+			filters={
+				"user": frappe.session.user,
+				"allow": "Portal Branch",
+			},
+			fields=["for_value"],
+		)
+		if frappe.db.exists("Portal Branch", {"name": row.for_value, "is_active": 1})
+	]
 
 
 def _create_status_log(order, from_status, to_status, role):

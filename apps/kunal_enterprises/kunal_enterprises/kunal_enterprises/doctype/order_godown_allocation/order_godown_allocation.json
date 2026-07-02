@@ -1,6 +1,6 @@
 {
  "actions": [],
- "creation": "2026-05-19 00:00:00.000000",
+ "creation": "2026-05-19 00:00:00",
  "doctype": "DocType",
  "document_type": "Other",
  "editable_grid": 1,
@@ -42,6 +42,7 @@
    "default": "0",
    "fieldname": "stock_shown_at_order_time",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Stock Shown At Order Time"
   },
   {
@@ -62,15 +63,15 @@
    "reqd": 1
   }
  ],
- "idx": 0,
  "istable": 1,
  "links": [],
- "modified": "2026-05-19 00:00:00.000000",
+ "modified": "2026-07-02 16:43:59.784320",
  "modified_by": "Administrator",
  "module": "Kunal Enterprises",
  "name": "Order Godown Allocation",
  "owner": "Administrator",
  "permissions": [],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []

@@ -2572,6 +2572,121 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertEqual(status_log.to_status, "Processing")
 		self.assertEqual(status_log.role, "Branch Manager")
 
+	def test_order_form_exposes_branch_move_to_processing_action(self):
+		script = (
+			Path(__file__).parents[1]
+			/ "kunal_enterprises"
+			/ "doctype"
+			/ "order"
+			/ "order.js"
+		).read_text()
+
+		self.assertIn('frm.doc.status === "Placed"', script)
+		self.assertIn('__("Move to Processing")', script)
+		self.assertIn("kunal_enterprises.api.branch_orders.mark_visible_order_processing", script)
+
+	def test_branch_desk_action_moves_visible_placed_order_to_processing(self):
+		product_group = self._create_product_group("Branch Desk Processing PG")
+		item = self._create_item("Branch Desk Processing Item", product_group.name)
+		customer = self._create_active_customer("9000000926", "ORDER-BRANCH-DESK-001")
+		branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Desk Processing Branch",
+				"is_active": 1,
+			}
+		).insert()
+		self._create_godown("Desk Processing Godown")
+		frappe.get_doc(
+			{
+				"doctype": "Branch Godown Mapping",
+				"portal_branch": branch.name,
+				"godown": "Desk Processing Godown",
+				"is_active": 1,
+			}
+		).insert()
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Desk Processing Godown", "quantity": 2}],
+		)
+		employee = self._create_branch_user(
+			"branch.desk.processing@example.com",
+			"Branch Employee",
+			branch.name,
+		)
+		process_order = frappe.get_attr(
+			"kunal_enterprises.api.branch_orders.mark_visible_order_processing"
+		)
+
+		try:
+			frappe.set_user(employee.name)
+			response = process_order(order_response["data"]["order"])
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertTrue(response["success"])
+		order = frappe.get_doc("Order", order_response["data"]["order"])
+		status_log = frappe.get_last_doc("Order Status Log", filters={"order": order.name})
+		self.assertEqual(order.status, "Processing")
+		self.assertEqual(status_log.from_status, "Placed")
+		self.assertEqual(status_log.to_status, "Processing")
+		self.assertEqual(status_log.role, "Branch Employee")
+
+	def test_branch_desk_action_rejects_order_outside_user_branch(self):
+		product_group = self._create_product_group("Branch Desk Hidden PG")
+		item = self._create_item("Branch Desk Hidden Item", product_group.name)
+		customer = self._create_active_customer("9000000927", "ORDER-BRANCH-DESK-002")
+		allowed_branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Desk Allowed Branch",
+				"is_active": 1,
+			}
+		).insert()
+		hidden_branch = frappe.get_doc(
+			{
+				"doctype": "Portal Branch",
+				"branch_name": "Desk Hidden Branch",
+				"is_active": 1,
+			}
+		).insert()
+		for branch, godown in (
+			(allowed_branch.name, "Desk Allowed Godown"),
+			(hidden_branch.name, "Desk Hidden Godown"),
+		):
+			self._create_godown(godown)
+			frappe.get_doc(
+				{
+					"doctype": "Branch Godown Mapping",
+					"portal_branch": branch,
+					"godown": godown,
+					"is_active": 1,
+				}
+			).insert()
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Desk Hidden Godown", "quantity": 2}],
+		)
+		employee = self._create_branch_user(
+			"branch.desk.hidden@example.com",
+			"Branch Employee",
+			allowed_branch.name,
+		)
+		process_order = frappe.get_attr(
+			"kunal_enterprises.api.branch_orders.mark_visible_order_processing"
+		)
+
+		try:
+			frappe.set_user(employee.name)
+			response = process_order(order_response["data"]["order"])
+		finally:
+			frappe.set_user("Administrator")
+
+		order = frappe.get_doc("Order", order_response["data"]["order"])
+		self.assertFalse(response["success"])
+		self.assertEqual(order.status, "Placed")
+		self.assertIn("not visible", response["error"]["message"])
+
 	def test_branch_order_apis_do_not_trust_claimed_role_or_branch(self):
 		product_group = self._create_product_group("Branch Claimed Role PG")
 		item = self._create_item("Branch Claimed Role Item", product_group.name)
