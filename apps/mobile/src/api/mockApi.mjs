@@ -74,6 +74,7 @@ const orders = [
     customer_name: 'Asha Textiles',
     sales_employee: 'SE-001',
     status: 'Manual Review',
+    confirmation_datetime: '2026-05-19 14:35:00',
     total_quantity: 4,
   },
   {
@@ -83,6 +84,7 @@ const orders = [
     customer_name: 'Asha Textiles',
     sales_employee: 'SE-002',
     status: 'Completed',
+    confirmation_datetime: '2026-05-18 09:15:00',
     total_quantity: 2,
   },
 ];

@@ -1,10 +1,31 @@
 import React from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 
 import { styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
 import type { TallyItem } from '../types';
+
+type FeedbackPressableProps = PressableProps & {
+  pressedStyle?: StyleProp<ViewStyle>;
+  rippleColor?: string;
+};
+
+export function FeedbackPressable({
+  style,
+  pressedStyle = styles.buttonPressed,
+  rippleColor = '#eeeeee',
+  ...props
+}: FeedbackPressableProps) {
+  return (
+    <Pressable
+      {...props}
+      android_ripple={{ color: rippleColor, ...props.android_ripple }}
+      style={({ pressed }) => [style as StyleProp<ViewStyle>, pressed && pressedStyle]}
+    />
+  );
+}
 
 export function RequiredFieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -40,7 +61,7 @@ export function DraftCartRow({
 }) {
   return (
     <View style={styles.draftCartRow}>
-      <Pressable style={styles.draftCartOpen} onPress={onOpen}>
+      <FeedbackPressable style={styles.draftCartOpen} onPress={onOpen}>
         <View style={styles.rowButtonTextBlock}>
           <Text style={styles.rowTitle}>{title}</Text>
           <Text style={styles.rowDetail}>{detail}</Text>
@@ -48,21 +69,21 @@ export function DraftCartRow({
         <View style={styles.rowChevron}>
           <ChevronRight size={18} color="#111111" />
         </View>
-      </Pressable>
-      <Pressable style={styles.draftCartClear} onPress={onClear}>
+      </FeedbackPressable>
+      <FeedbackPressable style={styles.draftCartClear} onPress={onClear} rippleColor="#fee2e2" pressedStyle={styles.dangerButtonPressed}>
         <Trash2 size={15} color="#b42318" />
         <Text style={styles.draftCartClearText}>Clear</Text>
-      </Pressable>
+      </FeedbackPressable>
     </View>
   );
 }
 
 export function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable style={styles.backButton} onPress={onPress}>
+    <FeedbackPressable style={styles.backButton} onPress={onPress}>
       <ChevronLeft size={16} color="#111111" />
       <Text style={styles.backButtonText}>{label}</Text>
-    </Pressable>
+    </FeedbackPressable>
   );
 }
 
@@ -79,9 +100,9 @@ export function DatePickerButton({
 }) {
   const displayValue = formatIndianDate(value);
   return (
-    <Pressable style={[styles.datePickerButton, disabled && styles.readOnlyInput]} disabled={disabled} onPress={onPress}>
+    <FeedbackPressable style={[styles.datePickerButton, disabled && styles.readOnlyInput]} disabled={disabled} onPress={onPress}>
       <Text style={[styles.datePickerText, !displayValue && styles.placeholderText]}>{displayValue || placeholder}</Text>
-    </Pressable>
+    </FeedbackPressable>
   );
 }
 
@@ -112,10 +133,15 @@ export function TopLevelTab({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
+    <FeedbackPressable
+      style={[styles.tabButton, active && styles.tabButtonActive]}
+      pressedStyle={active ? styles.tabButtonActivePressed : styles.buttonPressed}
+      rippleColor={active ? '#2a2a2a' : '#eeeeee'}
+      onPress={onPress}
+    >
       {icon}
       <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{label}</Text>
-    </Pressable>
+    </FeedbackPressable>
   );
 }
 
@@ -133,7 +159,12 @@ export function RowButton({
   actionLabel?: string;
 }) {
   return (
-    <Pressable style={[styles.rowButton, tone === 'warn' && styles.warningRow]} onPress={onPress}>
+    <FeedbackPressable
+      rippleColor={tone === 'warn' ? '#fed7aa' : '#eeeeee'}
+      pressedStyle={tone === 'warn' ? styles.warningRowPressed : styles.rowButtonPressed}
+      style={[styles.rowButton, tone === 'warn' && styles.warningRow]}
+      onPress={onPress}
+    >
       <View style={styles.rowButtonTextBlock}>
         <Text style={[styles.rowTitle, tone === 'warn' && styles.warningTitle]}>{title}</Text>
         <Text style={[styles.rowDetail, tone === 'warn' && styles.warningDetail]}>{detail}</Text>
@@ -148,7 +179,7 @@ export function RowButton({
           <ChevronRight size={18} color={tone === 'warn' ? '#c2410c' : '#111111'} />
         </View>
       )}
-    </Pressable>
+    </FeedbackPressable>
   );
 }
 
@@ -162,7 +193,7 @@ export function ItemSearchRow({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.itemRow} onPress={onPress}>
+    <FeedbackPressable style={styles.itemRow} pressedStyle={styles.rowButtonPressed} onPress={onPress}>
       <View style={styles.itemRowText}>
         <Text style={styles.rowTitle}>{item.item_name}</Text>
         <Text style={styles.rowDetail}>{item.root_stock_group} · {item.uom}</Text>
@@ -173,6 +204,6 @@ export function ItemSearchRow({
           {cartQuantity > 0 ? `Qty ${cartQuantity}` : 'Add'}
         </Text>
       </View>
-    </Pressable>
+    </FeedbackPressable>
   );
 }

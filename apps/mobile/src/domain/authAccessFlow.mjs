@@ -44,6 +44,18 @@ export function nextStepFromCustomerAccessStatus(response) {
   return response?.customer_app_access ? 'groups' : 'pending';
 }
 
+export function pendingAccessRequestFromCustomerOtp({ otpResponse, mobileNumber }) {
+  if (!otpResponse || otpResponse.customer_app_access || !otpResponse.customer) {
+    return null;
+  }
+  return {
+    identityType: 'Customer',
+    customer: otpResponse.customer,
+    mobileNumber: String(mobileNumber || '').trim(),
+    status: otpResponse.status || 'Pending Admin Review',
+  };
+}
+
 export async function customerOtpRouteAfterAccessCheck({ otpResponse, customerAccessStatus }) {
   const session = sessionFromOtpResponse(otpResponse);
   const authStep = nextAuthStepFromCustomerOtp(otpResponse);

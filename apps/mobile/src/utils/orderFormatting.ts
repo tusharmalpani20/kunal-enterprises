@@ -41,10 +41,66 @@ export function cartQuantityForItem(cart: CartAllocation[], item: string) {
 
 export function orderHistoryRowDetail(order: OrderSummary, mode: Mode) {
   const statusLine = `${order.display_status || order.status} · Quantity ${order.total_quantity || 0}`;
+  const placedStamp = formatOrderPlacedStamp(order.confirmation_datetime);
+  const placedLine = placedStamp ? `Placed ${placedStamp}` : '';
+  const detailLine = placedLine ? `${statusLine}\n${placedLine}` : statusLine;
   if (mode !== 'Sales Employee') {
-    return statusLine;
+    return detailLine;
   }
-  return `${order.customer_name || order.customer} · ${statusLine}`;
+  return `${order.customer_name || order.customer} · ${detailLine}`;
+}
+
+export function formatOrderPlacedStamp(value?: string | null, today = new Date()) {
+  const parsed = parseOrderPlacedDateTime(value);
+  if (!parsed) {
+    return '';
+  }
+
+  const time = formatHourMinute(parsed.hour, parsed.minute);
+  if (isSameLocalDate(parsed, today)) {
+    return `at ${time}`;
+  }
+  return `on ${formatIndianDate(parsed.isoDate)} at ${time}`;
+}
+
+export function formatOrderPlacedTime(value?: string | null) {
+  return formatOrderPlacedStamp(value).replace(/^at /, '').replace(/^on \d{2}-\d{2}-\d{4} at /, '');
+}
+
+function parseOrderPlacedDateTime(value?: string | null) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return null;
+  }
+
+  const frappeMatch = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?/.exec(text);
+  if (frappeMatch) {
+    return {
+      isoDate: frappeMatch[1],
+      hour: Number(frappeMatch[2]),
+      minute: frappeMatch[3],
+    };
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return {
+    isoDate: isoDateFromDate(parsed),
+    hour: parsed.getHours(),
+    minute: String(parsed.getMinutes()).padStart(2, '0'),
+  };
+}
+
+function isSameLocalDate(parsed: { isoDate: string }, today: Date) {
+  return parsed.isoDate === isoDateFromDate(today);
+}
+
+function formatHourMinute(hour24: number, minute: string) {
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minute} ${period}`;
 }
 
 export function godownStockDetailForSelection(stock: ItemStock, requestedQuantityInput: string) {

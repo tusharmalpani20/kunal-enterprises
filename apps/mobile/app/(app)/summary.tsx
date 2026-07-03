@@ -1,9 +1,9 @@
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { Check, Minus, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { BackButton, Workspace } from '../../src/components/orderUi';
+import { BackButton, FeedbackPressable, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
 
@@ -46,25 +46,30 @@ export default function SummaryScreen() {
               <Text style={styles.rowDetail}>{row.godown}</Text>
             </View>
             <View style={styles.cartControls}>
-              <Pressable style={styles.iconButton} onPress={() => changeCartQuantity(row, -1)}>
+              <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, -1)}>
                 <Minus size={16} color="#111111" />
-              </Pressable>
+              </FeedbackPressable>
               <Text style={styles.quantity}>{row.quantity}</Text>
-              <Pressable style={styles.iconButton} onPress={() => changeCartQuantity(row, 1)}>
+              <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, 1)}>
                 <Plus size={16} color="#111111" />
-              </Pressable>
-              <Pressable style={styles.iconButton} onPress={() => removeCartItem(row.item)}>
+              </FeedbackPressable>
+              <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => removeCartItem(row.item)}>
                 <Trash2 size={16} color="#111111" />
-              </Pressable>
+              </FeedbackPressable>
             </View>
           </View>
         ))}
         {notes.map((note) => (
           <Text key={note} style={styles.note}>{note}</Text>
         ))}
-        <Pressable style={styles.primaryAction} onPress={submitOrder}>
+        <FeedbackPressable
+          style={styles.primaryAction}
+          pressedStyle={styles.primaryActionPressed}
+          rippleColor="#2a2a2a"
+          onPress={submitOrder}
+        >
           <Text style={styles.primaryActionText}>Confirm order</Text>
-        </Pressable>
+        </FeedbackPressable>
       </Workspace>
     </AppShell>
   );

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 
 import { AuthShell } from '../../src/components/AuthShell';
-import { DatePickerButton, RequiredFieldLabel } from '../../src/components/orderUi';
+import { DatePickerButton, FeedbackPressable, RequiredFieldLabel } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
 
@@ -112,10 +112,10 @@ export default function SignInScreen() {
         {otpRequestedForCurrentFlow && !signupDetailsReview && (
           <>
             {isSignupOtpFlow && (
-              <Pressable style={styles.backButton} onPress={() => setSignupDetailsReview(true)}>
+              <FeedbackPressable style={styles.backButton} onPress={() => setSignupDetailsReview(true)}>
                 <ChevronLeft size={16} color="#111111" />
                 <Text style={styles.backButtonText}>Back to details</Text>
-              </Pressable>
+              </FeedbackPressable>
             )}
             <Text style={styles.fieldLabel}>OTP</Text>
             <TextInput
@@ -131,15 +131,25 @@ export default function SignInScreen() {
         )}
         {signupDetailsReadOnly ? (
           <View style={styles.authSplitActions}>
-            <Pressable style={[styles.secondaryAction, styles.authSecondaryAction]} onPress={editSignupDetails}>
+            <FeedbackPressable style={[styles.secondaryAction, styles.authSecondaryAction]} onPress={editSignupDetails}>
               <Text style={styles.secondaryActionText}>Edit details</Text>
-            </Pressable>
-            <Pressable style={[styles.primaryAction, styles.authInlinePrimaryAction]} onPress={() => setSignupDetailsReview(false)}>
+            </FeedbackPressable>
+            <FeedbackPressable
+              style={[styles.primaryAction, styles.authInlinePrimaryAction]}
+              pressedStyle={styles.primaryActionPressed}
+              rippleColor="#2a2a2a"
+              onPress={() => setSignupDetailsReview(false)}
+            >
               <Text style={styles.primaryActionText}>Continue to OTP</Text>
-            </Pressable>
+            </FeedbackPressable>
           </View>
         ) : (
-          <Pressable style={[styles.primaryAction, styles.authPrimaryAction]} onPress={otpRequestedForCurrentFlow ? verifyOtp : requestOtp}>
+          <FeedbackPressable
+            style={[styles.primaryAction, styles.authPrimaryAction]}
+            pressedStyle={styles.primaryActionPressed}
+            rippleColor="#2a2a2a"
+            onPress={otpRequestedForCurrentFlow ? verifyOtp : requestOtp}
+          >
             <Text style={styles.primaryActionText}>
               {otpRequestedForCurrentFlow
                 ? 'Verify OTP'
@@ -147,16 +157,16 @@ export default function SignInScreen() {
                   ? 'Send OTP and create request'
                   : 'Send OTP'}
             </Text>
-          </Pressable>
+          </FeedbackPressable>
         )}
         {otpRequestedForCurrentFlow && !signupDetailsReview && (
-          <Pressable style={styles.textAction} onPress={requestOtp}>
+          <FeedbackPressable style={styles.textAction} onPress={requestOtp}>
             <Text style={styles.textActionText}>
               {resend.canResend ? 'Resend OTP' : `Resend available in ${resend.secondsRemaining}s`}
             </Text>
-          </Pressable>
+          </FeedbackPressable>
         )}
-        <Pressable
+        <FeedbackPressable
           style={styles.authTextAction}
           onPress={() => {
             setCustomerAuthIntent(customerAuthIntent === 'signup' ? 'login' : 'signup');
@@ -172,7 +182,7 @@ export default function SignInScreen() {
           <Text style={styles.textActionText}>
             {customerAuthIntent === 'signup' ? 'Already have access? Sign in' : 'New customer? Create account'}
           </Text>
-        </Pressable>
+        </FeedbackPressable>
       </View>
     </AuthShell>
   );

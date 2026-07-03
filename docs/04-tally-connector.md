@@ -195,6 +195,7 @@ Possible PostgreSQL table:
 create table rpt_stock_godown_balance (
     item varchar(1024),
     godown varchar(1024),
+    batch_name varchar(1024),
     quantity decimal(17,4),
     rate decimal(17,4),
     value decimal(17,2),
@@ -203,7 +204,7 @@ create table rpt_stock_godown_balance (
 );
 ```
 
-Final columns should follow the connector's existing cross-database conventions.
+The connector export may emit one row per batch. Frappe imports this table grouped by `item` and `godown`, summing `quantity`, so batch-level detail does not leak into the mobile ordering flow.
 
 The source should be TallyPrime's computed Stock Summary / Godown Summary data exposed through XML/TDL, not a transaction reconstruction.
 

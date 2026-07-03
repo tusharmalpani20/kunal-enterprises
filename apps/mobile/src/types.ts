@@ -50,6 +50,7 @@ export interface OrderSummary {
   sales_employee?: string;
   status: string;
   display_status?: string;
+  confirmation_datetime?: string | null;
   total_quantity?: number;
 }
 

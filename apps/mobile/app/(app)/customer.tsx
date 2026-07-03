@@ -1,9 +1,9 @@
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { DraftCartRow, RowButton, Workspace } from '../../src/components/orderUi';
+import { DraftCartRow, FeedbackPressable, RowButton, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
 
@@ -25,7 +25,7 @@ export default function CustomerScreen() {
         {draftCarts.length > 0 && (
           <View style={styles.draftCartSection}>
             <View style={styles.openCartsWidget}>
-              <Pressable style={styles.openCartsHeader} onPress={() => setDraftCartsExpanded((current) => !current)}>
+              <FeedbackPressable style={styles.openCartsHeader} onPress={() => setDraftCartsExpanded((current) => !current)}>
                 <View>
                   <Text style={styles.rowTitle}>Open carts</Text>
                   <Text style={styles.rowDetail}>
@@ -37,7 +37,7 @@ export default function CustomerScreen() {
                   color="#111111"
                   style={draftCartsExpanded && styles.chevronExpanded}
                 />
-              </Pressable>
+              </FeedbackPressable>
               {draftCartsExpanded &&
                 draftCarts.map((draft) => {
                   const customer = customerForDraftCart(draft);

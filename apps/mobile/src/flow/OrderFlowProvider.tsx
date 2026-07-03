@@ -12,6 +12,7 @@ import {
   otpCooldownSecondsFromResponse,
   otpRequestKey,
   otpResendState,
+  pendingAccessRequestFromCustomerOtp,
   salesEmployeeSessionFromOtpResponse,
   shouldTrySalesEmployeeOtpAfterCustomerOtpError,
   shouldUseOtpResend,
@@ -70,9 +71,10 @@ export function useOrderFlow(): OrderFlowValue {
 }
 
 function useOrderFlowState() {
-  const { call, callAccessToken } = useFrappe();
+  const { call, guestCall, callAccessToken } = useFrappe();
   const { logout, session, setSession } = useContext(AuthContext);
   const api = useMemo(() => createMobileApi({ call }), [call]);
+  const guestApi = useMemo(() => createMobileApi({ call: guestCall || call }), [call, guestCall]);
   const router = useRouter();
   const pathname = usePathname();
   const step = stepForRoute(pathname) as Step;
@@ -92,6 +94,7 @@ function useOrderFlowState() {
   const [groups, setGroups] = useState<ProductGroup[]>([]);
   const [items, setItems] = useState<TallyItem[]>([]);
   const [catalogLoadedKey, setCatalogLoadedKey] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [stockRows, setStockRows] = useState<ItemStock[]>([]);
   const [customers, setCustomers] = useState<AllowedCustomer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<AllowedCustomer | null>(null);
@@ -120,6 +123,8 @@ function useOrderFlowState() {
   const [otpSentAtMs, setOtpSentAtMs] = useState<number | null>(null);
   const [lastOtpRequestKey, setLastOtpRequestKey] = useState<string | null>(null);
   const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(45);
+  const [pendingAccessRequest, setPendingAccessRequest] = useState<Record<string, string> | null>(null);
+  const [pendingAccessRefreshing, setPendingAccessRefreshing] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<OrderSummary[]>([]);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
@@ -144,6 +149,7 @@ function useOrderFlowState() {
     async (customer: string, salesEmployee?: string) => {
       const catalogKey = `${customer}:${salesEmployee || ''}`;
       try {
+        setCatalogLoading(true);
         const catalogApi = api as any;
         const allowedGroups = await catalogApi.allowedProductGroups(customer, salesEmployee);
         setGroups(allowedGroups);
@@ -168,6 +174,8 @@ function useOrderFlowState() {
           setStep('auth');
           return;
         }
+      } finally {
+        setCatalogLoading(false);
       }
     },
     [api, logout],
@@ -561,11 +569,17 @@ function useOrderFlowState() {
       });
       if (route.session) {
         await setSession(route.session);
+        setPendingAccessRequest(null);
         setSystemState({ kind: 'idle' });
         setStep(route.step as Step);
         showToast('success', 'Signed in', 'Your account is ready for ordering.');
         return;
       }
+      const pendingRequest = pendingAccessRequestFromCustomerOtp({ otpResponse: response, mobileNumber });
+      if (pendingRequest) {
+        setPendingAccessRequest(pendingRequest);
+      }
+      await setSession(null);
       setSystemState({ kind: 'idle' });
       setStep(route.step as Step);
       showToast('info', customerAuthIntent === 'signup' ? 'Sign up received' : 'Sign in pending', 'Access must be active before ordering.');
@@ -584,6 +598,42 @@ function useOrderFlowState() {
         throw error;
       }
       return api.startSalesEmployeeOtp(number);
+    }
+  }
+
+  async function refreshPendingAccess() {
+    const request = pendingAccessRequest;
+    if (!request?.customer) {
+      setSystemState({ kind: 'validation_error', message: 'No pending access request was found on this device. Sign in again to check status.' });
+      setStep('auth');
+      return;
+    }
+
+    try {
+      setPendingAccessRefreshing(true);
+      const status = await guestApi.customerAccessStatus(request.customer);
+      if (status.customer_app_access) {
+        setPendingAccessRequest(null);
+        setCustomerAuthIntent('login');
+        setOtpIdentityType(null);
+        setOtpSentAtMs(null);
+        setLastOtpRequestKey(null);
+        setOtpCode('');
+        setSystemState({ kind: 'idle' });
+        setStep('auth');
+        showToast('success', 'Access approved', 'Sign in with OTP to continue.');
+        return;
+      }
+
+      const nextRequest = { ...request, status: status.status || request.status || 'Pending Admin Review' };
+      setPendingAccessRequest(nextRequest);
+      setSystemState({ kind: 'idle' });
+      showToast('info', 'Still pending', 'Admin approval is not active yet.');
+    } catch (error) {
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+    } finally {
+      setPendingAccessRefreshing(false);
     }
   }
 
@@ -695,6 +745,7 @@ function useOrderFlowState() {
       return;
     }
     setProfile(result.profile);
+    showToast('success', 'Profile updated', 'Your changes have been saved.');
   }
 
   async function showOrderDetail(order: OrderSummary) {
@@ -807,6 +858,7 @@ function useOrderFlowState() {
     mode, setMode,
     step, setStep,
     groups,
+    catalogLoading,
     items,
     stockRows,
     customers,
@@ -834,6 +886,8 @@ function useOrderFlowState() {
     signupDateOfAnniversary,
     setOtpSentAtMs,
     setLastOtpRequestKey,
+    pendingAccessRequest,
+    pendingAccessRefreshing,
     reference,
     historyRows,
     orderDetail,
@@ -875,6 +929,7 @@ function useOrderFlowState() {
     submitOrder,
     requestOtp,
     verifyOtp,
+    refreshPendingAccess,
     switchMode,
     showOrder,
     switchCustomer,

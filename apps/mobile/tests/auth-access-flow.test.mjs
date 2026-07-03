@@ -10,6 +10,7 @@ import {
   otpRequestKey,
   otpCooldownSecondsFromResponse,
   otpResendState,
+  pendingAccessRequestFromCustomerOtp,
   salesEmployeeSessionFromOtpResponse,
   shouldLogoutForApiError,
   shouldTrySalesEmployeeOtpAfterCustomerOtpError,
@@ -87,6 +88,12 @@ test('customer OTP without app access routes to pending approval', () => {
 
   assert.equal(nextAuthStepFromCustomerOtp(response), 'pending_access');
   assert.equal(sessionFromOtpResponse(response), null);
+  assert.deepEqual(pendingAccessRequestFromCustomerOtp({ otpResponse: response, mobileNumber: ' 9000000001 ' }), {
+    identityType: 'Customer',
+    customer: '9000000001',
+    mobileNumber: '9000000001',
+    status: 'Pending Admin Review',
+  });
 });
 
 test('customer OTP with app access creates a customer session', () => {

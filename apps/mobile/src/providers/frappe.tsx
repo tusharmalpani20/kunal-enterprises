@@ -9,6 +9,7 @@ interface FrappeContextType {
   db: FrappeDB | null;
   auth: FrappeAuth | null;
   call: FrappeCall | null;
+  guestCall: FrappeCall | null;
   callAccessToken: string | null;
   file: FrappeFileUpload | null;
 }
@@ -17,6 +18,7 @@ const FrappeContext = createContext<FrappeContextType>({
   db: null,
   auth: null,
   call: null,
+  guestCall: null,
   callAccessToken: null,
   file: null,
 });
@@ -26,6 +28,7 @@ const FrappeProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const [db, setDb] = useState<FrappeDB | null>(null);
   const [call, setCall] = useState<FrappeCall | null>(null);
+  const [guestCall, setGuestCall] = useState<FrappeCall | null>(null);
   const [callAccessToken, setCallAccessToken] = useState<string | null>(null);
   const [auth, setAuth] = useState<FrappeAuth | null>(null);
   const [file, setFile] = useState<FrappeFileUpload | null>(null);
@@ -34,6 +37,7 @@ const FrappeProvider = ({ children }: { children: React.ReactNode }) => {
     const frappe = createFrappeApp(accessToken);
 
     setCall(frappe.call());
+    setGuestCall(createFrappeApp(null).call());
     setCallAccessToken(accessToken);
 
     if (!accessToken) {
@@ -71,7 +75,7 @@ const FrappeProvider = ({ children }: { children: React.ReactNode }) => {
     setFile(frappe.file());
   }, [accessToken, logout, router]);
 
-  return <FrappeContext.Provider value={{ db, auth, call, callAccessToken, file }}>{children}</FrappeContext.Provider>;
+  return <FrappeContext.Provider value={{ db, auth, call, guestCall, callAccessToken, file }}>{children}</FrappeContext.Provider>;
 };
 
 export const useFrappe = (): FrappeContextType => {

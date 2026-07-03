@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, Platform, Pressable, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+import { FeedbackPressable } from './orderUi';
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
@@ -31,9 +32,14 @@ export function GlobalDateModal() {
             </View>
           )}
           {Platform.OS === 'ios' && (
-            <Pressable style={styles.primaryAction} onPress={() => setDatePickerTarget(null)}>
+            <FeedbackPressable
+              style={styles.primaryAction}
+              pressedStyle={styles.primaryActionPressed}
+              rippleColor="#2a2a2a"
+              onPress={() => setDatePickerTarget(null)}
+            >
               <Text style={styles.primaryActionText}>Done</Text>
-            </Pressable>
+            </FeedbackPressable>
           )}
         </View>
       </View>

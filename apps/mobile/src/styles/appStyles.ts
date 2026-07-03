@@ -19,6 +19,15 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
+  buttonPressed: {
+    backgroundColor: '#f3f3f3',
+  },
+  primaryActionPressed: {
+    backgroundColor: '#2a2a2a',
+  },
+  dangerButtonPressed: {
+    backgroundColor: '#fef2f2',
+  },
   page: {
     padding: 24,
     gap: 24,
@@ -87,6 +96,9 @@ export const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
+  appHeaderCentered: {
+    alignItems: 'center',
+  },
   appHeaderText: {
     flex: 1,
     gap: 8,
@@ -146,6 +158,9 @@ export const styles = StyleSheet.create({
   tabButtonActive: {
     backgroundColor: colors.dark,
     borderColor: colors.dark,
+  },
+  tabButtonActivePressed: {
+    backgroundColor: '#2a2a2a',
   },
   tabButtonText: {
     color: '#111111',
@@ -214,6 +229,9 @@ export const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
     gap: 12,
   },
+  rowButtonPressed: {
+    backgroundColor: '#f3f3f3',
+  },
   rowButtonTextBlock: {
     flex: 1,
     minWidth: 0,
@@ -242,6 +260,9 @@ export const styles = StyleSheet.create({
   warningRow: {
     borderColor: '#f59e0b',
     backgroundColor: '#fff7ed',
+  },
+  warningRowPressed: {
+    backgroundColor: '#ffedd5',
   },
   warningTitle: {
     color: '#9a3412',
@@ -383,6 +404,9 @@ export const styles = StyleSheet.create({
     borderColor: colors.dark,
     backgroundColor: colors.dark,
   },
+  groupChipActivePressed: {
+    backgroundColor: '#2a2a2a',
+  },
   groupChipText: {
     color: '#555555',
     fontSize: 13,
@@ -432,6 +456,12 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fonts.regular,
     lineHeight: 19,
+  },
+  loadingProducts: {
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   cartHint: {
     color: '#777777',
@@ -487,6 +517,9 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#ffffff',
   },
+  iconButtonPressed: {
+    backgroundColor: '#f3f3f3',
+  },
   note: {
     color: '#444444',
     backgroundColor: '#f5f5f5',
@@ -503,6 +536,8 @@ export const styles = StyleSheet.create({
     minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
     marginTop: 4,
   },
   authPrimaryAction: {
@@ -616,6 +651,9 @@ export const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+  bottomSheetContent: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 28,

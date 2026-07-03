@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { ItemSearchRow } from '../../src/components/orderUi';
+import { FeedbackPressable, ItemSearchRow } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
 import { cartQuantityForItem } from '../../src/utils/orderFormatting';
@@ -11,6 +11,7 @@ import type { TallyItem } from '../../src/types';
 export default function OrderScreen() {
   const {
     groups,
+    catalogLoading,
     selectedGroup,
     chooseGroup,
     renderedGroups,
@@ -35,33 +36,45 @@ export default function OrderScreen() {
         </View>
         <Text style={styles.fieldLabel}>Product groups ({groups.length})</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChips}>
-          <Pressable style={[styles.groupChip, !selectedGroup && styles.groupChipActive]} onPress={() => chooseGroup(null)}>
+          <FeedbackPressable
+            style={[styles.groupChip, !selectedGroup && styles.groupChipActive]}
+            pressedStyle={!selectedGroup ? styles.groupChipActivePressed : styles.buttonPressed}
+            rippleColor={!selectedGroup ? '#2a2a2a' : '#eeeeee'}
+            onPress={() => chooseGroup(null)}
+          >
             <Text style={[styles.groupChipText, !selectedGroup && styles.groupChipTextActive]}>All</Text>
-          </Pressable>
+          </FeedbackPressable>
           {renderedGroups.map((group) => (
-            <Pressable
+            <FeedbackPressable
               key={group.name}
               style={[styles.groupChip, selectedGroup?.name === group.name && styles.groupChipActive]}
+              pressedStyle={selectedGroup?.name === group.name ? styles.groupChipActivePressed : styles.buttonPressed}
+              rippleColor={selectedGroup?.name === group.name ? '#2a2a2a' : '#eeeeee'}
               onPress={() => chooseGroup(group)}
             >
               <Text style={[styles.groupChipText, selectedGroup?.name === group.name && styles.groupChipTextActive]}>
                 {group.group_name}
               </Text>
-            </Pressable>
+            </FeedbackPressable>
           ))}
         </ScrollView>
-        {renderedItems.map((item: TallyItem) => (
-          <ItemSearchRow
-            key={item.name}
-            item={item}
-            cartQuantity={cartQuantityForItem(cart, item.name)}
-            onPress={() => chooseItem(item)}
-          />
-        ))}
-        {visibleItems.length === 0 && (
+        {catalogLoading ? (
+          <View style={styles.loadingProducts}>
+            <ActivityIndicator color="#111111" />
+            <Text style={styles.helperText}>Loading products</Text>
+          </View>
+        ) : renderedItems.map((item: TallyItem) => (
+            <ItemSearchRow
+              key={item.name}
+              item={item}
+              cartQuantity={cartQuantityForItem(cart, item.name)}
+              onPress={() => chooseItem(item)}
+            />
+          ))}
+        {!catalogLoading && visibleItems.length === 0 && (
           <Text style={styles.helperText}>No items match this search and product group filter.</Text>
         )}
-        {visibleItems.length > renderedItems.length && (
+        {!catalogLoading && visibleItems.length > renderedItems.length && (
           <Text style={styles.helperText}>
             Showing {renderedItems.length} of {visibleItems.length} matches. Refine search to narrow results.
           </Text>
