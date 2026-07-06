@@ -383,12 +383,15 @@ Response:
       {
         "name": "Cotton Fabric",
         "group_name": "Cotton Fabric",
-        "full_path": "Cotton Fabric"
+        "full_path": "Cotton Fabric",
+        "product_group_logo": "/files/cotton_fabric_logo.jpeg"
       }
     ]
   }
 }
 ```
+
+`product_group_logo` is the attached image URL for the root product group. It is `null` when no logo is attached. Mobile clients should build a root-name-to-logo map from this response and use it when rendering both product groups and their items (items resolve via `root_stock_group`).
 
 ### Allowed Items
 
@@ -805,6 +808,44 @@ Response:
 ```
 
 Each successful control action writes an `Order Status Log`.
+
+## Owner/Admin Product Group Logos
+
+Only `Owner` and `Admin` roles can attach logos to `Tally Stock Group` rows. The `Tally Stock Group` doctype itself remains read-only for Owner/Admin; logos must be set through this controlled endpoint.
+
+### Set Product Group Logo
+
+```http
+POST /api/method/kunal_enterprises.api.product_group_logos.set_product_group_logo
+```
+
+Request:
+
+```json
+{
+  "group": "Merino Industries Limited",
+  "file_url": "/files/merino830151.jpeg"
+}
+```
+
+`group` is the `name` (and `group_name`) of the `Tally Stock Group`. `file_url` is the uploaded file URL, typically created through the Frappe `File` doctype.
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Logo attached",
+  "data": {
+    "group": "Merino Industries Limited",
+    "product_group_logo": "/files/merino830151.jpeg"
+  }
+}
+```
+
+Rejects with `403` when called by non-Owner/Admin roles and with `400` when `group` or `file_url` is missing.
+
+A one-off upload script is available at `kunal_enterprises.patches.upload_product_group_logos.upload` to attach the source logos in `ke-enterprises-product-logos/` to their mapped groups.
 
 ## Owner/Admin Sync APIs
 

@@ -6,17 +6,19 @@
  "doctype": "DocType",
  "document_type": "Document",
  "engine": "InnoDB",
- "field_order": [
-  "group_name",
-  "tally_guid",
-  "parent_stock_group",
-  "root_stock_group",
-  "is_root",
-  "depth",
-  "full_path",
-  "is_active",
-  "last_synced_at"
- ],
+  "field_order": [
+   "group_name",
+   "tally_guid",
+   "parent_stock_group",
+   "root_stock_group",
+   "is_root",
+   "depth",
+   "full_path",
+   "product_group_logo",
+   "product_group_logo_preview",
+   "is_active",
+   "last_synced_at"
+  ],
  "fields": [
   {
    "fieldname": "group_name",
@@ -61,6 +63,18 @@
    "fieldname": "full_path",
    "fieldtype": "Small Text",
    "label": "Full Path"
+  },
+  {
+   "fieldname": "product_group_logo",
+   "fieldtype": "Attach Image",
+   "label": "Product Group Logo"
+  },
+  {
+   "fieldname": "product_group_logo_preview",
+   "fieldtype": "Image",
+   "label": "Product Group Logo Preview",
+   "options": "product_group_logo",
+   "depends_on": "product_group_logo"
   },
   {
    "default": "1",

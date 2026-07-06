@@ -109,7 +109,7 @@ def get_allowed_product_groups(customer_name, sales_employee_name=None):
 			"is_root": 1,
 			"is_active": 1,
 		},
-		fields=["name", "group_name", "full_path"],
+		fields=["name", "group_name", "full_path", "product_group_logo"],
 		order_by="group_name asc",
 	)
 
