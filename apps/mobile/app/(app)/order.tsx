@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
-
+import { Maximize2 } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
 import { FeedbackPressable, GroupLogo, ItemSearchRow } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
@@ -20,6 +20,7 @@ export default function OrderScreen() {
     cart,
     chooseItem,
     itemSearch, setItemSearch,
+    groupSheetOpen, setGroupSheetOpen,
     logoForGroupName,
     logoForTallyItem,
     resolveLogoUrl,
@@ -37,7 +38,16 @@ export default function OrderScreen() {
             style={styles.input}
           />
         </View>
-        <Text style={styles.fieldLabel}>Product groups ({groups.length})</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.fieldLabel}>Product groups ({groups.length})</Text>
+          <FeedbackPressable
+            style={{ padding: 4 }}
+            pressedStyle={styles.iconButtonPressed}
+            onPress={() => setGroupSheetOpen(true)}
+          >
+            <Maximize2 size={12} color="#111111" />
+          </FeedbackPressable>
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChips}>
           <FeedbackPressable
             style={[styles.groupChip, !selectedGroup && styles.groupChipActive]}

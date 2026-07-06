@@ -736,4 +736,42 @@ export const styles = StyleSheet.create({
   sheetFooterSpace: {
     height: 16,
   },
+  groupSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  groupSheetRowActive: {
+    borderColor: colors.brandGreen,
+    backgroundColor: '#f0fdf4',
+  },
+  groupSheetRowPressed: {
+    backgroundColor: '#f3f3f3',
+  },
+  groupSheetRowLogo: {
+    width: 32,
+    height: 32,
+    marginLeft: 4,
+    borderRadius: 6,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  groupSheetRowTitle: {
+    color: '#111111',
+    fontSize: 15,
+    fontFamily: fonts.medium,
+    flex: 1,
+  },
+  groupSheetSearch: {
+    marginBottom: 4,
+  },
 });

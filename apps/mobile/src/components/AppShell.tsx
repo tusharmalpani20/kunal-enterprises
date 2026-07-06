@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Keyboard, Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
-import { ChevronLeft, History, LogOut, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
+import { ChevronLeft, History, LogOut, Package, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
 import { useNavigation } from 'expo-router';
 
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { colors, styles } from '../styles/appStyles';
 import { godownStockDetailForSelection } from '../utils/orderFormatting';
-import { FeedbackPressable, RowButton, TopLevelTab } from './orderUi';
+import { FeedbackPressable, GroupLogo, RowButton, TopLevelTab } from './orderUi';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigation = useNavigation();
@@ -20,11 +20,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     showCartControls,
     showFloatingCartBar,
     selectedCustomer,
+    selectedGroup,
+    chooseGroup,
     selectedItem,
     stockRows,
     quantity, setQuantity,
     godownSelectorOpen, setGodownSelectorOpen,
+    groupSheetOpen, setGroupSheetOpen,
+    itemSearch, setItemSearch,
     revokeAndLogout,
+    groups,
+    logoForGroupName,
+    resolveLogoUrl,
     showOrder,
     showHistory,
     showProfile,
@@ -149,6 +156,63 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   tone={Number(quantity) > stock.quantity ? 'warn' : 'default'}
                   actionLabel="Add"
                 />
+              ))}
+              <View style={styles.sheetFooterSpace} />
+              {keyboardInset > 0 && <View style={{ height: keyboardInset }} />}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={groupSheetOpen} transparent animationType="slide" onRequestClose={() => setGroupSheetOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalScrim} onPress={() => setGroupSheetOpen(false)} />
+          <View style={styles.bottomSheet}>
+            <ScrollView
+              contentContainerStyle={styles.bottomSheetContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <Text style={styles.kicker}>Browse products</Text>
+                <Text style={styles.workspaceTitle}>All Product Groups</Text>
+              </View>
+              <TextInput
+                value={itemSearch}
+                onChangeText={setItemSearch}
+                placeholder="Search product groups"
+                placeholderTextColor="#9a9a9a"
+                style={[styles.input, styles.groupSheetSearch]}
+              />
+              <FeedbackPressable
+                style={[styles.groupSheetRow, !selectedGroup && styles.groupSheetRowActive]}
+                pressedStyle={!selectedGroup ? styles.groupSheetRowActive : styles.groupSheetRowPressed}
+                onPress={() => { chooseGroup(null); setGroupSheetOpen(false); }}
+              >
+                <View style={styles.groupSheetRowLogo}>
+                  <Package size={18} color="#9a9a9a" />
+                </View>
+                <Text style={styles.groupSheetRowTitle}>All Products</Text>
+              </FeedbackPressable>
+              {groups.filter((group) => {
+                const query = itemSearch.trim().toLowerCase();
+                if (!query) return true;
+                return [group.group_name, group.full_path, group.name].some((v) => String(v || '').toLowerCase().includes(query));
+              }).map((group) => (
+                <FeedbackPressable
+                  key={group.name}
+                  style={[styles.groupSheetRow, selectedGroup?.name === group.name && styles.groupSheetRowActive]}
+                  pressedStyle={selectedGroup?.name === group.name ? styles.groupSheetRowActive : styles.groupSheetRowPressed}
+                  onPress={() => { chooseGroup(group); setGroupSheetOpen(false); }}
+                >
+                  <GroupLogo
+                    logoUrl={resolveLogoUrl(logoForGroupName(group.name))}
+                    size={18}
+                    fallbackLabel={group.group_name}
+                    style={styles.groupSheetRowLogo}
+                  />
+                  <Text style={styles.groupSheetRowTitle}>{group.group_name}</Text>
+                </FeedbackPressable>
               ))}
               <View style={styles.sheetFooterSpace} />
               {keyboardInset > 0 && <View style={{ height: keyboardInset }} />}

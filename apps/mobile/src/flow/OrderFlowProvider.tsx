@@ -111,6 +111,7 @@ function useOrderFlowState() {
   const [cartLoadedKey, setCartLoadedKey] = useState<string | null>(null);
   const [draftCarts, setDraftCarts] = useState<DraftCartSummary[]>([]);
   const [draftCartsExpanded, setDraftCartsExpanded] = useState(false);
+  const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [salesNote, setSalesNote] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [itemSearch, setItemSearch] = useState('');
@@ -231,11 +232,15 @@ function useOrderFlowState() {
   const notes = useMemo(() => buildConfirmationNotes(cart, stockRows), [cart, stockRows]);
   const visibleGroups = useMemo(() => searchProductGroups(groups, itemSearch), [groups, itemSearch]);
   const renderedGroups = useMemo(() => visibleGroups.slice(0, MAX_VISIBLE_GROUPS), [visibleGroups]);
-  const filteredItems = useMemo(
-    () => (selectedGroup ? items.filter((item) => item.root_stock_group === selectedGroup.name) : items),
-    [items, selectedGroup],
+  const visibleItems = useMemo(
+    () => {
+      const pool = selectedGroup
+        ? items.filter((item) => item.root_stock_group === selectedGroup.name)
+        : items;
+      return searchItemsForMobile(pool, itemSearch);
+    },
+    [items, selectedGroup, itemSearch],
   );
-  const visibleItems = useMemo(() => searchItemsForMobile(filteredItems, itemSearch), [filteredItems, itemSearch]);
   const renderedItems = useMemo(() => visibleItems.slice(0, MAX_VISIBLE_ITEMS), [visibleItems]);
   const resend = otpResendState({ lastSentAtMs: otpSentAtMs, nowMs: Date.now(), waitSeconds: otpCooldownSeconds });
   const currentOtpIdentityType = customerAuthIntent === 'signup' ? 'Customer' : otpIdentityType || 'Customer';
@@ -898,6 +903,7 @@ function useOrderFlowState() {
     cart,
     draftCarts,
     draftCartsExpanded, setDraftCartsExpanded,
+    groupSheetOpen, setGroupSheetOpen,
     salesNote, setSalesNote,
     customerSearch, setCustomerSearch,
     itemSearch, setItemSearch,

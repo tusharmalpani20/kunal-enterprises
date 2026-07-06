@@ -3,7 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 import { Check, Minus, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { BackButton, FeedbackPressable, GroupLogo, Workspace } from '../../src/components/orderUi';
+import { FeedbackPressable, GroupLogo, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { colors, styles } from '../../src/styles/appStyles';
 import type { CartAllocation } from '../../src/types';
@@ -16,7 +16,6 @@ export default function SummaryScreen() {
     cart,
     groupedCart,
     notes,
-    backToItems,
     changeCartQuantity,
     removeCartItem,
     submitOrder,
@@ -27,7 +26,6 @@ export default function SummaryScreen() {
   return (
     <AppShell>
       <Workspace title="Order Summary" icon={<Check size={18} color="#111111" />}>
-        <BackButton label="Back to product search" onPress={backToItems} />
         {mode === 'Sales Employee' && selectedCustomer && (
           <View style={styles.contextBlock}>
             <Text style={styles.fieldLabel}>Customer</Text>
