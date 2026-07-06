@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Keyboard, Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
-import { ChevronLeft, History, LogOut, Package, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
+import { Check, ChevronLeft, History, LogOut, Package, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
 import { useNavigation } from 'expo-router';
 
 import { useOrderFlow } from '../flow/OrderFlowProvider';
@@ -19,6 +19,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     appSection,
     showCartControls,
     showFloatingCartBar,
+    cart,
+    submitOrder,
     selectedCustomer,
     selectedGroup,
     chooseGroup,
@@ -107,7 +109,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {children}
       </ScrollView>
-      {showFloatingCartBar && (
+      {step === 'summary' && cart.length > 0 ? (
+        <FeedbackPressable
+          style={styles.cartBar}
+          pressedStyle={styles.primaryActionPressed}
+          rippleColor={colors.primaryPressed}
+          onPress={submitOrder}
+        >
+          <View>
+            <Text style={styles.cartBarTitle}>{totals.rowCount} item{totals.rowCount !== 1 ? 's' : ''} in cart</Text>
+            <Text style={styles.cartBarText}>Total quantity {totals.totalQuantity}</Text>
+          </View>
+          <View style={styles.cartBarAction}>
+            <Check size={16} color={colors.onPrimary} />
+            <Text style={styles.cartBarActionText}>Confirm</Text>
+          </View>
+        </FeedbackPressable>
+      ) : showFloatingCartBar ? (
         <FeedbackPressable
           style={styles.cartBar}
           pressedStyle={styles.primaryActionPressed}
@@ -123,7 +141,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Text style={styles.cartBarActionText}>Review</Text>
           </View>
         </FeedbackPressable>
-      )}
+      ) : null}
       <Modal visible={godownSelectorOpen} transparent animationType="slide" onRequestClose={() => setGodownSelectorOpen(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalScrim} onPress={() => setGodownSelectorOpen(false)} />
@@ -167,11 +185,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalScrim} onPress={() => setGroupSheetOpen(false)} />
           <View style={styles.bottomSheet}>
-            <ScrollView
-              contentContainerStyle={styles.bottomSheetContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
+            <View style={styles.sheetStickyHeader}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
                 <Text style={styles.kicker}>Browse products</Text>
@@ -184,6 +198,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 placeholderTextColor="#9a9a9a"
                 style={[styles.input, styles.groupSheetSearch]}
               />
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.bottomSheetContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <FeedbackPressable
                 style={[styles.groupSheetRow, !selectedGroup && styles.groupSheetRowActive]}
                 pressedStyle={!selectedGroup ? styles.groupSheetRowActive : styles.groupSheetRowPressed}

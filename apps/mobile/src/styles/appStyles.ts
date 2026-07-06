@@ -774,4 +774,12 @@ export const styles = StyleSheet.create({
   groupSheetSearch: {
     marginBottom: 4,
   },
+  sheetStickyHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eeeeee',
+    gap: 8,
+  },
 });
