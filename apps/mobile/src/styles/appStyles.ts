@@ -547,6 +547,35 @@ export const styles = StyleSheet.create({
   iconButtonPressed: {
     backgroundColor: '#f3f3f3',
   },
+  groupSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+  },
+  groupSectionLogo: {
+    width: 28,
+    height: 28,
+    marginRight: 4,
+    borderRadius: 6,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  groupSectionTitle: {
+    color: '#111111',
+    fontSize: 14,
+    fontFamily: fonts.semibold,
+  },
+  groupDivider: {
+    height: 1,
+    backgroundColor: '#e8e8e8',
+    marginTop: 8,
+    marginBottom: 4,
+  },
   note: {
     color: '#444444',
     backgroundColor: '#f5f5f5',

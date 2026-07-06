@@ -25,6 +25,7 @@ import {
   buildConfirmationNotes,
   customerOrderGuard,
   finalizeOrderSubmission,
+  groupCartByProductGroup,
   logoForGroup,
   logoForItem,
   orderTotals,
@@ -257,6 +258,10 @@ function useOrderFlowState() {
   );
   const cartOwnerKey = useMemo(() => cartOwnerKeyForSession(session), [session]);
   const groupLogoMap = useMemo(() => productGroupLogoMap(groups), [groups]);
+  const groupedCart = useMemo(
+    () => groupCartByProductGroup(cart, items, groupLogoMap),
+    [cart, items, groupLogoMap],
+  );
   useEffect(() => {
     if (groups.length === 0) return;
     console.log(`[logos] group logo map — ${groupLogoMap.size} of ${groups.length} groups have logos`);
@@ -924,6 +929,7 @@ function useOrderFlowState() {
     // derived
     totals,
     notes,
+    groupedCart,
     renderedGroups,
     visibleItems,
     renderedItems,

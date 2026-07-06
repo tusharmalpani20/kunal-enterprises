@@ -266,6 +266,33 @@ export function logoForItem(groups, item) {
   return logoForGroup(groups, item.root_stock_group);
 }
 
+export function groupCartByProductGroup(cart, items, groupLogoMap) {
+  const groupIndex = new Map();
+
+  for (const row of cart) {
+    const tallyItem = items.find((i) => i.name === row.item);
+    const groupName = tallyItem?.root_stock_group || 'Other';
+    if (!groupIndex.has(groupName)) {
+      groupIndex.set(groupName, {
+        groupName,
+        groupLogo: logoForGroup(groupLogoMap, groupName),
+        rows: [],
+      });
+    }
+    groupIndex.get(groupName).rows.push(row);
+  }
+
+  const sorted = [...groupIndex.values()].sort((a, b) => a.groupName.localeCompare(b.groupName));
+
+  const other = sorted.find((g) => g.groupName === 'Other');
+  if (other) {
+    sorted.splice(sorted.indexOf(other), 1);
+    sorted.push(other);
+  }
+
+  return sorted;
+}
+
 export function resolveFrappeFileUrl(path, baseUrl) {
   const raw = String(path || '').trim();
   if (!raw) {

@@ -6,6 +6,7 @@ import { AppShell } from '../../src/components/AppShell';
 import { BackButton, FeedbackPressable, GroupLogo, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { colors, styles } from '../../src/styles/appStyles';
+import type { CartAllocation } from '../../src/types';
 
 export default function SummaryScreen() {
   const {
@@ -13,6 +14,7 @@ export default function SummaryScreen() {
     selectedCustomer,
     salesNote, setSalesNote,
     cart,
+    groupedCart,
     notes,
     backToItems,
     changeCartQuantity,
@@ -41,25 +43,47 @@ export default function SummaryScreen() {
             />
           </View>
         )}
-        {cart.map((row) => (
-          <View key={`${row.item}:${row.godown}`} style={styles.summaryLine}>
-            <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(row.item))} size={24} fallbackLabel={row.itemName} style={styles.itemRowLogo} />
-            <View style={styles.summaryItemText}>
-              <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{row.itemName}</Text>
-              <Text style={styles.rowDetail}>{row.godown}</Text>
+        {groupedCart.map((group, index) => (
+          <View key={group.groupName}>
+            <View style={styles.groupSectionHeader}>
+              <GroupLogo
+                logoUrl={resolveLogoUrl(group.groupLogo)}
+                size={18}
+                fallbackLabel={group.groupName}
+                style={styles.groupSectionLogo}
+              />
+              <Text style={styles.groupSectionTitle}>{group.groupName}</Text>
             </View>
-            <View style={styles.cartControls}>
-              <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, -1)}>
-                <Minus size={16} color="#111111" />
-              </FeedbackPressable>
-              <Text style={styles.quantity}>{row.quantity}</Text>
-              <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, 1)}>
-                <Plus size={16} color="#111111" />
-              </FeedbackPressable>
-              <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => removeCartItem(row.item)}>
-                <Trash2 size={16} color="#111111" />
-              </FeedbackPressable>
-            </View>
+            {group.rows.map((row: CartAllocation, rowIndex: number) => {
+              const isLastRow = rowIndex === group.rows.length - 1;
+              return (
+              <View key={`${row.item}:${row.godown}`} style={[styles.summaryLine, isLastRow && { borderBottomWidth: 0 }]}>
+                <GroupLogo
+                  logoUrl={resolveLogoUrl(logoForItemName(row.item))}
+                  size={24}
+                  fallbackLabel={row.itemName}
+                  style={styles.itemRowLogo}
+                />
+                <View style={styles.summaryItemText}>
+                  <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{row.itemName}</Text>
+                  <Text style={styles.rowDetail}>{row.godown}</Text>
+                </View>
+                <View style={styles.cartControls}>
+                  <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, -1)}>
+                    <Minus size={16} color="#111111" />
+                  </FeedbackPressable>
+                  <Text style={styles.quantity}>{row.quantity}</Text>
+                  <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, 1)}>
+                    <Plus size={16} color="#111111" />
+                  </FeedbackPressable>
+                  <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => removeCartItem(row.item)}>
+                    <Trash2 size={16} color="#111111" />
+                  </FeedbackPressable>
+                </View>
+              </View>
+              );
+            })}
+            {index < groupedCart.length - 1 && <View style={styles.groupDivider} />}
           </View>
         ))}
         {notes.map((note) => (
