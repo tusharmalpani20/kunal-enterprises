@@ -6,7 +6,7 @@ import { AuthShell } from '../../src/components/AuthShell';
 import { FeedbackPressable, Workspace } from '../../src/components/orderUi';
 import { pendingAccessMessage } from '../../src/domain/screenCopy.mjs';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/appStyles';
+import { colors, styles } from '../../src/styles/appStyles';
 
 export default function PendingScreen() {
   const { pendingAccessRequest, pendingAccessRefreshing, refreshPendingAccess } = useOrderFlow();
@@ -21,7 +21,7 @@ export default function PendingScreen() {
         <FeedbackPressable
           style={[styles.primaryAction, styles.authPrimaryAction]}
           pressedStyle={styles.primaryActionPressed}
-          rippleColor="#2a2a2a"
+          rippleColor={colors.primaryPressed}
           onPress={refreshPendingAccess}
           disabled={pendingAccessRefreshing}
         >

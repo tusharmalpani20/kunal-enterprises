@@ -8,10 +8,11 @@ export const fonts = {
 
 export const colors = {
   primary: '#FFAF00',
-  onPrimary: '#111111', // black text/icons on amber surfaces
+  primaryPressed: '#014a28',
+  onPrimary: '#FFAF00', // amber text/icons on green surfaces
   ink: '#111111', // primary text
   surface: '#ffffff',
-  dark: '#111111', // large dark panels (status strip, cart bar)
+  brandGreen: '#016235',
 };
 
 export const styles = StyleSheet.create({
@@ -23,7 +24,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#f3f3f3',
   },
   primaryActionPressed: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: colors.primaryPressed,
   },
   dangerButtonPressed: {
     backgroundColor: '#fef2f2',
@@ -156,11 +157,11 @@ export const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   tabButtonActive: {
-    backgroundColor: colors.dark,
-    borderColor: colors.dark,
+    backgroundColor: colors.brandGreen,
+    borderColor: colors.brandGreen,
   },
   tabButtonActivePressed: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: colors.primaryPressed,
   },
   tabButtonText: {
     color: '#111111',
@@ -168,7 +169,7 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   tabButtonTextActive: {
-    color: colors.primary,
+    color: colors.onPrimary,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -399,13 +400,15 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 9,
     backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   groupChipActive: {
-    borderColor: colors.dark,
-    backgroundColor: colors.dark,
+    borderColor: colors.brandGreen,
+    backgroundColor: colors.brandGreen,
   },
   groupChipActivePressed: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: colors.primaryPressed,
   },
   groupChipText: {
     color: '#555555',
@@ -413,7 +416,31 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.regular,
   },
   groupChipTextActive: {
-    color: colors.primary,
+    color: colors.onPrimary,
+  },
+  groupChipLogo: {
+    width: 20,
+    height: 20,
+    marginRight: 6,
+    borderRadius: 4,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  itemRowLogo: {
+    width: 40,
+    height: 40,
+    marginRight: 12,
+    borderRadius: 6,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   itemRow: {
     borderWidth: 1,
@@ -440,8 +467,8 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   itemAddPillActive: {
-    backgroundColor: colors.dark,
-    borderColor: colors.dark,
+    backgroundColor: colors.brandGreen,
+    borderColor: colors.brandGreen,
   },
   itemAddPillText: {
     color: '#111111',
@@ -449,7 +476,7 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   itemAddPillTextActive: {
-    color: colors.primary,
+    color: colors.onPrimary,
   },
   helperText: {
     color: '#666666',
@@ -530,7 +557,7 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
   },
   primaryAction: {
-    backgroundColor: colors.dark,
+    backgroundColor: colors.brandGreen,
     borderRadius: 8,
     padding: 15,
     minHeight: 54,
@@ -582,7 +609,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   primaryActionText: {
-    color: colors.primary,
+    color: colors.onPrimary,
     fontSize: 15,
     fontFamily: fonts.medium,
   },
@@ -610,7 +637,7 @@ export const styles = StyleSheet.create({
     margin: 14,
     marginTop: 0,
     borderRadius: 8,
-    backgroundColor: '#111111',
+    backgroundColor: colors.brandGreen,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -618,12 +645,12 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   cartBarTitle: {
-    color: colors.primary,
+    color: colors.onPrimary,
     fontSize: 15,
     fontFamily: fonts.medium,
   },
   cartBarText: {
-    color: '#c8c8c8',
+    color: colors.onPrimary,
     fontSize: 12,
     fontFamily: fonts.regular,
     marginTop: 2,
@@ -634,7 +661,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   cartBarActionText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontFamily: fonts.regular,
   },

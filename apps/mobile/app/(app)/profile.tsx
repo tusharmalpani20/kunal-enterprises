@@ -5,7 +5,7 @@ import { UserRound } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
 import { DatePickerButton, FeedbackPressable, ProfileReadOnlyField, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/appStyles';
+import { colors, styles } from '../../src/styles/appStyles';
 
 export default function ProfileScreen() {
   const {
@@ -47,7 +47,7 @@ export default function ProfileScreen() {
             <FeedbackPressable
               style={styles.primaryAction}
               pressedStyle={styles.primaryActionPressed}
-              rippleColor="#2a2a2a"
+              rippleColor={colors.primaryPressed}
               onPress={saveCustomerProfile}
             >
               <Text style={styles.primaryActionText}>Save profile</Text>

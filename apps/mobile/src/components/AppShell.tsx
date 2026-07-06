@@ -4,7 +4,7 @@ import { ChevronLeft, History, LogOut, ShoppingBag, ShoppingCart, UserRound } fr
 import { useNavigation } from 'expo-router';
 
 import { useOrderFlow } from '../flow/OrderFlowProvider';
-import { styles } from '../styles/appStyles';
+import { colors, styles } from '../styles/appStyles';
 import { godownStockDetailForSelection } from '../utils/orderFormatting';
 import { FeedbackPressable, RowButton, TopLevelTab } from './orderUi';
 
@@ -72,19 +72,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <TopLevelTab
             label="Order"
             active={appSection === 'order'}
-            icon={<ShoppingBag size={16} color={appSection === 'order' ? '#FFAF00' : '#111111'} />}
+            icon={<ShoppingBag size={16} color={appSection === 'order' ? colors.onPrimary : '#111111'} />}
             onPress={showOrder}
           />
           <TopLevelTab
             label="History"
             active={appSection === 'history'}
-            icon={<History size={16} color={appSection === 'history' ? '#FFAF00' : '#111111'} />}
+            icon={<History size={16} color={appSection === 'history' ? colors.onPrimary : '#111111'} />}
             onPress={showHistory}
           />
           <TopLevelTab
             label="Profile"
             active={appSection === 'profile'}
-            icon={<UserRound size={16} color={appSection === 'profile' ? '#FFAF00' : '#111111'} />}
+            icon={<UserRound size={16} color={appSection === 'profile' ? colors.onPrimary : '#111111'} />}
             onPress={showProfile}
           />
         </View>
@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <FeedbackPressable
           style={styles.cartBar}
           pressedStyle={styles.primaryActionPressed}
-          rippleColor="#2a2a2a"
+          rippleColor={colors.primaryPressed}
           onPress={() => setStep('summary')}
         >
           <View>
@@ -112,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Text style={styles.cartBarText}>Total quantity {totals.totalQuantity}</Text>
           </View>
           <View style={styles.cartBarAction}>
-            <ShoppingCart size={16} color="#ffffff" />
+            <ShoppingCart size={16} color={colors.onPrimary} />
             <Text style={styles.cartBarActionText}>Review</Text>
           </View>
         </FeedbackPressable>

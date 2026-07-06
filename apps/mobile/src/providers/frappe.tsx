@@ -2,7 +2,8 @@ import { useRouter } from 'expo-router';
 import { FrappeApp, FrappeAuth, FrappeCall, FrappeDB, FrappeFileUpload } from 'frappe-js-sdk';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { APP_CONFIG } from '../constants/config';
+import { APP_CONFIG, FALLBACK_BASE_URL, PRIMARY_BASE_URL } from '../constants/config';
+import { resolveBaseUrl } from '../domain/baseUrlResolver.mjs';
 import { AuthContext } from './auth';
 
 interface FrappeContextType {
@@ -12,6 +13,7 @@ interface FrappeContextType {
   guestCall: FrappeCall | null;
   callAccessToken: string | null;
   file: FrappeFileUpload | null;
+  baseUrl: string | null;
 }
 
 const FrappeContext = createContext<FrappeContextType>({
@@ -21,11 +23,13 @@ const FrappeContext = createContext<FrappeContextType>({
   guestCall: null,
   callAccessToken: null,
   file: null,
+  baseUrl: null,
 });
 
 const FrappeProvider = ({ children }: { children: React.ReactNode }) => {
   const { accessToken, logout } = useContext(AuthContext);
   const router = useRouter();
+  const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [db, setDb] = useState<FrappeDB | null>(null);
   const [call, setCall] = useState<FrappeCall | null>(null);
   const [guestCall, setGuestCall] = useState<FrappeCall | null>(null);
@@ -34,10 +38,30 @@ const FrappeProvider = ({ children }: { children: React.ReactNode }) => {
   const [file, setFile] = useState<FrappeFileUpload | null>(null);
 
   useEffect(() => {
-    const frappe = createFrappeApp(accessToken);
+    let cancelled = false;
+    resolveBaseUrl({
+      primary: PRIMARY_BASE_URL,
+      fallback: FALLBACK_BASE_URL,
+      probe: frappeHealthProbe,
+    }).then((resolved) => {
+      if (!cancelled) {
+        console.log(`[frappe] resolved base URL: ${resolved}`);
+        setBaseUrl(resolved);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!baseUrl) {
+      return;
+    }
+    const frappe = createFrappeApp(baseUrl, accessToken);
 
     setCall(frappe.call());
-    setGuestCall(createFrappeApp(null).call());
+    setGuestCall(createFrappeApp(baseUrl, null).call());
     setCallAccessToken(accessToken);
 
     if (!accessToken) {
@@ -73,9 +97,9 @@ const FrappeProvider = ({ children }: { children: React.ReactNode }) => {
     setDb(frappe.db());
     setAuth(frappe.auth());
     setFile(frappe.file());
-  }, [accessToken, logout, router]);
+  }, [accessToken, baseUrl, logout, router]);
 
-  return <FrappeContext.Provider value={{ db, auth, call, guestCall, callAccessToken, file }}>{children}</FrappeContext.Provider>;
+  return <FrappeContext.Provider value={{ db, auth, call, guestCall, callAccessToken, file, baseUrl }}>{children}</FrappeContext.Provider>;
 };
 
 export const useFrappe = (): FrappeContextType => {
@@ -85,9 +109,9 @@ export const useFrappe = (): FrappeContextType => {
 export { FrappeContext, FrappeProvider };
 export type { FrappeContextType };
 
-function createFrappeApp(accessToken: string | null) {
+function createFrappeApp(baseUrl: string, accessToken: string | null) {
   return new FrappeApp(
-    APP_CONFIG.BASE_URL,
+    baseUrl,
     {
       useToken: false,
       type: 'Bearer',
@@ -99,4 +123,10 @@ function createFrappeApp(accessToken: string | null) {
         }
       : undefined,
   );
+}
+
+function frappeHealthProbe(url: string, method: string, timeoutMs: number) {
+  const frappe = new FrappeApp(url, { useToken: false, type: 'Bearer' }, undefined, undefined);
+  frappe.axios.defaults.timeout = timeoutMs;
+  return frappe.call().get(method);
 }

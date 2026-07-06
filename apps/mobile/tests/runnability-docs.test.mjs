@@ -39,7 +39,7 @@ test('mobile README documents install, launch, test, and typecheck verification'
 test('mobile backend environment example matches runtime config default', () => {
 	assert.match(envExample, /^EXPO_PUBLIC_FRAPPE_BASE_URL=http:\/\/127\.0\.0\.1:8000$/m);
 	assert.match(configSource, /process\.env\.EXPO_PUBLIC_FRAPPE_BASE_URL/);
-	assert.match(configSource, /http:\/\/127\.0\.0\.1:8000/);
+	assert.match(configSource, /LOCAL_BASE_URL/);
 	assert.match(readme, /\.env\.example/);
 	assert.match(deliveryAudit, /apps\/mobile\/\.env\.example/);
 });

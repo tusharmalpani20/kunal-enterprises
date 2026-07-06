@@ -3,12 +3,12 @@ import { Text, View } from 'react-native';
 import { History } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { BackButton, Workspace } from '../../src/components/orderUi';
+import { BackButton, GroupLogo, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
 
 export default function DetailScreen() {
-  const { orderDetail, showHistory } = useOrderFlow();
+  const { orderDetail, showHistory, logoForItemName, resolveLogoUrl } = useOrderFlow();
 
   if (!orderDetail) {
     return <AppShell>{null}</AppShell>;
@@ -23,6 +23,7 @@ export default function DetailScreen() {
         <Text style={styles.rowDetail}>Placed by {orderDetail.placed_by_label || orderDetail.placed_by || 'You'}</Text>
         {(orderDetail.godown_allocations || []).map((allocation) => (
           <View key={`${allocation.item}:${allocation.godown}`} style={styles.summaryLine}>
+            <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(allocation.item))} size={24} fallbackLabel={allocation.item} style={styles.itemRowLogo} />
             <View>
               <Text style={styles.rowTitle}>{allocation.item}</Text>
               <Text style={styles.rowDetail}>{allocation.godown}</Text>

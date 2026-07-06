@@ -241,3 +241,44 @@ export async function finalizeOrderSubmission({ submit, payload }) {
     };
   }
 }
+
+export function productGroupLogoMap(groups) {
+  const map = new Map();
+  for (const group of groups) {
+    const logo = group?.product_group_logo;
+    if (typeof logo === 'string' && logo.trim() !== '') {
+      map.set(group.name, logo);
+    }
+  }
+  return map;
+}
+
+export function logoForGroup(groups, name) {
+  const map = groups instanceof Map ? groups : productGroupLogoMap(groups);
+  const logo = map.get(name);
+  return typeof logo === 'string' && logo.trim() !== '' ? logo : null;
+}
+
+export function logoForItem(groups, item) {
+  if (!item?.root_stock_group) {
+    return null;
+  }
+  return logoForGroup(groups, item.root_stock_group);
+}
+
+export function resolveFrappeFileUrl(path, baseUrl) {
+  const raw = String(path || '').trim();
+  if (!raw) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+  if (!baseUrl) {
+    return raw;
+  }
+  if (raw.startsWith('/')) {
+    return `${baseUrl}${raw}`;
+  }
+  return `${baseUrl}/${raw}`;
+}

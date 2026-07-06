@@ -13,8 +13,8 @@ import {
 import { sortGodownStockForMobile } from '../domain/mobileFlow.mjs';
 
 const productGroups = [
-  { name: 'Cotton Fabric', group_name: 'Cotton Fabric', full_path: 'Cotton Fabric' },
-  { name: 'Lining', group_name: 'Lining', full_path: 'Lining' },
+  { name: 'Cotton Fabric', group_name: 'Cotton Fabric', full_path: 'Cotton Fabric', product_group_logo: '/files/cotton_fabric_logo.jpeg' },
+  { name: 'Lining', group_name: 'Lining', full_path: 'Lining', product_group_logo: null },
 ];
 
 const items = [

@@ -91,7 +91,7 @@ test('Frappe provider preserves the Goal 3 SDK contract', () => {
     'setDb(null)',
     'setAuth(null)',
     'setFile(null)',
-    'function createFrappeApp(accessToken',
+    'function createFrappeApp(baseUrl: string, accessToken',
     "accessToken\n      ? {",
   ]) {
     assert.match(source, new RegExp(escapeRegExp(phrase)));
@@ -104,7 +104,8 @@ test('auth provider validates stored sessions through the Frappe SDK by default'
     'validateStoredSession = validateStoredMobileSession',
     'FrappeApp',
     'createFrappeApiClient',
-    'APP_CONFIG.BASE_URL',
+    'PRIMARY_BASE_URL',
+    'FALLBACK_BASE_URL',
     'return createFrappeApiClient(frappe.call()).currentSession()',
   ]) {
     assert.match(source, new RegExp(escapeRegExp(phrase)));

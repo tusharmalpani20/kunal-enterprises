@@ -25,16 +25,21 @@ import {
   buildConfirmationNotes,
   customerOrderGuard,
   finalizeOrderSubmission,
+  logoForGroup,
+  logoForItem,
   orderTotals,
   parseOrderQuantityInput,
   prepareStockReviewBeforeSubmit,
+  productGroupLogoMap,
   removeAllocation,
+  resolveFrappeFileUrl,
   searchItemsForMobile,
   updateAllocationQuantity,
 } from '../domain/mobileFlow.mjs';
 import { buildSalesEmployeeOrderPayload, salesEmployeeOrderGuard } from '../domain/salesEmployeeFlow.mjs';
 import { loadProfileForMobile, saveCustomerProfileForMobile } from '../domain/profileHistoryFlow.mjs';
 import { classifyApiFailure, requestBanner } from '../domain/sharedStateFlow.mjs';
+import { PRIMARY_BASE_URL } from '../constants/config';
 import {
   appSectionForStep,
   isAuthSurface as isAuthSurfaceStep,
@@ -71,7 +76,7 @@ export function useOrderFlow(): OrderFlowValue {
 }
 
 function useOrderFlowState() {
-  const { call, guestCall, callAccessToken } = useFrappe();
+  const { call, guestCall, callAccessToken, baseUrl } = useFrappe();
   const { logout, session, setSession } = useContext(AuthContext);
   const api = useMemo(() => createMobileApi({ call }), [call]);
   const guestApi = useMemo(() => createMobileApi({ call: guestCall || call }), [call, guestCall]);
@@ -251,6 +256,25 @@ function useOrderFlowState() {
     [mode, selectedCustomer, session],
   );
   const cartOwnerKey = useMemo(() => cartOwnerKeyForSession(session), [session]);
+  const groupLogoMap = useMemo(() => productGroupLogoMap(groups), [groups]);
+  useEffect(() => {
+    if (groups.length === 0) return;
+    console.log(`[logos] group logo map — ${groupLogoMap.size} of ${groups.length} groups have logos`);
+    if (groupLogoMap.size > 0) {
+      const entries = [...groupLogoMap.entries()].map(([name, url]) => `${name} -> ${url}`);
+      console.log('[logos] map entries:', entries.join(', '));
+    }
+  }, [groupLogoMap, groups]);
+  const logoForGroupName = useCallback((name: string) => logoForGroup(groupLogoMap, name), [groupLogoMap]);
+  const logoForTallyItem = useCallback((item: TallyItem) => logoForItem(groupLogoMap, item), [groupLogoMap]);
+  const logoForItemName = useCallback(
+    (itemName: string) => {
+      const item = items.find((row) => row.name === itemName);
+      return item ? logoForItem(groupLogoMap, item) : null;
+    },
+    [groupLogoMap, items],
+  );
+  const resolveLogoUrl = useCallback((path: string | null | undefined) => resolveFrappeFileUrl(path, baseUrl || PRIMARY_BASE_URL), [baseUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -915,6 +939,11 @@ function useOrderFlowState() {
     showFloatingCartBar,
     activeDatePickerValue,
     activeDatePickerDate,
+    // logo helpers
+    logoForGroupName,
+    logoForTallyItem,
+    logoForItemName,
+    resolveLogoUrl,
     // handlers
     chooseGroup,
     chooseItem,

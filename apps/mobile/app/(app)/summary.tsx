@@ -3,9 +3,9 @@ import { Text, TextInput, View } from 'react-native';
 import { Check, Minus, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { BackButton, FeedbackPressable, Workspace } from '../../src/components/orderUi';
+import { BackButton, FeedbackPressable, GroupLogo, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/appStyles';
+import { colors, styles } from '../../src/styles/appStyles';
 
 export default function SummaryScreen() {
   const {
@@ -18,6 +18,8 @@ export default function SummaryScreen() {
     changeCartQuantity,
     removeCartItem,
     submitOrder,
+    logoForItemName,
+    resolveLogoUrl,
   } = useOrderFlow();
 
   return (
@@ -41,6 +43,7 @@ export default function SummaryScreen() {
         )}
         {cart.map((row) => (
           <View key={`${row.item}:${row.godown}`} style={styles.summaryLine}>
+            <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(row.item))} size={24} fallbackLabel={row.itemName} style={styles.itemRowLogo} />
             <View style={styles.summaryItemText}>
               <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{row.itemName}</Text>
               <Text style={styles.rowDetail}>{row.godown}</Text>
@@ -65,7 +68,7 @@ export default function SummaryScreen() {
         <FeedbackPressable
           style={styles.primaryAction}
           pressedStyle={styles.primaryActionPressed}
-          rippleColor="#2a2a2a"
+          rippleColor={colors.primaryPressed}
           onPress={submitOrder}
         >
           <Text style={styles.primaryActionText}>Confirm order</Text>

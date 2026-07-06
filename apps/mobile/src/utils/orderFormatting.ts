@@ -4,6 +4,8 @@ import { formatSyncTimestampForMobile, stockRowDetailForMobile } from '../domain
 import type { CartAllocation, ItemStock, OrderSummary, ProductGroup, TallyItem } from '../types';
 import type { Mode, ToastKind } from '../flow/types';
 
+export { resolveFrappeFileUrl } from '../domain/mobileFlow.mjs';
+
 export function showToast(type: ToastKind, text1: string, text2?: string) {
   Toast.show({
     type,

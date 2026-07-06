@@ -1,9 +1,9 @@
-import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Package, Plus, Trash2 } from 'lucide-react-native';
 
-import { styles } from '../styles/appStyles';
+import { colors, styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
 import type { TallyItem } from '../types';
 
@@ -136,7 +136,7 @@ export function TopLevelTab({
     <FeedbackPressable
       style={[styles.tabButton, active && styles.tabButtonActive]}
       pressedStyle={active ? styles.tabButtonActivePressed : styles.buttonPressed}
-      rippleColor={active ? '#2a2a2a' : '#eeeeee'}
+      rippleColor={active ? colors.primaryPressed : '#eeeeee'}
       onPress={onPress}
     >
       {icon}
@@ -183,17 +183,68 @@ export function RowButton({
   );
 }
 
+export function GroupLogo({
+  logoUrl,
+  size,
+  fallbackLabel,
+  style,
+}: {
+  logoUrl?: string | null;
+  size: number;
+  fallbackLabel?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const resolved = logoUrl || null;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [resolved]);
+
+  if (resolved && !failed) {
+    return (
+      <View style={[style, { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
+        <Image
+          source={{ uri: resolved }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="contain"
+          onError={(error) => {
+            console.log(`[GroupLogo] image load failed for ${fallbackLabel || 'unknown'}: ${resolved}`, error?.nativeEvent?.error || '');
+            setFailed(true);
+          }}
+          onLoad={() => {
+            console.log(`[GroupLogo] image loaded for ${fallbackLabel || 'unknown'}: ${resolved}`);
+          }}
+          accessibilityRole="image"
+          accessibilityLabel={fallbackLabel || 'Product group'}
+        />
+      </View>
+    );
+  }
+  return (
+    <View
+      style={[style, { alignItems: 'center', justifyContent: 'center' }]}
+      accessibilityRole="image"
+      accessibilityLabel={fallbackLabel || 'Product group'}
+    >
+      <Package size={size} color="#9a9a9a" />
+    </View>
+  );
+}
+
 export function ItemSearchRow({
   item,
   cartQuantity,
+  logoUrl,
   onPress,
 }: {
   item: TallyItem;
   cartQuantity: number;
+  logoUrl?: string | null;
   onPress: () => void;
 }) {
   return (
     <FeedbackPressable style={styles.itemRow} pressedStyle={styles.rowButtonPressed} onPress={onPress}>
+      <GroupLogo logoUrl={logoUrl} size={24} fallbackLabel={item.item_name} style={styles.itemRowLogo} />
       <View style={styles.itemRowText}>
         <Text style={styles.rowTitle}>{item.item_name}</Text>
         <Text style={styles.rowDetail}>{item.root_stock_group} · {item.uom}</Text>

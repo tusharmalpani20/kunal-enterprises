@@ -102,7 +102,15 @@ export function createFrappeApiClient(call) {
           sales_employee: salesEmployee,
         }),
       );
-      return data.product_groups;
+      const groups = data.product_groups;
+      const withLogos = groups.filter((g) => g.product_group_logo);
+      console.log(`[api] allowedProductGroups — ${groups.length} groups, ${withLogos.length} with logos`);
+      if (withLogos.length > 0) {
+        console.log('[api] groups with logos:', withLogos.map((g) => `${g.name} -> ${g.product_group_logo}`).join(', '));
+      } else {
+        console.log('[api] no groups have logos in this response');
+      }
+      return groups;
     },
 
     async allowedItems(customer, productGroup, salesEmployee = undefined) {

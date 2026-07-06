@@ -5,7 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { AuthShell } from '../../src/components/AuthShell';
 import { DatePickerButton, FeedbackPressable, RequiredFieldLabel } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/appStyles';
+import { colors, styles } from '../../src/styles/appStyles';
 
 export default function SignInScreen() {
   const {
@@ -137,7 +137,7 @@ export default function SignInScreen() {
             <FeedbackPressable
               style={[styles.primaryAction, styles.authInlinePrimaryAction]}
               pressedStyle={styles.primaryActionPressed}
-              rippleColor="#2a2a2a"
+              rippleColor={colors.primaryPressed}
               onPress={() => setSignupDetailsReview(false)}
             >
               <Text style={styles.primaryActionText}>Continue to OTP</Text>
@@ -147,7 +147,7 @@ export default function SignInScreen() {
           <FeedbackPressable
             style={[styles.primaryAction, styles.authPrimaryAction]}
             pressedStyle={styles.primaryActionPressed}
-            rippleColor="#2a2a2a"
+            rippleColor={colors.primaryPressed}
             onPress={otpRequestedForCurrentFlow ? verifyOtp : requestOtp}
           >
             <Text style={styles.primaryActionText}>

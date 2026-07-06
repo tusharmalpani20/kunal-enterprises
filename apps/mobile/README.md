@@ -2,7 +2,7 @@
 
 Expo / React Native mobile app for Customers and Sales Employees placing quantity-only order requests through the Frappe backend.
 
-Visual thesis: a quiet field-operations workspace with warm paper surfaces, black utility typography, and a single green action accent for order confidence.
+Visual thesis: a quiet field-operations workspace with warm paper surfaces, black utility typography, dark green utility surfaces, and a golden action accent for order confidence.
 
 Interaction thesis:
 

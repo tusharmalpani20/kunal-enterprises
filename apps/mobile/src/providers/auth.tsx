@@ -3,7 +3,7 @@ import { FrappeApp } from 'frappe-js-sdk';
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { createFrappeApiClient } from '../api/frappeClient';
-import { APP_CONFIG } from '../constants/config';
+import { FALLBACK_BASE_URL, PRIMARY_BASE_URL } from '../constants/config';
 import { bootstrapStoredSession } from '../domain/sessionFlow';
 import { clearSession, saveSession } from '../storage/mobileStorage';
 
@@ -73,8 +73,19 @@ export function AuthProvider({
 }
 
 export async function validateStoredMobileSession(headers: Record<string, string>) {
+  try {
+    return await validateSessionAgainstUrl(PRIMARY_BASE_URL, headers);
+  } catch (primaryError) {
+    if (!FALLBACK_BASE_URL) {
+      throw primaryError;
+    }
+    return validateSessionAgainstUrl(FALLBACK_BASE_URL, headers);
+  }
+}
+
+async function validateSessionAgainstUrl(baseUrl: string, headers: Record<string, string>) {
   const frappe = new FrappeApp(
-    APP_CONFIG.BASE_URL,
+    baseUrl,
     {
       useToken: false,
       type: 'Bearer',

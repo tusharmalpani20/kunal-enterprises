@@ -4,6 +4,7 @@ export interface ProductGroup {
   name: string;
   group_name: string;
   full_path: string;
+  product_group_logo: string | null;
 }
 
 export interface TallyItem {

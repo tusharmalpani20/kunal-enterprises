@@ -24,7 +24,7 @@ test('mobile api uses live Frappe adapter when call object is available', async 
           message: {
             success: true,
             data: {
-              product_groups: [{ name: 'Cotton Fabric', group_name: 'Cotton Fabric', full_path: 'Cotton Fabric' }],
+              product_groups: [{ name: 'Cotton Fabric', group_name: 'Cotton Fabric', full_path: 'Cotton Fabric', product_group_logo: null }],
             },
           },
         };

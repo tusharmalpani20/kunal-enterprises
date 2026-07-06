@@ -2,9 +2,9 @@ import React from 'react';
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { FeedbackPressable, ItemSearchRow } from '../../src/components/orderUi';
+import { FeedbackPressable, GroupLogo, ItemSearchRow } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/appStyles';
+import { colors, styles } from '../../src/styles/appStyles';
 import { cartQuantityForItem } from '../../src/utils/orderFormatting';
 import type { TallyItem } from '../../src/types';
 
@@ -20,6 +20,9 @@ export default function OrderScreen() {
     cart,
     chooseItem,
     itemSearch, setItemSearch,
+    logoForGroupName,
+    logoForTallyItem,
+    resolveLogoUrl,
   } = useOrderFlow();
 
   return (
@@ -39,7 +42,7 @@ export default function OrderScreen() {
           <FeedbackPressable
             style={[styles.groupChip, !selectedGroup && styles.groupChipActive]}
             pressedStyle={!selectedGroup ? styles.groupChipActivePressed : styles.buttonPressed}
-            rippleColor={!selectedGroup ? '#2a2a2a' : '#eeeeee'}
+            rippleColor={!selectedGroup ? colors.primaryPressed : '#eeeeee'}
             onPress={() => chooseGroup(null)}
           >
             <Text style={[styles.groupChipText, !selectedGroup && styles.groupChipTextActive]}>All</Text>
@@ -49,9 +52,10 @@ export default function OrderScreen() {
               key={group.name}
               style={[styles.groupChip, selectedGroup?.name === group.name && styles.groupChipActive]}
               pressedStyle={selectedGroup?.name === group.name ? styles.groupChipActivePressed : styles.buttonPressed}
-              rippleColor={selectedGroup?.name === group.name ? '#2a2a2a' : '#eeeeee'}
+              rippleColor={selectedGroup?.name === group.name ? colors.primaryPressed : '#eeeeee'}
               onPress={() => chooseGroup(group)}
             >
+              <GroupLogo logoUrl={resolveLogoUrl(logoForGroupName(group.name))} size={12} fallbackLabel={group.group_name} style={styles.groupChipLogo} />
               <Text style={[styles.groupChipText, selectedGroup?.name === group.name && styles.groupChipTextActive]}>
                 {group.group_name}
               </Text>
@@ -67,6 +71,7 @@ export default function OrderScreen() {
             <ItemSearchRow
               key={item.name}
               item={item}
+              logoUrl={resolveLogoUrl(logoForTallyItem(item))}
               cartQuantity={cartQuantityForItem(cart, item.name)}
               onPress={() => chooseItem(item)}
             />

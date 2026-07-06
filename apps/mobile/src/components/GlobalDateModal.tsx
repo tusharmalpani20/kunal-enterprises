@@ -4,7 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { FeedbackPressable } from './orderUi';
 import { useOrderFlow } from '../flow/OrderFlowProvider';
-import { styles } from '../styles/appStyles';
+import { colors, styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
 
 export function GlobalDateModal() {
@@ -35,7 +35,7 @@ export function GlobalDateModal() {
             <FeedbackPressable
               style={styles.primaryAction}
               pressedStyle={styles.primaryActionPressed}
-              rippleColor="#2a2a2a"
+              rippleColor={colors.primaryPressed}
               onPress={() => setDatePickerTarget(null)}
             >
               <Text style={styles.primaryActionText}>Done</Text>
