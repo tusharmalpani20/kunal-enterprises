@@ -139,11 +139,13 @@ export function createFrappeApiClient(call) {
       return unwrap(await call.post(METHODS.submitOrder, payload));
     },
 
-    async orderHistory(customer, salesEmployee = undefined) {
+    async orderHistory(customer, salesEmployee = undefined, options = {}) {
       const data = unwrap(
         await call.get(METHODS.orderHistory, {
           customer,
           sales_employee: salesEmployee,
+          limit: options.limit ?? 20,
+          offset: options.offset ?? 0,
         }),
       );
       return data.orders.map(orderSummaryForMobile);

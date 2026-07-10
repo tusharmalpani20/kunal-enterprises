@@ -57,10 +57,26 @@ export interface OrderSummary {
 
 export interface OrderDetail extends OrderSummary {
   placed_by?: string;
+  placed_by_identity_type?: IdentityType;
+  placed_by_name?: string;
   placed_by_label?: string;
+  items?: Array<{
+    item: string;
+    item_name?: string;
+    root_stock_group?: string;
+    unit?: string;
+    requested_quantity: number;
+    fulfilled_quantity?: number;
+    pending_quantity?: number;
+    status?: string;
+  }>;
   godown_allocations?: Array<{
     item: string;
+    item_name?: string;
+    unit?: string;
     godown: string;
     requested_quantity: number;
+    fulfilled_quantity?: number;
+    pending_quantity?: number;
   }>;
 }

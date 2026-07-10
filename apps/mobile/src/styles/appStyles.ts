@@ -227,6 +227,48 @@ export const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: fonts.semibold,
   },
+  emptyState: {
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 32,
+  },
+  historyLoadMore: {
+    marginTop: 4,
+  },
+  historyEndText: {
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  segmentedButton: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: '#d8d8d8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  segmentedButtonActive: {
+    backgroundColor: colors.brandGreen,
+    borderColor: colors.brandGreen,
+  },
+  segmentedButtonText: {
+    color: '#111111',
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    textAlign: 'center',
+  },
+  segmentedButtonTextActive: {
+    color: colors.onPrimary,
+  },
   rowButton: {
     backgroundColor: '#ffffff',
     borderRadius: 8,

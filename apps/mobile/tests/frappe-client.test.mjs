@@ -354,9 +354,22 @@ test('frappe client normalizes live order history and detail for mobile safety',
           sales_employee_note: 'Call before dispatch',
           manual_review_reason: 'Customer mismatch',
           client_code: 'ASHA-LEDGER-001',
+          placed_by_identity_type: 'Sales Employee',
+          placed_by_name: 'Ravi Sales',
+          items: [
+            {
+              item: 'ITEM-COTTON-001',
+              item_name: 'Cotton Roll',
+              root_stock_group: 'Cotton',
+              unit: 'PCS',
+              requested_quantity: 4,
+            },
+          ],
           godown_allocations: [
             {
               item: 'ITEM-COTTON-001',
+              item_name: 'Cotton Roll',
+              unit: 'PCS',
               godown: 'Main Godown',
               requested_quantity: 4,
               price: 300,
@@ -379,6 +392,9 @@ test('frappe client normalizes live order history and detail for mobile safety',
   assert.equal(Object.hasOwn(detail, 'sales_employee_note'), false);
   assert.equal(Object.hasOwn(detail, 'manual_review_reason'), false);
   assert.equal(Object.hasOwn(detail, 'client_code'), false);
+  assert.equal(detail.placed_by_label, 'Ravi Sales');
+  assert.equal(detail.items[0].item_name, 'Cotton Roll');
+  assert.equal(detail.godown_allocations[0].item_name, 'Cotton Roll');
   assert.equal(Object.hasOwn(detail.godown_allocations[0], 'price'), false);
   assert.equal(Object.hasOwn(detail.godown_allocations[0], 'amount'), false);
 });
@@ -413,7 +429,7 @@ test('frappe client can request sales employee order history without a customer 
   });
   const client = createFrappeApiClient(fake.call);
 
-  const history = await client.orderHistory(undefined, 'SE-001');
+  const history = await client.orderHistory(undefined, 'SE-001', { limit: 21, offset: 20 });
 
   assert.deepEqual(
     history.map((order) => order.customer),
@@ -429,6 +445,8 @@ test('frappe client can request sales employee order history without a customer 
     params: {
       customer: undefined,
       sales_employee: 'SE-001',
+      limit: 21,
+      offset: 20,
     },
   });
 });

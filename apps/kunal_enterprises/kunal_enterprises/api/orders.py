@@ -39,7 +39,7 @@ def submit(customer, allocations, sales_employee=None, sales_employee_note=None,
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def history(customer=None, sales_employee=None, headers=None):
+def history(customer=None, sales_employee=None, limit=20, offset=0, headers=None):
 	try:
 		token_error = _validate_order_token(customer, sales_employee, headers, "Order history")
 		if token_error:
@@ -66,6 +66,8 @@ def history(customer=None, sales_employee=None, headers=None):
 				"total_quantity",
 			],
 			order_by="confirmation_datetime desc",
+			limit_start=_coerce_history_offset(offset),
+			limit_page_length=_coerce_history_limit(limit),
 		)
 
 		return create_success_response(
@@ -207,6 +209,22 @@ def _validate_order_detail_access(order, customer=None, sales_employee=None):
 			frappe.throw("Sales Employee is disabled", title="Sales Employee Access Required")
 
 
+def _coerce_history_limit(limit):
+	try:
+		value = int(limit)
+	except (TypeError, ValueError):
+		value = 20
+	return max(1, min(value, 100))
+
+
+def _coerce_history_offset(offset):
+	try:
+		value = int(offset)
+	except (TypeError, ValueError):
+		value = 0
+	return max(0, value)
+
+
 def _serialize_order_summary(order):
 	return {
 		"name": order.name,
@@ -224,9 +242,12 @@ def _serialize_order_summary(order):
 
 
 def _serialize_order_detail(order, customer=None, sales_employee=None):
+	items_by_name = {row.item: row for row in order.items}
 	return {
 		**_serialize_order_summary(order),
 		"placed_by": _placed_by(order, customer, sales_employee),
+		"placed_by_identity_type": _placed_by_identity_type(order),
+		"placed_by_name": _placed_by_name(order),
 		"items": [
 			{
 				"item": row.item,
@@ -243,6 +264,8 @@ def _serialize_order_detail(order, customer=None, sales_employee=None):
 		"godown_allocations": [
 			{
 				"item": row.item,
+				"item_name": _order_item_name(items_by_name, row.item),
+				"unit": _order_item_unit(items_by_name, row.item),
 				"godown": row.godown,
 				"requested_quantity": row.requested_quantity,
 				"fulfilled_quantity": row.fulfilled_quantity,
@@ -259,12 +282,34 @@ def _display_status(status):
 	return status
 
 
+def _placed_by_identity_type(order):
+	if order.order_source == "Sales Employee":
+		return "Sales Employee"
+	return "Customer"
+
+
+def _placed_by_name(order):
+	if order.order_source == "Sales Employee":
+		return frappe.db.get_value("Sales Employee", order.sales_employee, "sales_employee_name") or order.sales_employee
+	return frappe.db.get_value("Customer", order.customer, "customer_name") or order.customer
+
+
 def _placed_by(order, customer=None, sales_employee=None):
 	if order.order_source == "Customer":
 		return "You" if customer and order.customer == customer else "Customer"
 	if sales_employee and order.sales_employee == sales_employee:
 		return "You"
 	return frappe.db.get_value("Sales Employee", order.sales_employee, "sales_employee_name") or "Sales Employee"
+
+
+def _order_item_name(items_by_name, item):
+	row = items_by_name.get(item)
+	return row.item_name_at_order if row else item
+
+
+def _order_item_unit(items_by_name, item):
+	row = items_by_name.get(item)
+	return row.unit if row else None
 
 
 def _create_order_confirmation_records(order):

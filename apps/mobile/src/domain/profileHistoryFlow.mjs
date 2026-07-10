@@ -93,9 +93,15 @@ export function orderPlacedByLabel(order, viewerIdentityType) {
     return 'You';
   }
   if (order.placed_by_identity_type === 'Sales Employee') {
-    return order.sales_employee_name || order.placed_by || 'Sales Employee';
+    return order.placed_by_name || order.sales_employee_name || order.placed_by || 'Sales Employee';
   }
-  return order.customer_name || order.placed_by || 'Customer';
+  if (order.placed_by_identity_type === 'Customer') {
+    return order.placed_by_name || order.customer_name || order.placed_by || 'Customer';
+  }
+  if (order.placed_by === 'You') {
+    return 'You';
+  }
+  return order.placed_by_name || order.customer_name || order.placed_by || 'Customer';
 }
 
 export function customerOrderDetailForMobile(order) {

@@ -2301,12 +2301,19 @@ class TestOrderSubmission(FrappeTestCase):
 		)
 
 		response = order_history(sales_employee=sales_employee.name)
+		first_page = order_history(sales_employee=sales_employee.name, limit=1, offset=0)
+		second_page = order_history(sales_employee=sales_employee.name, limit=1, offset=1)
 
 		self.assertTrue(response["success"])
 		self.assertEqual(
 			{order["name"] for order in response["data"]["orders"]},
 			{first_order["data"]["order"], second_order["data"]["order"]},
 		)
+		self.assertTrue(first_page["success"])
+		self.assertEqual(len(first_page["data"]["orders"]), 1)
+		self.assertTrue(second_page["success"])
+		self.assertEqual(len(second_page["data"]["orders"]), 1)
+		self.assertNotEqual(first_page["data"]["orders"][0]["name"], second_page["data"]["orders"][0]["name"])
 
 	def test_order_detail_hides_internal_fields_from_customer_response(self):
 		product_group = self._create_product_group("Order Detail PG")
@@ -2338,6 +2345,11 @@ class TestOrderSubmission(FrappeTestCase):
 
 		self.assertTrue(response["success"])
 		self.assertEqual(response["data"]["placed_by"], "Detail Sales Employee")
+		self.assertEqual(response["data"]["placed_by_identity_type"], "Sales Employee")
+		self.assertEqual(response["data"]["placed_by_name"], "Detail Sales Employee")
+		self.assertEqual(response["data"]["items"][0]["item_name"], "Order Detail Item")
+		self.assertEqual(response["data"]["godown_allocations"][0]["item_name"], "Order Detail Item")
+		self.assertEqual(response["data"]["godown_allocations"][0]["unit"], "PCS")
 		self.assertNotIn("sales_employee_note", response["data"])
 		self.assertNotIn("client_code", response["data"])
 		self.assertNotIn("stock_shown_at_order_time", response["data"]["godown_allocations"][0])

@@ -299,9 +299,9 @@ export const mockApi = {
     };
   },
 
-  async orderHistory(customer, salesEmployee = undefined) {
+  async orderHistory(customer, salesEmployee = undefined, options = {}) {
     const scoped = salesEmployee ? salesEmployeeHistory(orders, salesEmployee) : orders.filter((order) => order.customer === customer);
-    return scoped.map(orderSummaryForMobile);
+    return scoped.slice(options.offset || 0, (options.offset || 0) + (options.limit || scoped.length)).map(orderSummaryForMobile);
   },
 
   async orderHistoryForSalesEmployee(salesEmployee) {

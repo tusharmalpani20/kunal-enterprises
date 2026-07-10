@@ -1,18 +1,32 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { History } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { BackButton, GroupLogo, Workspace } from '../../src/components/orderUi';
+import { BackButton, FeedbackPressable, GroupLogo, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
-import { styles } from '../../src/styles/appStyles';
+import { colors, styles } from '../../src/styles/appStyles';
+
+type DetailView = 'overall' | 'godown';
 
 export default function DetailScreen() {
   const { orderDetail, showHistory, logoForItemName, resolveLogoUrl } = useOrderFlow();
+  const [detailView, setDetailView] = useState<DetailView>('overall');
+
+  const itemNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of orderDetail?.items || []) {
+      map.set(item.item, item.item_name || item.item);
+    }
+    return map;
+  }, [orderDetail]);
 
   if (!orderDetail) {
     return <AppShell>{null}</AppShell>;
   }
+
+  const overallRows = orderDetail.items || [];
+  const godownRows = orderDetail.godown_allocations || [];
 
   return (
     <AppShell>
@@ -21,17 +35,98 @@ export default function DetailScreen() {
         <Text style={styles.successRef}>{orderDetail.portal_reference_number}</Text>
         <Text style={styles.rowDetail}>{orderDetail.display_status || orderDetail.status}</Text>
         <Text style={styles.rowDetail}>Placed by {orderDetail.placed_by_label || orderDetail.placed_by || 'You'}</Text>
-        {(orderDetail.godown_allocations || []).map((allocation) => (
-          <View key={`${allocation.item}:${allocation.godown}`} style={styles.summaryLine}>
-            <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(allocation.item))} size={24} fallbackLabel={allocation.item} style={styles.itemRowLogo} />
-            <View>
-              <Text style={styles.rowTitle}>{allocation.item}</Text>
-              <Text style={styles.rowDetail}>{allocation.godown}</Text>
+        <View style={styles.segmentedControl}>
+          <FeedbackPressable
+            style={[styles.segmentedButton, detailView === 'overall' && styles.segmentedButtonActive]}
+            pressedStyle={detailView === 'overall' ? styles.segmentedButtonActive : styles.buttonPressed}
+            rippleColor={detailView === 'overall' ? colors.primaryPressed : '#eeeeee'}
+            onPress={() => setDetailView('overall')}
+          >
+            <Text style={[styles.segmentedButtonText, detailView === 'overall' && styles.segmentedButtonTextActive]}>Overall</Text>
+          </FeedbackPressable>
+          <FeedbackPressable
+            style={[styles.segmentedButton, detailView === 'godown' && styles.segmentedButtonActive]}
+            pressedStyle={detailView === 'godown' ? styles.segmentedButtonActive : styles.buttonPressed}
+            rippleColor={detailView === 'godown' ? colors.primaryPressed : '#eeeeee'}
+            onPress={() => setDetailView('godown')}
+          >
+            <Text style={[styles.segmentedButtonText, detailView === 'godown' && styles.segmentedButtonTextActive]}>Godown Summary</Text>
+          </FeedbackPressable>
+        </View>
+        {detailView === 'overall' ? (
+          overallRows.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.rowDetail}>No item summary is available for this order.</Text>
             </View>
-            <Text style={styles.quantity}>{allocation.requested_quantity}</Text>
-          </View>
-        ))}
+          ) : overallRows.map((item) => (
+            <View key={item.item} style={styles.summaryLine}>
+              <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(item.item))} size={24} fallbackLabel={item.item_name || item.item} style={styles.itemRowLogo} />
+              <View style={styles.summaryItemText}>
+                <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{item.item_name || item.item}</Text>
+                <Text style={styles.rowDetail}>{overallRowDetail(item)}</Text>
+              </View>
+              <Text style={styles.quantity}>{item.requested_quantity}</Text>
+            </View>
+          ))
+        ) : (
+          godownRows.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.rowDetail}>No godown summary is available for this order.</Text>
+            </View>
+          ) : godownRows.map((allocation) => {
+            const itemName = allocation.item_name || itemNameById.get(allocation.item) || allocation.item;
+            return (
+              <View key={`${allocation.item}:${allocation.godown}`} style={styles.summaryLine}>
+                <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(allocation.item))} size={24} fallbackLabel={itemName} style={styles.itemRowLogo} />
+                <View style={styles.summaryItemText}>
+                  <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{itemName}</Text>
+                  <Text style={styles.rowDetail}>{godownRowDetail(allocation)}</Text>
+                </View>
+                <Text style={styles.quantity}>{allocation.requested_quantity}</Text>
+              </View>
+            );
+          })
+        )}
       </Workspace>
     </AppShell>
   );
+}
+
+function overallRowDetail(item: {
+  root_stock_group?: string;
+  unit?: string;
+  pending_quantity?: number;
+  fulfilled_quantity?: number;
+  status?: string;
+}) {
+  return [
+    item.root_stock_group,
+    item.unit,
+    quantityStatus(item),
+    item.status,
+  ].filter(Boolean).join('\n');
+}
+
+function godownRowDetail(allocation: {
+  godown: string;
+  unit?: string;
+  pending_quantity?: number;
+  fulfilled_quantity?: number;
+}) {
+  return [
+    allocation.godown,
+    allocation.unit,
+    quantityStatus(allocation),
+  ].filter(Boolean).join('\n');
+}
+
+function quantityStatus(row: { pending_quantity?: number; fulfilled_quantity?: number }) {
+  const parts = [];
+  if (typeof row.fulfilled_quantity === 'number') {
+    parts.push(`Fulfilled ${row.fulfilled_quantity}`);
+  }
+  if (typeof row.pending_quantity === 'number') {
+    parts.push(`Pending ${row.pending_quantity}`);
+  }
+  return parts.join(' · ');
 }

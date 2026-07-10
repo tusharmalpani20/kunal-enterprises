@@ -171,6 +171,40 @@ test('customer order detail labels self-placed and sales-employee-placed orders'
   );
 });
 
+test('order detail keeps friendly item names for summary and godown rows', () => {
+  const detail = orderDetailForMobile(
+    {
+      name: 'KE-26-05-0001',
+      status: 'Placed',
+      placed_by_identity_type: 'Sales Employee',
+      placed_by_name: 'Ravi Sales',
+      items: [
+        {
+          item: 'ITEM-COTTON-001',
+          item_name: 'Cotton Roll',
+          root_stock_group: 'Cotton',
+          unit: 'PCS',
+          requested_quantity: 4,
+        },
+      ],
+      godown_allocations: [
+        {
+          item: 'ITEM-COTTON-001',
+          item_name: 'Cotton Roll',
+          unit: 'PCS',
+          godown: 'Main Godown',
+          requested_quantity: 4,
+        },
+      ],
+    },
+    { viewerIdentityType: 'Customer' },
+  );
+
+  assert.equal(detail.placed_by_label, 'Ravi Sales');
+  assert.equal(detail.items[0].item_name, 'Cotton Roll');
+  assert.equal(detail.godown_allocations[0].item_name, 'Cotton Roll');
+});
+
 test('sales employee order detail labels orders placed by that employee as you', () => {
   const detail = orderDetailForMobile(
     {

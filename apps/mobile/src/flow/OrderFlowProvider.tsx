@@ -58,6 +58,7 @@ import type { DatePickerTarget, DraftCartSummary, Mode, Step } from './types';
 
 const MAX_VISIBLE_GROUPS = 40;
 const MAX_VISIBLE_ITEMS = 60;
+const HISTORY_PAGE_SIZE = 20;
 
 export type OrderFlowValue = ReturnType<typeof useOrderFlowState>;
 
@@ -134,6 +135,8 @@ function useOrderFlowState() {
   const [pendingAccessRefreshing, setPendingAccessRefreshing] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<OrderSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [profileEmail, setProfileEmail] = useState('');
@@ -740,12 +743,50 @@ function useOrderFlowState() {
       setSystemState({ kind: 'validation_error', message: 'Verify OTP before loading account data.' });
       return;
     }
-    setHistoryRows(
-      mode === 'Sales Employee'
-        ? await api.orderHistory(undefined, activeSalesEmployeeIdentity())
-        : await api.orderHistory(activeCustomerIdentity()),
-    );
-    setStep('history');
+    try {
+      setHistoryLoading(true);
+      const rows = await fetchHistoryPage(0);
+      setHistoryRows(rows.slice(0, HISTORY_PAGE_SIZE));
+      setHistoryHasMore(rows.length > HISTORY_PAGE_SIZE);
+      setStep('history');
+    } catch (error) {
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+      if (failure.kind === 'expired_session') {
+        await logout();
+        setStep('auth');
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadMoreHistory() {
+    if (!hasActiveModeSession || historyLoading || !historyHasMore) {
+      return;
+    }
+    try {
+      setHistoryLoading(true);
+      const rows = await fetchHistoryPage(historyRows.length);
+      setHistoryRows((current) => [...current, ...rows.slice(0, HISTORY_PAGE_SIZE)]);
+      setHistoryHasMore(rows.length > HISTORY_PAGE_SIZE);
+    } catch (error) {
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+      if (failure.kind === 'expired_session') {
+        await logout();
+        setStep('auth');
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function fetchHistoryPage(offset: number) {
+    const options = { limit: HISTORY_PAGE_SIZE + 1, offset };
+    return mode === 'Sales Employee'
+      ? api.orderHistory(undefined, activeSalesEmployeeIdentity(), options)
+      : api.orderHistory(activeCustomerIdentity(), undefined, options);
   }
 
   async function showProfile() {
@@ -789,15 +830,24 @@ function useOrderFlowState() {
   }
 
   async function showOrderDetail(order: OrderSummary) {
-    setOrderDetail(
-      await api.orderDetail(
-        order.name,
-        mode === 'Sales Employee'
-          ? { salesEmployee: activeSalesEmployeeIdentity() }
-          : { customer: activeCustomerIdentity() },
-      ),
-    );
-    setStep('detail');
+    try {
+      setOrderDetail(
+        await api.orderDetail(
+          order.name,
+          mode === 'Sales Employee'
+            ? { salesEmployee: activeSalesEmployeeIdentity() }
+            : { customer: activeCustomerIdentity() },
+        ),
+      );
+      setStep('detail');
+    } catch (error) {
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+      if (failure.kind === 'expired_session') {
+        await logout();
+        setStep('auth');
+      }
+    }
   }
 
   async function revokeAndLogout() {
@@ -931,6 +981,8 @@ function useOrderFlowState() {
     pendingAccessRefreshing,
     reference,
     historyRows,
+    historyLoading,
+    historyHasMore,
     orderDetail,
     profile,
     profileEmail, setProfileEmail,
@@ -982,6 +1034,7 @@ function useOrderFlowState() {
     refreshCatalog,
     switchCustomer,
     showHistory,
+    loadMoreHistory,
     showProfile,
     saveCustomerProfile,
     showOrderDetail,
