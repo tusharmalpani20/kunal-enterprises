@@ -3,6 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 
 import { AuthShell } from '../../src/components/AuthShell';
+import { OtpInput } from '../../src/components/OtpInput';
 import { DatePickerButton, FeedbackPressable, RequiredFieldLabel } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { colors, styles } from '../../src/styles/appStyles';
@@ -118,15 +119,7 @@ export default function SignInScreen() {
               </FeedbackPressable>
             )}
             <Text style={styles.fieldLabel}>OTP</Text>
-            <TextInput
-              value={otpCode}
-              onChangeText={(value) => setOtpCode(value.toUpperCase())}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              placeholder="Enter WhatsApp OTP"
-              placeholderTextColor="#9a9a9a"
-              style={styles.input}
-            />
+            <OtpInput otpValue={otpCode} onOtpChange={setOtpCode} />
           </>
         )}
         {signupDetailsReadOnly ? (

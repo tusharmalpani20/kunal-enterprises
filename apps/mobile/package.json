@@ -20,6 +20,7 @@
     "expo-constants": "~18.0.13",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.23",
+    "expo-splash-screen": "~31.0.13",
     "frappe-js-sdk": "^1.7.1",
     "lucide-react-native": "^1.16.0",
     "react": "19.1.0",
@@ -32,7 +33,7 @@
   "devDependencies": {
     "@react-native-reusables/cli": "^0.7.1",
     "@types/react": "~19.1.10",
-    "typescript": "~5.9.2"
+    "typescript": "6.0.3"
   },
   "overrides": {
     "postcss": "8.5.10"

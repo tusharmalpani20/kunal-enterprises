@@ -15,6 +15,14 @@ export const colors = {
   brandGreen: '#016235',
 };
 
+const bottomSheetBase = {
+  maxHeight: '88%',
+  backgroundColor: '#ffffff',
+  borderTopLeftRadius: 16,
+  borderTopRightRadius: 16,
+  overflow: 'hidden',
+} as const;
+
 export const styles = StyleSheet.create({
   shell: {
     flex: 1,
@@ -703,11 +711,15 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
   },
   bottomSheet: {
-    maxHeight: '88%',
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    overflow: 'hidden',
+    ...bottomSheetBase,
+  },
+  bottomSheetTall: {
+    ...bottomSheetBase,
+    minHeight: '75%',
+  },
+  bottomSheetHalf: {
+    ...bottomSheetBase,
+    minHeight: '50%',
   },
   bottomSheetContent: {
     paddingHorizontal: 20,

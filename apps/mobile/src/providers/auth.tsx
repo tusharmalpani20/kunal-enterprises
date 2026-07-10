@@ -10,6 +10,7 @@ import { clearSession, saveSession } from '../storage/mobileStorage';
 interface AuthContextType {
   accessToken: string | null;
   session: MobileSession | null;
+  isReady: boolean;
   setAccessToken: (token: string | null) => void;
   setSession: (session: MobileSession | null) => Promise<void>;
   logout: () => Promise<void>;
@@ -25,6 +26,7 @@ interface MobileSession {
 export const AuthContext = createContext<AuthContextType>({
   accessToken: null,
   session: null,
+  isReady: false,
   setAccessToken: () => undefined,
   setSession: async () => undefined,
   logout: async () => undefined,
@@ -39,16 +41,31 @@ export function AuthProvider({
 }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [session, setSessionState] = useState<MobileSession | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    bootstrapStoredSession({
-      storage: AsyncStorage,
-      currentSession: validateStoredSession,
-      applySession: (storedSession: MobileSession) => {
-        setSessionState(storedSession);
-        setAccessToken(storedSession.accessToken);
-      },
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        await bootstrapStoredSession({
+          storage: AsyncStorage,
+          currentSession: validateStoredSession,
+          applySession: (storedSession: MobileSession) => {
+            setSessionState(storedSession);
+            setAccessToken(storedSession.accessToken);
+          },
+        });
+      } catch (error) {
+        console.warn('bootstrapStoredSession failed', error);
+      } finally {
+        if (!cancelled) {
+          setIsReady(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [validateStoredSession]);
 
   const setSession = useCallback(async (nextSession: MobileSession | null) => {
@@ -65,8 +82,8 @@ export function AuthProvider({
     await setSession(null);
   }, [setSession]);
   const value = useMemo(
-    () => ({ accessToken, session, setAccessToken, setSession, logout }),
-    [accessToken, logout, session, setSession],
+    () => ({ accessToken, session, isReady, setAccessToken, setSession, logout }),
+    [accessToken, isReady, logout, session, setSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

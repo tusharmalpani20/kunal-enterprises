@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
-import { ChevronLeft, ChevronRight, Package, Plus, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Package, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
 
 import { colors, styles } from '../styles/appStyles';
 import { formatIndianDate } from '../utils/orderFormatting';
@@ -256,5 +256,25 @@ export function ItemSearchRow({
         </Text>
       </View>
     </FeedbackPressable>
+  );
+}
+
+export function SpinningRefreshIcon({ size, color, spinning }: { size: number; color: string; spinning: boolean }) {
+  const rotation = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!spinning) {
+      rotation.stopAnimation();
+      rotation.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(Animated.timing(rotation, { toValue: 1, duration: 1000, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [spinning, rotation]);
+  const rotate = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return (
+    <Animated.View style={{ transform: [{ rotate }] }}>
+      <RefreshCw size={size} color={color} />
+    </Animated.View>
   );
 }

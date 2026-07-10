@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Keyboard, Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
+import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, ChevronLeft, History, LogOut, Package, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
 import { useNavigation } from 'expo-router';
 
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { colors, styles } from '../styles/appStyles';
 import { godownStockDetailForSelection } from '../utils/orderFormatting';
-import { FeedbackPressable, GroupLogo, RowButton, TopLevelTab } from './orderUi';
+import { FeedbackPressable, GroupLogo, RowButton, SpinningRefreshIcon, TopLevelTab } from './orderUi';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigation = useNavigation();
@@ -35,6 +36,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     logoForGroupName,
     resolveLogoUrl,
     showOrder,
+    refreshCatalog,
+    catalogLoading,
     showHistory,
     showProfile,
     switchCustomer,
@@ -70,6 +73,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </FeedbackPressable>
             )}
           </View>
+          {appSection === 'order' && (
+            <FeedbackPressable
+              style={[styles.iconOnlyButton, { borderWidth: 0, backgroundColor: 'transparent' }]}
+              onPress={refreshCatalog}
+              disabled={catalogLoading}
+            >
+              <SpinningRefreshIcon size={17} color="#111111" spinning={catalogLoading} />
+            </FeedbackPressable>
+          )}
           {appSection === 'profile' && (
             <FeedbackPressable style={styles.iconOnlyButton} onPress={revokeAndLogout}>
               <LogOut size={17} color="#111111" />
@@ -145,7 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Modal visible={godownSelectorOpen} transparent animationType="slide" onRequestClose={() => setGodownSelectorOpen(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalScrim} onPress={() => setGodownSelectorOpen(false)} />
-          <View style={styles.bottomSheet}>
+          <View style={styles.bottomSheetHalf}>
             <ScrollView
               contentContainerStyle={styles.bottomSheetContent}
               keyboardShouldPersistTaps="handled"
@@ -184,7 +196,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Modal visible={groupSheetOpen} transparent animationType="slide" onRequestClose={() => setGroupSheetOpen(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalScrim} onPress={() => setGroupSheetOpen(false)} />
-          <View style={styles.bottomSheet}>
+          <View style={styles.bottomSheetTall}>
             <View style={styles.sheetStickyHeader}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>

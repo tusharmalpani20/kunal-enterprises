@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { styles } from '../styles/appStyles';

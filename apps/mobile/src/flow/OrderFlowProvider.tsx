@@ -117,7 +117,7 @@ function useOrderFlowState() {
   const [itemSearch, setItemSearch] = useState('');
   const [quantity, setQuantity] = useState('14');
   const [mobileNumber, setMobileNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('123456');
+  const [otpCode, setOtpCode] = useState('1234');
   const [customerAuthIntent, setCustomerAuthIntent] = useState<'login' | 'signup'>('login');
   const [otpIdentityType, setOtpIdentityType] = useState<Mode | null>(null);
   const [signupDetailsReview, setSignupDetailsReview] = useState(false);
@@ -704,6 +704,12 @@ function useOrderFlowState() {
     setGodownSelectorOpen(false);
   }
 
+  async function refreshCatalog() {
+    const customer = activeCustomer();
+    if (!customer) return;
+    await loadCatalogForCustomer(customer, activeSalesEmployeeContext());
+  }
+
   function showOrder() {
     setSystemState({ kind: 'idle' });
     setOrderDetail(null);
@@ -973,6 +979,7 @@ function useOrderFlowState() {
     refreshPendingAccess,
     switchMode,
     showOrder,
+    refreshCatalog,
     switchCustomer,
     showHistory,
     showProfile,
