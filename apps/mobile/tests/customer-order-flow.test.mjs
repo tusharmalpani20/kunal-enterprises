@@ -8,6 +8,7 @@ import {
   customerOrderGuard,
   finalizeOrderSubmission,
   formatSyncTimestampForMobile,
+  groupCartByProductGroup,
   mobileDisplayStatus,
   orderTotals,
   parseOrderQuantityInput,
@@ -77,6 +78,43 @@ test('cart quantities can be edited and godown allocations removed', () => {
   assert.throws(
     () => updateAllocationQuantity(cart, { item: 'ITEM-COTTON-001', godown: 'Main Godown', quantity: 0 }),
     /Order Quantity must be positive/,
+  );
+});
+
+test('cart summary groups items by backend mobile summary group when present', () => {
+  const grouped = groupCartByProductGroup(
+    [
+      { item: 'ITEM-ALISHAN-001', itemName: 'Alishan Ply', godown: 'Goshamahal', quantity: 1 },
+      { item: 'ITEM-FLEXI-001', itemName: 'Flexi Ply', godown: 'Goshamahal', quantity: 2 },
+    ],
+    [
+      {
+        name: 'ITEM-ALISHAN-001',
+        item_name: 'Alishan Ply',
+        root_stock_group: 'KE STOCK',
+        mobile_summary_group: 'ALISHAN',
+        mobile_summary_group_name: 'ALISHAN',
+        mobile_summary_group_logo: '/files/alishan.png',
+      },
+      {
+        name: 'ITEM-FLEXI-001',
+        item_name: 'Flexi Ply',
+        root_stock_group: 'KE STOCK',
+      },
+    ],
+    new Map([['KE STOCK', '/files/ke.png']]),
+  );
+
+  assert.deepEqual(
+    grouped.map((group) => ({
+      name: group.groupName,
+      logo: group.groupLogo,
+      items: group.rows.map((row) => row.item),
+    })),
+    [
+      { name: 'ALISHAN', logo: '/files/alishan.png', items: ['ITEM-ALISHAN-001'] },
+      { name: 'KE STOCK', logo: '/files/ke.png', items: ['ITEM-FLEXI-001'] },
+    ],
   );
 });
 

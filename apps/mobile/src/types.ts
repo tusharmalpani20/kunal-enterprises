@@ -10,7 +10,11 @@ export interface ProductGroup {
 export interface TallyItem {
   name: string;
   item_name: string;
+  immediate_stock_group?: string;
   root_stock_group: string;
+  mobile_summary_group?: string;
+  mobile_summary_group_name?: string;
+  mobile_summary_group_logo?: string | null;
   uom: string;
   total_closing_balance: number;
 }

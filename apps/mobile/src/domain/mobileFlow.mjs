@@ -260,6 +260,15 @@ export function logoForGroup(groups, name) {
 }
 
 export function logoForItem(groups, item) {
+  if (item?.mobile_summary_group_logo) {
+    return item.mobile_summary_group_logo;
+  }
+  if (item?.mobile_summary_group) {
+    const summaryLogo = logoForGroup(groups, item.mobile_summary_group);
+    if (summaryLogo) {
+      return summaryLogo;
+    }
+  }
   if (!item?.root_stock_group) {
     return null;
   }
@@ -271,15 +280,16 @@ export function groupCartByProductGroup(cart, items, groupLogoMap) {
 
   for (const row of cart) {
     const tallyItem = items.find((i) => i.name === row.item);
-    const groupName = tallyItem?.root_stock_group || 'Other';
-    if (!groupIndex.has(groupName)) {
-      groupIndex.set(groupName, {
+    const groupId = tallyItem?.mobile_summary_group || tallyItem?.root_stock_group || 'Other';
+    const groupName = tallyItem?.mobile_summary_group_name || groupId;
+    if (!groupIndex.has(groupId)) {
+      groupIndex.set(groupId, {
         groupName,
-        groupLogo: logoForGroup(groupLogoMap, groupName),
+        groupLogo: tallyItem?.mobile_summary_group_logo || logoForGroup(groupLogoMap, groupId),
         rows: [],
       });
     }
-    groupIndex.get(groupName).rows.push(row);
+    groupIndex.get(groupId).rows.push(row);
   }
 
   const sorted = [...groupIndex.values()].sort((a, b) => a.groupName.localeCompare(b.groupName));

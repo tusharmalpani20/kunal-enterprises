@@ -52,6 +52,29 @@ test('logoForItem resolves via root_stock_group and returns null when root has n
   assert.equal(logoForItem(groupsWithLogos, null), null);
 });
 
+test('logoForItem prefers backend mobile summary group logo', () => {
+  const itemWithSummaryLogo = {
+    name: 'ITEM-ALISHAN-001',
+    item_name: 'Alishan Ply',
+    root_stock_group: 'KE STOCK',
+    mobile_summary_group: 'ALISHAN',
+    mobile_summary_group_logo: '/files/alishan.png',
+    uom: 'SHEET',
+    total_closing_balance: 2,
+  };
+  const itemWithSummaryGroup = {
+    name: 'ITEM-WOOL-001',
+    item_name: 'Wool',
+    root_stock_group: 'Cotton Fabric',
+    mobile_summary_group: 'Wool',
+    uom: 'PCS',
+    total_closing_balance: 1,
+  };
+
+  assert.equal(logoForItem(groupsWithLogos, itemWithSummaryLogo), '/files/alishan.png');
+  assert.equal(logoForItem(groupsWithLogos, itemWithSummaryGroup), 'https://cdn.example.com/wool.png');
+});
+
 test('resolveFrappeFileUrl handles null, empty, relative, and absolute paths', () => {
   const base = 'https://ke-dev.hopnet.co.in';
   assert.equal(resolveFrappeFileUrl(null, base), null);
