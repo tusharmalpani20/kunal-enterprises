@@ -1,5 +1,6 @@
 import json
 import inspect
+from datetime import datetime
 from pathlib import Path
 
 import frappe
@@ -38,6 +39,7 @@ from kunal_enterprises import hooks
 from kunal_enterprises.permission_query_conditions.orders import get_permission_query_conditions as order_permission_query
 from kunal_enterprises.permission_query_conditions.orders import has_permission as order_has_permission
 from kunal_enterprises.api.orders import detail as order_detail
+from kunal_enterprises.api.orders import _financial_year_period
 from kunal_enterprises.api.orders import history as order_history
 from kunal_enterprises.api.orders import submit as submit_order
 from kunal_enterprises.api.profile import get_profile, update_customer_profile
@@ -503,7 +505,7 @@ class TestCustomerAppAccess(FrappeTestCase):
 		customer = frappe.get_doc("Customer", response["data"]["customer"])
 
 		self.assertTrue(response["success"])
-		self.assertRegex(customer.name, r"^CUS-\d{5}$")
+		self.assertRegex(customer.name, r"^KE-CUST-\d{5}$")
 		self.assertEqual(customer.mobile_number, "9000000006")
 		self.assertEqual(customer.status, "Pending Admin Review")
 		self.assertTrue(customer.mobile_verified)
@@ -1052,9 +1054,9 @@ class TestCustomerAppAccess(FrappeTestCase):
 			}
 		).insert()
 
-		self.assertRegex(customer.name, r"^CUS-\d{5}$")
+		self.assertRegex(customer.name, r"^KE-CUST-\d{5}$")
 		self.assertEqual(customer.mobile_number, "9000000034")
-		self.assertRegex(sales_employee.name, r"^SE-\d{5}$")
+		self.assertRegex(sales_employee.name, r"^KE-SE-\d{4}$")
 		self.assertEqual(sales_employee.mobile_number, "9000000035")
 		self.assertFalse(frappe.get_meta("Customer").allow_rename)
 		self.assertFalse(frappe.get_meta("Sales Employee").allow_rename)
@@ -1852,7 +1854,7 @@ class TestOrderSubmission(FrappeTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 
-	def test_customer_can_submit_quantity_only_order_with_monthly_reference(self):
+	def test_customer_can_submit_quantity_only_order_with_financial_year_reference(self):
 		product_group = self._create_product_group("Order PG A")
 		item = self._create_item("Order Item A", product_group.name)
 		customer = self._create_active_customer("9000000201", "ORDER-CUSTOMER-001")
@@ -1870,8 +1872,8 @@ class TestOrderSubmission(FrappeTestCase):
 		)
 
 		self.assertTrue(response["success"])
-		expected_period = frappe.utils.now_datetime().strftime("%y-%m")
-		self.assertEqual(response["data"]["portal_reference_number"], f"KE-{expected_period}-0001")
+		expected_period = _financial_year_period(frappe.utils.now_datetime())
+		self.assertEqual(response["data"]["portal_reference_number"], f"KE-SO-00001-{expected_period}")
 		order = frappe.get_doc("Order", response["data"]["order"])
 		self.assertEqual(order.status, "Placed")
 		self.assertEqual(order.order_source, "Customer")
@@ -2142,7 +2144,7 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertFalse(response["success"])
 		self.assertEqual(response["http_status_code"], 400)
 
-	def test_reference_sequence_resets_by_month(self):
+	def test_reference_sequence_resets_by_financial_year(self):
 		product_group = self._create_product_group("Order PG Sequence")
 		item = self._create_item("Order Item Sequence", product_group.name)
 		customer = self._create_active_customer("9000000206", "ORDER-CUSTOMER-006")
@@ -2156,9 +2158,14 @@ class TestOrderSubmission(FrappeTestCase):
 			[{"item": item.name, "godown": "Main Godown", "quantity": 1}],
 		)
 
-		expected_period = frappe.utils.now_datetime().strftime("%y-%m")
-		self.assertEqual(first["data"]["portal_reference_number"], f"KE-{expected_period}-0001")
-		self.assertEqual(second["data"]["portal_reference_number"], f"KE-{expected_period}-0002")
+		expected_period = _financial_year_period(frappe.utils.now_datetime())
+		self.assertEqual(first["data"]["portal_reference_number"], f"KE-SO-00001-{expected_period}")
+		self.assertEqual(second["data"]["portal_reference_number"], f"KE-SO-00002-{expected_period}")
+
+	def test_financial_year_period_uses_indian_april_boundary(self):
+		self.assertEqual(_financial_year_period(datetime(2026, 4, 1)), "26-27")
+		self.assertEqual(_financial_year_period(datetime(2027, 3, 31)), "26-27")
+		self.assertEqual(_financial_year_period(datetime(2027, 4, 1)), "27-28")
 
 	def test_customer_order_history_includes_sales_employee_placed_orders(self):
 		product_group = self._create_product_group("Order History PG")

@@ -475,7 +475,7 @@ def _validate_active_godowns(godown_names):
 
 
 def _next_reference_number(confirmation_datetime):
-	period = confirmation_datetime.strftime("%y-%m")
+	period = _financial_year_period(confirmation_datetime)
 	current_number = frappe.db.get_value(
 		"Order Reference Sequence",
 		period,
@@ -495,4 +495,9 @@ def _next_reference_number(confirmation_datetime):
 			}
 		).insert(ignore_permissions=True)
 
-	return f"KE-{period}-{next_number:04d}"
+	return f"KE-SO-{next_number:05d}-{period}"
+
+
+def _financial_year_period(value):
+	start_year = value.year if value.month >= 4 else value.year - 1
+	return f"{start_year % 100:02d}-{(start_year + 1) % 100:02d}"
