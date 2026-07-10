@@ -3560,9 +3560,9 @@ class TestTallyStockSync(FrappeTestCase):
 	def test_tally_master_sync_imports_units_godowns_categories_and_records_run(self):
 		run = sync_tally_masters(
 			{
-				"units": [{"unit_name": "BOX", "symbol": "BX", "is_active": 1}],
-				"godowns": [{"godown_name": "Sync Main Godown", "is_active": 1}],
-				"stock_categories": [{"category_name": "Sync Category", "is_active": 1}],
+				"units": [{"unit_name": "BOX", "tally_guid": "UOM-SYNC-BOX", "symbol": "BX", "is_active": 1}],
+				"godowns": [{"godown_name": "Sync Main Godown", "tally_guid": "GODOWN-SYNC-MAIN", "is_active": 1}],
+				"stock_categories": [{"category_name": "Sync Category", "tally_guid": "CATEGORY-SYNC-001", "is_active": 1}],
 			}
 		)
 
@@ -3633,6 +3633,151 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(item.root_stock_group, root_group.name)
 		self.assertEqual(item.total_closing_balance, 12)
 		self.assertEqual(ledger.ledger_name, "Sync Ledger Customer")
+
+	def test_tally_master_sync_renames_existing_records_by_guid(self):
+		group = self._create_product_group("Old GUID Group")
+		item = self._create_item("Old GUID Item", group.name)
+		frappe.db.set_value("Tally Stock Group", group.name, "tally_guid", "GROUP-RENAME-001")
+		frappe.db.set_value("Tally Item", item.name, "tally_guid", "ITEM-RENAME-001")
+
+		run = sync_tally_masters(
+			{
+				"stock_groups": [{"group_name": "New GUID Group", "tally_guid": "GROUP-RENAME-001", "is_active": 1}],
+				"items": [
+					{
+						"item_name": "New GUID Item",
+						"tally_guid": "ITEM-RENAME-001",
+						"immediate_stock_group": "New GUID Group",
+						"root_stock_group": "New GUID Group",
+						"uom": "PCS",
+						"is_active": 1,
+					}
+				],
+			}
+		)
+
+		self.assertEqual(run.status, "Completed")
+		self.assertFalse(frappe.db.exists("Tally Stock Group", "Old GUID Group"))
+		self.assertFalse(frappe.db.exists("Tally Item", "Old GUID Item"))
+		self.assertEqual(frappe.db.get_value("Tally Stock Group", "New GUID Group", "tally_guid"), "GROUP-RENAME-001")
+		self.assertEqual(frappe.db.get_value("Tally Item", "New GUID Item", "immediate_stock_group"), "New GUID Group")
+
+	def test_tally_master_sync_updates_stock_group_parent_move(self):
+		self._create_product_group("Old Parent")
+		self._create_product_group("New Parent")
+		self._create_product_group("Moved Child")
+
+		run = sync_tally_masters(
+			{
+				"stock_groups": [
+					{"group_name": "Old Parent", "tally_guid": self._test_guid("GROUP", "Old Parent"), "is_active": 1},
+					{"group_name": "New Parent", "tally_guid": self._test_guid("GROUP", "New Parent"), "is_active": 1},
+					{
+						"group_name": "Moved Child",
+						"tally_guid": self._test_guid("GROUP", "Moved Child"),
+						"source_parent_group": "New Parent",
+						"is_active": 1,
+					},
+				],
+			}
+		)
+
+		child = frappe.get_doc("Tally Stock Group", "Moved Child")
+		self.assertEqual(run.status, "Completed")
+		self.assertEqual(child.parent_stock_group, "New Parent")
+		self.assertEqual(child.root_stock_group, "New Parent")
+		self.assertEqual(child.depth, 1)
+
+	def test_tally_ledger_guid_rename_updates_customer_client_code(self):
+		frappe.get_doc(
+			{
+				"doctype": "Tally Customer Ledger",
+				"client_code": "LEDGER-OLD-001",
+				"ledger_name": "Ledger Rename Customer",
+				"tally_guid": "LEDGER-RENAME-001",
+				"is_active": 1,
+			}
+		).insert()
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Ledger Rename Customer",
+				"business_legal_name": "Ledger Rename Customer",
+				"mobile_number": "9000099001",
+				"client_code": "LEDGER-OLD-001",
+			}
+		).insert()
+
+		run = sync_tally_masters(
+			{
+				"customer_ledgers": [
+					{
+						"client_code": "LEDGER-NEW-001",
+						"ledger_name": "Ledger Rename Customer",
+						"tally_guid": "LEDGER-RENAME-001",
+						"is_active": 1,
+					}
+				],
+			}
+		)
+
+		self.assertEqual(run.status, "Completed")
+		self.assertFalse(frappe.db.exists("Tally Customer Ledger", "LEDGER-OLD-001"))
+		self.assertEqual(frappe.db.get_value("Customer", customer.name, "client_code"), "LEDGER-NEW-001")
+
+	def test_stock_snapshot_uses_guid_pair_after_item_rename(self):
+		group = self._create_product_group("Snapshot GUID Group")
+		item = self._create_item("Snapshot Old Item", group.name)
+		godown = self._create_godown("Snapshot GUID Godown")
+		frappe.db.set_value("Tally Stock Group", group.name, "tally_guid", "GROUP-SNAPSHOT-001")
+		frappe.db.set_value("Tally Item", item.name, "tally_guid", "ITEM-SNAPSHOT-001")
+		frappe.db.set_value("Tally Godown", godown.name, "tally_guid", "GODOWN-SNAPSHOT-001")
+
+		sync_stock_snapshots([{"item": item.name, "godown": godown.name, "quantity": 2, "uom": "PCS"}])
+		sync_tally_masters(
+			{
+				"stock_groups": [{"group_name": group.name, "tally_guid": "GROUP-SNAPSHOT-001", "is_active": 1}],
+				"items": [
+					{
+						"item_name": "Snapshot New Item",
+						"tally_guid": "ITEM-SNAPSHOT-001",
+						"immediate_stock_group": group.name,
+						"root_stock_group": group.name,
+						"uom": "PCS",
+						"is_active": 1,
+					}
+				],
+			}
+		)
+		sync_stock_snapshots([{"item": "Snapshot New Item", "godown": godown.name, "quantity": 7, "uom": "PCS"}])
+
+		key = "ITEM-SNAPSHOT-001:GODOWN-SNAPSHOT-001"
+		self.assertEqual(frappe.db.count("Tally Stock Snapshot", {"tally_snapshot_key": key}), 1)
+		self.assertEqual(frappe.db.get_value("Tally Stock Snapshot", {"tally_snapshot_key": key}, "quantity"), 7)
+
+	def test_voucher_without_reference_is_unmatched_and_not_reconciled(self):
+		group = self._create_product_group("Unmatched Voucher Group")
+		item = self._create_item("Unmatched Voucher Item", group.name)
+		godown = self._create_godown("Unmatched Voucher Godown")
+		frappe.db.set_value("Tally Item", item.name, "tally_guid", "ITEM-UNMATCHED-001")
+		frappe.db.set_value("Tally Godown", godown.name, "tally_guid", "GODOWN-UNMATCHED-001")
+
+		sync_tally_vouchers(
+			[
+				{
+					"voucher_type": "Delivery Challan",
+					"voucher_number": "DC-UNMATCHED-001",
+					"party_client_code": "UNMATCHED-CUSTOMER",
+					"lines": [{"item": item.name, "godown": godown.name, "quantity": 1}],
+				}
+			]
+		)
+		voucher = frappe.get_doc("Tally Voucher", "DC-UNMATCHED-001")
+		run = run_reconciliation()
+
+		self.assertEqual(voucher.reconciliation_state, "Unmatched")
+		self.assertFalse(voucher.reconciled)
+		self.assertEqual(run.records_seen, 0)
 
 	def test_owner_manual_sync_actions_wrap_master_stock_and_reconciliation_jobs(self):
 		product_group = self._create_product_group("Manual Sync PG")
@@ -4291,6 +4436,7 @@ class TestTallyStockSync(FrappeTestCase):
 			{
 				"doctype": "Tally Stock Group",
 				"group_name": group_name,
+				"tally_guid": self._test_guid("GROUP", group_name),
 				"is_root": 1,
 				"depth": 0,
 				"full_path": group_name,
@@ -4303,6 +4449,7 @@ class TestTallyStockSync(FrappeTestCase):
 			{
 				"doctype": "Tally Item",
 				"item_name": item_name,
+				"tally_guid": self._test_guid("ITEM", item_name),
 				"root_stock_group": root_stock_group,
 				"uom": "PCS",
 				"total_closing_balance": 0,
@@ -4312,15 +4459,21 @@ class TestTallyStockSync(FrappeTestCase):
 
 	def _create_godown(self, godown_name, is_active=1):
 		if frappe.db.exists("Tally Godown", godown_name):
-			frappe.db.set_value("Tally Godown", godown_name, "is_active", is_active)
+			frappe.db.set_value(
+				"Tally Godown", godown_name, {"is_active": is_active, "tally_guid": self._test_guid("GODOWN", godown_name)}
+			)
 			return frappe.get_doc("Tally Godown", godown_name)
 		return frappe.get_doc(
 			{
 				"doctype": "Tally Godown",
 				"godown_name": godown_name,
+				"tally_guid": self._test_guid("GODOWN", godown_name),
 				"is_active": is_active,
 			}
 		).insert()
+
+	def _test_guid(self, prefix, value):
+		return f"TEST-{prefix}-{value}".upper().replace(" ", "-")
 
 	def _build_tally_stock_workbook(self, rows):
 		import os
