@@ -12,10 +12,11 @@ def run_reconciliation():
 			"source_table": "trn_voucher",
 		}
 	).insert(ignore_permissions=True)
+	frappe.db.commit()
 
 	vouchers = frappe.get_all(
 		"Tally Voucher",
-		filters={"reconciled": 0},
+		filters={"reconciliation_state": "Pending"},
 		fields=["name"],
 		order_by="voucher_date asc, creation asc",
 	)
@@ -25,8 +26,11 @@ def run_reconciliation():
 	for voucher_ref in vouchers:
 		try:
 			voucher = frappe.get_doc("Tally Voucher", voucher_ref.name)
-			_reconcile_voucher(voucher)
-			voucher.reconciled = 1
+			state, reason = _reconcile_voucher(voucher)
+			voucher.reconciliation_state = state
+			voucher.reconciliation_reason = reason
+			voucher.reconciliation_last_attempt = now_datetime()
+			voucher.reconciled = int(state in {"Matched", "Manual Review"})
 			voucher.save(ignore_permissions=True)
 			processed += 1
 		except Exception as error:
@@ -52,10 +56,14 @@ def run_reconciliation():
 
 
 def _reconcile_voucher(voucher):
+	if not voucher.reference_number:
+		_log_reconciliation(None, voucher.name, "Skipped", "MISSING_REFERENCE_NUMBER", "Voucher has no portal reference")
+		return "Unmatched", "MISSING_REFERENCE_NUMBER"
+
 	order_name = frappe.db.exists("Order", {"portal_reference_number": voucher.reference_number})
 	if not order_name:
 		_log_reconciliation(None, voucher.name, "Skipped", "NO_MATCHING_ORDER", "No matching Order")
-		return
+		return "Unmatched", "NO_MATCHING_ORDER"
 
 	if _delivery_challan_is_superseded_by_sales_invoice(voucher):
 		_log_reconciliation(
@@ -65,7 +73,7 @@ def _reconcile_voucher(voucher):
 			"SUPERSEDED_DELIVERY_CHALLAN",
 			"Delivery Challan superseded by Sales Invoice for same tracking movement",
 		)
-		return
+		return "Matched", "SUPERSEDED_DELIVERY_CHALLAN"
 
 	order = frappe.get_doc("Order", order_name)
 	if _has_ambiguous_duplicate_movement(voucher):
@@ -78,7 +86,7 @@ def _reconcile_voucher(voucher):
 			"AMBIGUOUS_DUPLICATE_MOVEMENT",
 			"Ambiguous duplicate movement for same tracking number and item quantities",
 		)
-		return
+		return "Manual Review", "AMBIGUOUS_DUPLICATE_MOVEMENT"
 
 	customer_client_code = frappe.db.get_value("Customer", order.customer, "client_code")
 	if customer_client_code != voucher.party_client_code:
@@ -91,7 +99,7 @@ def _reconcile_voucher(voucher):
 			"CUSTOMER_CLIENT_CODE_MISMATCH",
 			f"Customer Client Code mismatch: portal customer {customer_client_code}, Tally party {voucher.party_client_code}",
 		)
-		return
+		return "Manual Review", "CUSTOMER_CLIENT_CODE_MISMATCH"
 
 	fulfilled_by_item = {}
 	for line in voucher.lines:
@@ -109,7 +117,7 @@ def _reconcile_voucher(voucher):
 			"EXTRA_VOUCHER_ITEM",
 			f"Extra unmatched item lines in voucher: {', '.join(extra_items)}",
 		)
-		return
+		return "Manual Review", "EXTRA_VOUCHER_ITEM"
 
 	for item_row in order.items:
 		new_fulfilled_quantity = fulfilled_by_item.get(item_row.item, 0)
@@ -124,7 +132,7 @@ def _reconcile_voucher(voucher):
 				"OVER_FULFILLMENT",
 				f"Over fulfillment for item {item_row.item}: fulfilled {total_fulfilled_quantity:g}, requested {item_row.requested_quantity:g}",
 			)
-			return
+			return "Manual Review", "OVER_FULFILLMENT"
 
 	for item_row in order.items:
 		new_fulfilled_quantity = fulfilled_by_item.get(item_row.item, 0)
@@ -140,6 +148,7 @@ def _reconcile_voucher(voucher):
 	_apply_order_status_from_items(order)
 	order.save(ignore_permissions=True)
 	_log_reconciliation(order.name, voucher.name, "Matched", "VOUCHER_QUANTITIES_APPLIED", "Voucher quantities applied")
+	return "Matched", "VOUCHER_QUANTITIES_APPLIED"
 
 
 def _apply_order_status_from_items(order):

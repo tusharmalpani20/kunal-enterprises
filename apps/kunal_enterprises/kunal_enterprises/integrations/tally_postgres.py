@@ -30,6 +30,7 @@ def import_all(voucher_limit=None, run_reconciliation_after=True):
 
 def import_masters():
 	with _connect() as connection:
+		connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
 		records = {
 			"units": _fetch_units(connection),
 			"godowns": _fetch_godowns(connection),
@@ -288,7 +289,6 @@ def _voucher_filter_count(connection):
 			from {} v
 			join {} i on i.guid = v.guid
 			where coalesce(v.voucher_number, '') != ''
-				and coalesce(v.reference_number, '') != ''
 				and coalesce(i.item, '') != ''
 				and coalesce(i.godown, '') != ''
 				and (
@@ -304,17 +304,20 @@ def _voucher_filter_count(connection):
 def _fetch_units(connection):
 	rows = _fetch_all(
 		connection,
-		sql.SQL("select name from {} where coalesce(name, '') != '' order by name").format(_table("mst_uom")),
+		sql.SQL("select guid, name from {} where coalesce(name, '') != '' order by name").format(_table("mst_uom")),
 	)
-	return [{"unit_name": row["name"], "symbol": row["name"], "is_active": 1} for row in rows]
+	return [
+		{"unit_name": row["name"], "tally_guid": row.get("guid"), "symbol": row["name"], "is_active": 1}
+		for row in rows
+	]
 
 
 def _fetch_godowns(connection):
 	rows = _fetch_all(
 		connection,
-		sql.SQL("select name from {} where coalesce(name, '') != '' order by name").format(_table("mst_godown")),
+		sql.SQL("select guid, name from {} where coalesce(name, '') != '' order by name").format(_table("mst_godown")),
 	)
-	return [{"godown_name": row["name"], "is_active": 1} for row in rows]
+	return [{"godown_name": row["name"], "tally_guid": row.get("guid"), "is_active": 1} for row in rows]
 
 
 def _fetch_stock_categories(connection):
@@ -324,7 +327,7 @@ def _fetch_stock_categories(connection):
 			_table("mst_stock_category")
 		),
 	)
-	return [{"category_name": row["name"], "is_active": 1} for row in rows]
+	return [{"category_name": row["name"], "tally_guid": row.get("guid"), "is_active": 1} for row in rows]
 
 
 def _fetch_stock_groups(connection):
@@ -349,6 +352,7 @@ def _fetch_stock_groups(connection):
 			{
 				"group_name": row["name"],
 				"tally_guid": row.get("guid"),
+				"source_parent_group": row.get("parent") or None,
 				"parent_stock_group": parent,
 				"root_stock_group": None if row["name"] == root else root,
 				"is_root": 1 if row["name"] == root else 0,
@@ -442,17 +446,28 @@ def _fetch_stock_snapshots(connection):
 		sql.SQL(
 				"""
 				select
-					item,
-					godown,
-					sum(coalesce(closing_qty, 0)) as quantity,
-					max(uom) as uom,
-					max(imported_at)::date as as_on_date
-				from {}
-				where coalesce(item, '') != '' and coalesce(godown, '') != ''
-				group by item, godown
+					snapshot.item,
+					snapshot.godown,
+					snapshot.quantity,
+					snapshot.uom,
+					snapshot.as_on_date,
+					master.name as source_item_name,
+					master.parent as source_item_parent
+				from (
+					select
+						item,
+						godown,
+						sum(coalesce(closing_qty, 0)) as quantity,
+						max(uom) as uom,
+						max(imported_at)::date as as_on_date
+					from {}
+					where coalesce(item, '') != '' and coalesce(godown, '') != ''
+					group by item, godown
+				) snapshot
+				left join {} master on master.name = snapshot.item
 				"""
-			).format(_table(STOCK_SNAPSHOT_TABLE)),
-		)
+			).format(_table(STOCK_SNAPSHOT_TABLE), _table("mst_stock_item")),
+	)
 	return [
 		{
 			"item": row["item"],
@@ -460,6 +475,8 @@ def _fetch_stock_snapshots(connection):
 			"quantity": _number(row.get("quantity")),
 			"uom": row.get("uom"),
 			"as_on_date": row.get("as_on_date"),
+			"source_item_exists": bool(row.get("source_item_name")),
+			"source_item_parent": row.get("source_item_parent"),
 			"synced_at": now_datetime(),
 		}
 		for row in rows
@@ -553,7 +570,6 @@ def _fetch_vouchers(connection, limit=None):
 			join {} i on i.guid = v.guid
 			left join {} l on l.name = v.party_name
 			where coalesce(v.voucher_number, '') != ''
-				and coalesce(v.reference_number, '') != ''
 				and coalesce(i.item, '') != ''
 				and coalesce(i.godown, '') != ''
 				and (
