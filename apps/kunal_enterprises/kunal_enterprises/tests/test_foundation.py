@@ -1551,6 +1551,58 @@ class TestProductGroupAccess(FrappeTestCase):
 		self.assertTrue(response["success"])
 		self.assertEqual(response["data"]["items"][0]["total_closing_balance"], 277)
 
+	def test_allowed_items_resolve_nearest_marked_mobile_summary_group(self):
+		root_group = self._create_product_group("PG Mobile Summary Root")
+		brand_group = self._create_child_product_group(
+			"PG Mobile Summary Brand",
+			root_group.name,
+			show_as_mobile_summary_group=1,
+		)
+		series_group = self._create_child_product_group(
+			"PG Mobile Summary Series",
+			brand_group.name,
+			show_as_mobile_summary_group=1,
+		)
+		item = self._create_item(
+			"Mobile Summary Marked Item",
+			root_group.name,
+			immediate_stock_group=series_group.name,
+		)
+		customer = self._create_active_customer(
+			"9000000441",
+			"PG-MOBILE-SUMMARY-001",
+			product_groups=[root_group.name],
+		)
+
+		response = allowed_items(customer.name, root_group.name)
+		row = next(item_row for item_row in response["data"]["items"] if item_row["name"] == item.name)
+
+		self.assertTrue(response["success"])
+		self.assertEqual(row["immediate_stock_group"], series_group.name)
+		self.assertEqual(row["mobile_summary_group"], series_group.name)
+		self.assertEqual(row["mobile_summary_group_name"], "PG Mobile Summary Series")
+
+	def test_allowed_items_fall_back_to_root_mobile_summary_group(self):
+		root_group = self._create_product_group("PG Mobile Summary Fallback")
+		child_group = self._create_child_product_group("PG Mobile Summary Fallback Child", root_group.name)
+		item = self._create_item(
+			"Mobile Summary Fallback Item",
+			root_group.name,
+			immediate_stock_group=child_group.name,
+		)
+		customer = self._create_active_customer(
+			"9000000442",
+			"PG-MOBILE-SUMMARY-002",
+			product_groups=[root_group.name],
+		)
+
+		response = allowed_items(customer.name, root_group.name)
+		row = next(item_row for item_row in response["data"]["items"] if item_row["name"] == item.name)
+
+		self.assertTrue(response["success"])
+		self.assertEqual(row["mobile_summary_group"], root_group.name)
+		self.assertEqual(row["mobile_summary_group_name"], "PG Mobile Summary Fallback")
+
 	def test_sales_employee_product_group_access_intersects_with_customer_access(self):
 		customer_group = self._create_product_group("PG Customer Only")
 		shared_group = self._create_product_group("PG Shared")
@@ -1758,11 +1810,30 @@ class TestProductGroupAccess(FrappeTestCase):
 			}
 		).insert()
 
-	def _create_item(self, item_name, root_stock_group):
+	def _create_child_product_group(self, group_name, parent_stock_group, show_as_mobile_summary_group=0):
+		root_stock_group = frappe.db.get_value("Tally Stock Group", parent_stock_group, "root_stock_group") or parent_stock_group
+		depth = (frappe.db.get_value("Tally Stock Group", parent_stock_group, "depth") or 0) + 1
+		parent_path = frappe.db.get_value("Tally Stock Group", parent_stock_group, "full_path") or parent_stock_group
+		return frappe.get_doc(
+			{
+				"doctype": "Tally Stock Group",
+				"group_name": group_name,
+				"parent_stock_group": parent_stock_group,
+				"root_stock_group": root_stock_group,
+				"is_root": 0,
+				"depth": depth,
+				"full_path": f"{parent_path} > {group_name}",
+				"show_as_mobile_summary_group": show_as_mobile_summary_group,
+				"is_active": 1,
+			}
+		).insert()
+
+	def _create_item(self, item_name, root_stock_group, immediate_stock_group=None):
 		return frappe.get_doc(
 			{
 				"doctype": "Tally Item",
 				"item_name": item_name,
+				"immediate_stock_group": immediate_stock_group or root_stock_group,
 				"root_stock_group": root_stock_group,
 				"uom": "PCS",
 				"total_closing_balance": 10,

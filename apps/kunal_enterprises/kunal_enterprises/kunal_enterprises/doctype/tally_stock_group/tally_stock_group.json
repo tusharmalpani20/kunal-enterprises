@@ -14,6 +14,7 @@
    "is_root",
    "depth",
    "full_path",
+   "show_as_mobile_summary_group",
    "product_group_logo",
    "product_group_logo_preview",
    "is_active",
@@ -63,6 +64,12 @@
    "fieldname": "full_path",
    "fieldtype": "Small Text",
    "label": "Full Path"
+  },
+  {
+   "default": "0",
+   "fieldname": "show_as_mobile_summary_group",
+   "fieldtype": "Check",
+   "label": "Show as Mobile Summary Group"
   },
   {
    "fieldname": "product_group_logo",
