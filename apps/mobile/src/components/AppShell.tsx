@@ -145,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Modal visible={godownSelectorOpen} transparent animationType="slide" onRequestClose={() => setGodownSelectorOpen(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalScrim} onPress={() => setGodownSelectorOpen(false)} />
-          <View style={styles.bottomSheet}>
+          <View style={styles.bottomSheetHalf}>
             <ScrollView
               contentContainerStyle={styles.bottomSheetContent}
               keyboardShouldPersistTaps="handled"
@@ -184,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Modal visible={groupSheetOpen} transparent animationType="slide" onRequestClose={() => setGroupSheetOpen(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalScrim} onPress={() => setGroupSheetOpen(false)} />
-          <View style={styles.bottomSheet}>
+          <View style={styles.bottomSheetTall}>
             <View style={styles.sheetStickyHeader}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
