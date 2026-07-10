@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import now_datetime
+from frappe.utils import cint, now_datetime
 
 
 class Customer(Document):
@@ -215,3 +215,57 @@ def set_customer_client_code(customer_name, client_code):
 	customer.client_code = client_code
 	customer.save()
 	return get_access_status(customer.name)
+
+
+@frappe.whitelist()
+def search_tally_customer_ledgers(search_text="", customer_name=None, limit=10):
+	search_text = (search_text or "").strip()
+	current_customer = (customer_name or "").strip()
+	limit = min(max(cint(limit) or 10, 1), 10)
+	if current_customer:
+		frappe.get_doc("Customer", current_customer).check_permission("write")
+	elif not frappe.has_permission("Tally Customer Ledger", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	filters = []
+	values = {"current_customer": current_customer, "limit": limit}
+	if search_text:
+		values["search_text"] = f"%{search_text}%"
+		filters.append("(ledger.client_code like %(search_text)s or ledger.ledger_name like %(search_text)s)")
+
+	where_clause = " and ".join(filters)
+	if where_clause:
+		where_clause = f" and {where_clause}"
+
+	return frappe.db.sql(
+		f"""
+		select
+			ledger.client_code,
+			ledger.ledger_name,
+			ledger.tally_guid,
+			mapped_customer.name as mapped_customer,
+			mapped_customer.customer_name as mapped_customer_name,
+			mapped_customer.business_legal_name as mapped_customer_business
+		from `tabTally Customer Ledger` ledger
+		left join `tabCustomer` mapped_customer
+			on mapped_customer.client_code = ledger.client_code
+		where ledger.is_active = 1
+			and (mapped_customer.name is null or mapped_customer.name = %(current_customer)s)
+			{where_clause}
+		order by
+			case
+				when ledger.client_code = %(search_exact)s then 0
+				when ledger.client_code like %(search_prefix)s then 1
+				when ledger.ledger_name like %(search_prefix)s then 2
+				else 3
+			end,
+			ledger.client_code
+		limit %(limit)s
+		""",
+		{
+			**values,
+			"search_exact": search_text,
+			"search_prefix": f"{search_text}%",
+		},
+		as_dict=True,
+	)

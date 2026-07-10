@@ -25,7 +25,11 @@ from kunal_enterprises.api.product_groups import item_stock
 from kunal_enterprises.api.product_groups import items as allowed_items
 from kunal_enterprises.api.sales_employees import allowed_customers
 from kunal_enterprises.api.token_verification import current_session, issue_token, revoke_token
-from kunal_enterprises.kunal_enterprises.doctype.customer.customer import set_customer_client_code
+from kunal_enterprises.kunal_enterprises.doctype.customer.customer import (
+	search_tally_customer_ledgers,
+	set_customer_client_code,
+)
+from kunal_enterprises.kunal_enterprises.doctype.tally_customer_ledger.tally_customer_ledger import get_mapped_customer
 from kunal_enterprises.cron.tally_sync import sync_stock_snapshots
 from kunal_enterprises.cron.tally_sync import sync_tally_masters
 from kunal_enterprises.cron.tally_sync import sync_tally_vouchers
@@ -917,6 +921,84 @@ class TestCustomerAppAccess(FrappeTestCase):
 
 		with self.assertRaises(frappe.ValidationError):
 			set_customer_client_code(first_customer.name, second_customer.client_code)
+
+	def test_tally_ledger_search_only_returns_unassigned_ledgers(self):
+		for client_code, ledger_name in (
+			("SEARCH-CODE-001", "Search Available Ledger"),
+			("SEARCH-CODE-002", "Search Assigned Ledger"),
+			("SEARCH-CODE-003", "Search Inactive Ledger"),
+		):
+			frappe.get_doc(
+				{
+					"doctype": "Tally Customer Ledger",
+					"client_code": client_code,
+					"ledger_name": ledger_name,
+					"is_active": 0 if client_code == "SEARCH-CODE-003" else 1,
+				}
+			).insert()
+
+		assigned_customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Search Assigned Customer",
+				"business_legal_name": "Search Assigned Business",
+				"mobile_number": "9000000041",
+				"mobile_verified": 1,
+				"admin_approved": 1,
+				"status": "Active",
+				"client_code": "SEARCH-CODE-002",
+			}
+		).insert()
+		current_customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Search Current Customer",
+				"business_legal_name": "Search Current Business",
+				"mobile_number": "9000000042",
+				"mobile_verified": 1,
+				"admin_approved": 1,
+				"status": "Active",
+			}
+		).insert()
+
+		results = search_tally_customer_ledgers("Search", current_customer.name)
+		client_codes = {row.client_code for row in results}
+
+		self.assertIn("SEARCH-CODE-001", client_codes)
+		self.assertNotIn("SEARCH-CODE-002", client_codes)
+		self.assertNotIn("SEARCH-CODE-003", client_codes)
+
+		own_results = search_tally_customer_ledgers("SEARCH-CODE-002", assigned_customer.name)
+		own_result_by_code = {row.client_code: row for row in own_results}
+		self.assertIn("SEARCH-CODE-002", own_result_by_code)
+		self.assertEqual(own_result_by_code["SEARCH-CODE-002"].mapped_customer, assigned_customer.name)
+
+	def test_tally_ledger_reports_mapped_customer(self):
+		frappe.get_doc(
+			{
+				"doctype": "Tally Customer Ledger",
+				"client_code": "MAPPED-CODE-001",
+				"ledger_name": "Mapped Ledger",
+				"is_active": 1,
+			}
+		).insert()
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Mapped Customer",
+				"business_legal_name": "Mapped Business",
+				"mobile_number": "9000000043",
+				"mobile_verified": 1,
+				"admin_approved": 1,
+				"status": "Active",
+				"client_code": "MAPPED-CODE-001",
+			}
+		).insert()
+
+		mapping = get_mapped_customer("MAPPED-CODE-001")
+
+		self.assertEqual(mapping.name, customer.name)
+		self.assertEqual(mapping.business_legal_name, "Mapped Business")
 
 	def test_customer_email_and_gstin_are_unique_when_present(self):
 		frappe.get_doc(
