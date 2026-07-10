@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import React from 'react';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useFonts } from '@expo-google-fonts/figtree/useFonts';
 import { Figtree_400Regular } from '@expo-google-fonts/figtree/400Regular';
@@ -26,11 +27,11 @@ export default function RootLayout() {
     <AuthProvider>
       <FrappeProvider>
         <OrderFlowProvider>
-          <>
+          <SafeAreaProvider initialMetrics={initialWindowMetrics}>
             <Stack screenOptions={{ headerShown: false }} />
             <GlobalDateModal />
             <Toast />
-          </>
+          </SafeAreaProvider>
         </OrderFlowProvider>
       </FrappeProvider>
     </AuthProvider>
