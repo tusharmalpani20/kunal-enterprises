@@ -29,7 +29,15 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "backgroundColor": "#ffffff",
+          "imageWidth": 100
+        }
+      ]
     ]
   }
 }
