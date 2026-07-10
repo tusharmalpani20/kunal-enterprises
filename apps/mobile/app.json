@@ -18,7 +18,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.amol909.kunalenterprisesmobile"
     },
     "web": {
       "bundler": "metro",
@@ -38,6 +39,12 @@
           "imageWidth": 100
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9e0b149f-f450-4b19-a90c-19901515e619"
+      }
+    }
   }
 }
