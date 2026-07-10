@@ -75,17 +75,12 @@ class TestProductGroupLogos(FrappeTestCase):
 		self.assertIn("error", result)
 
 	def test_upload_script_mapping_is_complete(self):
-		from kunal_enterprises.patches.upload_product_group_logos import LOGO_MAPPING, LOGOS_DIR
-		import os
+		from kunal_enterprises.patches.upload_product_group_logos import LOGO_MAPPING
 		self.assertEqual(len(LOGO_MAPPING), 18)
 		for filename, group_name in LOGO_MAPPING:
 			self.assertTrue(
 				frappe.db.exists("Tally Stock Group", group_name),
 				f"Group '{group_name}' does not exist for logo '{filename}'",
-			)
-			self.assertTrue(
-				os.path.isfile(os.path.join(LOGOS_DIR, filename)),
-				f"Logo file '{filename}' does not exist",
 			)
 
 	def _create_test_group(self, name, tally_guid):

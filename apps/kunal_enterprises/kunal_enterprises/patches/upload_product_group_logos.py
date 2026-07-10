@@ -1,16 +1,12 @@
-"""One-off patch to upload product group logos and attach them to Tally Stock Group rows.
+"""One-off patch to attach already-uploaded product group logos.
 
 Run via: bench execute kunal_enterprises.patches.upload_product_group_logos.upload
 """
-import os
 
 import frappe
-from frappe.utils.file_manager import save_file
 
 
-LOGOS_DIR = "/Volumes/a909SSD/Development/Kunal-Enterprises/ke-enterprises-product-logos"
-
-LOGO_MAPPING = [
+EXPECTED_LOGO_MAPPING = [
     ("ascend_acrylic.jpeg", "ASCEND ACRYLIC"),
     ("ascend_interiors.jpeg", "ASCEND PLUS"),
     ("archidply.jpeg", "ARCHID VENEER"),
@@ -31,14 +27,32 @@ LOGO_MAPPING = [
     ("teqora.jpeg", "TEQORA ACRYLIC"),
 ]
 
+# Backward-compatible alias for tests and ad-hoc imports.
+LOGO_MAPPING = EXPECTED_LOGO_MAPPING
+
 
 def upload():
-    results = {"attached": [], "skipped": [], "missing_file": [], "missing_group": []}
+    results = {
+        "attached": [],
+        "skipped": [],
+        "missing_file_url": [],
+        "missing_group": [],
+    }
 
-    for filename, group_name in LOGO_MAPPING:
-        filepath = os.path.join(LOGOS_DIR, filename)
-        if not os.path.isfile(filepath):
-            results["missing_file"].append({"filename": filename, "group": group_name})
+    uploaded_files = {
+        (file.attached_to_name, file.file_name): file.file_url
+        for file in frappe.get_all(
+            "File",
+            filters={"attached_to_doctype": "Tally Stock Group"},
+            fields=["attached_to_name", "file_name", "file_url"],
+            order_by="creation desc",
+        )
+    }
+
+    for filename, group_name in EXPECTED_LOGO_MAPPING:
+        file_url = uploaded_files.get((group_name, filename))
+        if not file_url:
+            results["missing_file_url"].append({"filename": filename, "group": group_name})
             continue
 
         if not frappe.db.exists("Tally Stock Group", group_name):
@@ -54,26 +68,15 @@ def upload():
             )
             continue
 
-        with open(filepath, "rb") as f:
-            content = f.read()
-
-        file_doc = save_file(
-            fname=filename,
-            content=content,
-            dt="Tally Stock Group",
-            dn=group_name,
-            is_private=0,
-        )
-
         frappe.db.set_value(
             "Tally Stock Group", group_name,
-            "product_group_logo", file_doc.file_url,
+            "product_group_logo", file_url,
             update_modified=False,
         )
         frappe.db.commit()
 
         results["attached"].append(
-            {"filename": filename, "group": group_name, "file_url": file_doc.file_url},
+            {"filename": filename, "group": group_name, "file_url": file_url},
         )
 
     return results
