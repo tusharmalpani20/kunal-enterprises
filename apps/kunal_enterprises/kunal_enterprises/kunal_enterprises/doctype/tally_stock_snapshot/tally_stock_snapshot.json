@@ -9,6 +9,7 @@
  "field_order": [
   "item",
   "godown",
+  "tally_snapshot_key",
   "quantity",
   "uom",
   "as_on_date",
@@ -24,6 +25,12 @@
    "label": "Item",
    "options": "Tally Item",
    "reqd": 1
+  },
+  {
+   "fieldname": "tally_snapshot_key",
+   "fieldtype": "Data",
+   "label": "Tally Snapshot Key",
+   "read_only": 1
   },
   {
    "fieldname": "godown",

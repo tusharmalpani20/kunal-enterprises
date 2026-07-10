@@ -37,8 +37,7 @@
    "fieldname": "reference_number",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Reference Number",
-   "reqd": 1
+   "label": "Reference Number"
   },
   {
    "fieldname": "party_client_code",
@@ -61,6 +60,26 @@
    "fieldname": "reconciled",
    "fieldtype": "Check",
    "label": "Reconciled"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "reconciliation_state",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Reconciliation State",
+   "options": "Pending\nMatched\nUnmatched\nManual Review"
+  },
+  {
+   "fieldname": "reconciliation_last_attempt",
+   "fieldtype": "Datetime",
+   "label": "Reconciliation Last Attempt",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_reason",
+   "fieldtype": "Data",
+   "label": "Reconciliation Reason",
+   "read_only": 1
   },
   {
    "fieldname": "lines",

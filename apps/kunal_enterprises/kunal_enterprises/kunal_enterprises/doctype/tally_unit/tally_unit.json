@@ -8,6 +8,7 @@
  "engine": "InnoDB",
  "field_order": [
   "unit_name",
+  "tally_guid",
   "symbol",
   "is_active"
  ],
@@ -19,6 +20,13 @@
    "label": "Unit Name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "tally_guid",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tally GUID",
+   "read_only": 1
   },
   {
    "fieldname": "symbol",
