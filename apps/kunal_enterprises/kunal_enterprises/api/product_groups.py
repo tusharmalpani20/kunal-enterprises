@@ -29,8 +29,8 @@ def items(customer, product_group, sales_employee=None, headers=None):
 		token_error = _validate_product_token(customer, sales_employee, headers)
 		if token_error:
 			return token_error
-		allowed_group_names = {group["name"] for group in get_allowed_product_groups(customer, sales_employee)}
-		if product_group not in allowed_group_names:
+		access = resolve_product_access(customer, sales_employee)
+		if product_group not in access["visible_root_names"]:
 			frappe.throw("Product Group is not allowed", title="Product Group Access Required")
 
 		item_rows = frappe.get_all(
@@ -39,16 +39,18 @@ def items(customer, product_group, sales_employee=None, headers=None):
 				"root_stock_group": product_group,
 				"is_active": 1,
 			},
-			fields=[
-				"name",
-				"item_name",
-				"immediate_stock_group",
-				"root_stock_group",
-				"uom",
-				"total_closing_balance",
-			],
+		fields=[
+			"name",
+			"item_name",
+			"immediate_stock_group",
+			"root_stock_group",
+			"uom",
+			"total_closing_balance",
+			"is_active",
+		],
 			order_by="item_name asc",
 		)
+		item_rows = [row for row in item_rows if item_is_allowed(row, access)]
 		_apply_godown_stock_totals(item_rows)
 		_apply_mobile_summary_groups(item_rows)
 
@@ -72,8 +74,8 @@ def item_stock(customer, item, sales_employee=None, headers=None):
 		if token_error:
 			return token_error
 		item_doc = frappe.get_doc("Tally Item", item)
-		allowed_group_names = {group["name"] for group in get_allowed_product_groups(customer, sales_employee)}
-		if item_doc.root_stock_group not in allowed_group_names:
+		access = resolve_product_access(customer, sales_employee)
+		if not item_is_allowed(item_doc, access):
 			frappe.throw("Item is not allowed", title="Item Access Required")
 
 		snapshots = frappe.get_all(
@@ -100,15 +102,14 @@ def get_allowed_product_groups(customer_name, sales_employee_name=None):
 	customer = frappe.get_doc("Customer", customer_name)
 	_validate_customer_can_order(customer)
 
-	customer_groups = _child_product_groups(customer.product_group_access)
-	employee_groups = None
-
 	if sales_employee_name:
 		sales_employee = frappe.get_doc("Sales Employee", sales_employee_name)
 		_validate_sales_employee_can_order_for_customer(sales_employee, customer.name)
-		employee_groups = _child_product_groups(sales_employee.product_group_access)
 
-	allowed_names = _resolve_allowed_group_names(customer_groups, employee_groups)
+	access = resolve_product_access(customer_name, sales_employee_name)
+	allowed_names = access["visible_root_names"]
+	if not allowed_names:
+		return []
 
 	return frappe.get_all(
 		"Tally Stock Group",
@@ -120,6 +121,125 @@ def get_allowed_product_groups(customer_name, sales_employee_name=None):
 		fields=["name", "group_name", "full_path", "product_group_logo"],
 		order_by="group_name asc",
 	)
+
+
+def resolve_product_access(customer_name, sales_employee_name=None):
+	"""Return the effective hierarchy scope for a Customer/mobile ordering context."""
+	customer = frappe.get_doc("Customer", customer_name)
+	_validate_customer_can_order(customer)
+	groups = _load_product_group_hierarchy()
+	customer_grants = _group_grants(customer.product_group_access)
+	customer_scope, customer_diagnostics = _expand_group_scope(
+		customer_grants,
+		groups,
+		default_all=not customer_grants,
+	)
+
+	employee_scope = None
+	employee_grants = None
+	employee_diagnostics = []
+	if sales_employee_name:
+		sales_employee = frappe.get_doc("Sales Employee", sales_employee_name)
+		_validate_sales_employee_can_order_for_customer(sales_employee, customer.name)
+		employee_grants = _group_grants(sales_employee.product_group_access)
+		if employee_grants:
+			employee_scope, employee_diagnostics = _expand_group_scope(
+				employee_grants,
+				groups,
+				default_all=False,
+			)
+
+	effective_scope = customer_scope if employee_scope is None else customer_scope.intersection(employee_scope)
+	visible_root_names = _visible_root_names(effective_scope, groups)
+	return {
+		"groups": groups,
+		"customer_grants": customer_grants,
+		"employee_grants": employee_grants,
+		"effective_group_names": effective_scope,
+		"visible_root_names": visible_root_names,
+		"diagnostics": customer_diagnostics + employee_diagnostics,
+	}
+
+
+def item_is_allowed(item, access):
+	"""Check an item against a previously resolved product access scope."""
+	if not item.get("is_active"):
+		return False
+	path = _active_group_path(
+		item.get("immediate_stock_group") or item.get("root_stock_group"),
+		access["groups"],
+	)
+	if not path or path[0] != item.get("root_stock_group"):
+		return False
+	return bool(set(path).intersection(access["effective_group_names"]))
+
+
+def _load_product_group_hierarchy():
+	return {
+		row["name"]: row
+		for row in frappe.get_all(
+			"Tally Stock Group",
+			fields=["name", "parent_stock_group", "root_stock_group", "is_root", "is_active"],
+		)
+	}
+
+
+def _group_grants(rows):
+	return {row.product_group for row in rows if row.product_group}
+
+
+def _expand_group_scope(grants, groups, default_all=False):
+	diagnostics = []
+	if not grants:
+		return (
+			{name for name, group in groups.items() if group.is_active} if default_all else set(),
+			diagnostics,
+		)
+
+	scope = set()
+	for grant in grants:
+		if grant not in groups or not groups[grant].is_active:
+			diagnostics.append(f"Invalid or inactive Product Group grant: {grant}")
+			continue
+		for name in groups:
+			path = _active_group_path(name, groups)
+			if path and grant in path:
+				scope.add(name)
+	return scope, diagnostics
+
+
+def _visible_root_names(scope, groups):
+	roots = set()
+	for name in scope:
+		path = _active_group_path(name, groups)
+		if path:
+			root = groups.get(path[0])
+			if root and root.is_root and root.is_active:
+				roots.add(path[0])
+	return sorted(roots)
+
+
+def _active_group_path(start_group, groups, max_depth=100):
+	if not start_group:
+		return None
+	path = []
+	visited = set()
+	current = start_group
+	while current:
+		if current in visited or len(path) >= max_depth:
+			return None
+		visited.add(current)
+		group = groups.get(current)
+		if not group or not group.is_active:
+			return None
+		path.append(current)
+		current = group.parent_stock_group
+
+	path.reverse()
+	root = groups.get(path[0])
+	if not root or not root.is_root:
+		return None
+	return path
 
 
 def _apply_godown_stock_totals(item_rows):
@@ -246,28 +366,3 @@ def _validate_sales_employee_can_order_for_customer(sales_employee, customer_nam
 	assigned_customers = [row.customer for row in sales_employee.assigned_customers if row.customer]
 	if assigned_customers and customer_name not in assigned_customers:
 		frappe.throw("Sales Employee is not assigned to this Customer", title="Customer Assignment Required")
-
-
-def _child_product_groups(rows):
-	return {row.product_group for row in rows if row.product_group}
-
-
-def _resolve_allowed_group_names(customer_groups, employee_groups=None):
-	active_root_groups = set(
-		frappe.get_all(
-			"Tally Stock Group",
-			filters={"is_root": 1, "is_active": 1},
-			pluck="name",
-		)
-	)
-
-	if customer_groups:
-		allowed = active_root_groups.intersection(customer_groups)
-	else:
-		allowed = set(active_root_groups)
-
-	if employee_groups is not None:
-		if employee_groups:
-			allowed = allowed.intersection(employee_groups)
-
-	return sorted(allowed)

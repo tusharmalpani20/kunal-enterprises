@@ -7,7 +7,7 @@ from frappe.utils.file_manager import save_file
 from frappe.utils.pdf import get_pdf
 from frappe.utils import get_datetime, now_datetime
 
-from kunal_enterprises.api.product_groups import get_allowed_product_groups
+from kunal_enterprises.api.product_groups import item_is_allowed, resolve_product_access
 from kunal_enterprises.api.token_verification import verify_token
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
 
@@ -94,7 +94,7 @@ def detail(order, customer=None, sales_employee=None, headers=None):
 def submit_order(customer, allocations, sales_employee=None, sales_employee_note=None, confirmation_datetime=None):
 	confirmation_datetime = get_datetime(confirmation_datetime) if confirmation_datetime else now_datetime()
 	merged_allocations = _merge_allocations(allocations)
-	allowed_group_names = {group["name"] for group in get_allowed_product_groups(customer, sales_employee)}
+	product_access = resolve_product_access(customer, sales_employee)
 	items_by_name = _load_items([row["item"] for row in merged_allocations])
 	_validate_active_godowns({row["godown"] for row in merged_allocations})
 
@@ -104,7 +104,7 @@ def submit_order(customer, allocations, sales_employee=None, sales_employee_note
 		item = items_by_name.get(allocation["item"])
 		if not item:
 			frappe.throw(f"Item {allocation['item']} was not found or is inactive", title="Invalid Item")
-		if item.root_stock_group not in allowed_group_names:
+		if not item_is_allowed(item, product_access):
 			frappe.throw(f"Item {item.name} is not allowed", title="Item Access Required")
 
 		item_rows.setdefault(
@@ -498,7 +498,7 @@ def _load_items(item_names):
 		for item in frappe.get_all(
 			"Tally Item",
 			filters={"name": ("in", item_names), "is_active": 1},
-			fields=["name", "item_name", "root_stock_group", "uom"],
+			fields=["name", "item_name", "immediate_stock_group", "root_stock_group", "uom", "is_active"],
 		)
 	}
 

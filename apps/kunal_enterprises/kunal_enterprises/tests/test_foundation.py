@@ -1535,6 +1535,86 @@ class TestProductGroupAccess(FrappeTestCase):
 		self.assertEqual([item["name"] for item in items_response["data"]["items"]], [visible_item.name])
 		self.assertFalse(blocked_items_response["success"])
 
+	def test_customer_child_product_group_grant_keeps_mobile_root_and_filters_items(self):
+		root_group = self._create_product_group("PG Subgroup Root")
+		allowed_group = self._create_child_product_group("PG Subgroup Allowed", root_group.name)
+		allowed_grandchild = self._create_child_product_group("PG Subgroup Grandchild", allowed_group.name)
+		blocked_group = self._create_child_product_group("PG Subgroup Blocked", root_group.name)
+		allowed_item = self._create_item("Subgroup Allowed Item", root_group.name, immediate_stock_group=allowed_group.name)
+		grandchild_item = self._create_item("Subgroup Grandchild Item", root_group.name, immediate_stock_group=allowed_grandchild.name)
+		self._create_item("Subgroup Blocked Item", root_group.name, immediate_stock_group=blocked_group.name)
+		customer = self._create_active_customer(
+			"9000000451",
+			"PG-SUBGROUP-CUSTOMER-001",
+			product_groups=[allowed_group.name],
+		)
+
+		groups_response = allowed_product_groups(customer.name)
+		items_response = allowed_items(customer.name, root_group.name)
+
+		self.assertTrue(groups_response["success"])
+		self.assertEqual([row["name"] for row in groups_response["data"]["product_groups"]], [root_group.name])
+		self.assertTrue(items_response["success"])
+		self.assertEqual(
+			{row["name"] for row in items_response["data"]["items"]},
+			{allowed_item.name, grandchild_item.name},
+		)
+
+	def test_sales_employee_child_product_group_grant_intersects_customer_root(self):
+		root_group = self._create_product_group("PG Subgroup Employee Root")
+		allowed_group = self._create_child_product_group("PG Subgroup Employee Allowed", root_group.name)
+		blocked_group = self._create_child_product_group("PG Subgroup Employee Blocked", root_group.name)
+		allowed_item = self._create_item("Employee Subgroup Allowed Item", root_group.name, immediate_stock_group=allowed_group.name)
+		self._create_item("Employee Subgroup Blocked Item", root_group.name, immediate_stock_group=blocked_group.name)
+		customer = self._create_active_customer(
+			"9000000452",
+			"PG-SUBGROUP-EMPLOYEE-001",
+			product_groups=[root_group.name],
+		)
+		sales_employee = frappe.get_doc(
+			{
+				"doctype": "Sales Employee",
+				"sales_employee_name": "PG Subgroup Employee",
+				"mobile_number": "9000000453",
+				"status": "Active",
+				"product_group_access": [{"product_group": allowed_group.name}],
+			}
+		).insert()
+
+		groups_response = allowed_product_groups(customer.name, sales_employee.name)
+		items_response = allowed_items(customer.name, root_group.name, sales_employee=sales_employee.name)
+
+		self.assertTrue(groups_response["success"])
+		self.assertEqual([row["name"] for row in groups_response["data"]["product_groups"]], [root_group.name])
+		self.assertEqual([row["name"] for row in items_response["data"]["items"]], [allowed_item.name])
+
+	def test_sales_employee_without_product_group_rows_adds_no_restriction(self):
+		root_group = self._create_product_group("PG Subgroup Empty Employee Root")
+		child_group = self._create_child_product_group("PG Subgroup Empty Employee Child", root_group.name)
+		item = self._create_item(
+			"Empty Employee Child Item",
+			root_group.name,
+			immediate_stock_group=child_group.name,
+		)
+		customer = self._create_active_customer(
+			"9000000454",
+			"PG-SUBGROUP-EMPTY-EMPLOYEE-001",
+			product_groups=[root_group.name],
+		)
+		sales_employee = frappe.get_doc(
+			{
+				"doctype": "Sales Employee",
+				"sales_employee_name": "PG Subgroup Empty Employee",
+				"mobile_number": "9000000455",
+				"status": "Active",
+			}
+		).insert()
+
+		response = allowed_items(customer.name, root_group.name, sales_employee=sales_employee.name)
+
+		self.assertTrue(response["success"])
+		self.assertEqual([row["name"] for row in response["data"]["items"]], [item.name])
+
 	def test_allowed_items_show_total_from_godown_stock_snapshots(self):
 		product_group = self._create_product_group("PG Snapshot Total")
 		item = self._create_item("Snapshot Total Item", product_group.name)
@@ -1727,6 +1807,17 @@ class TestProductGroupAccess(FrappeTestCase):
 		self._create_stock_snapshot(blocked_item.name, "Hidden Godown", 10)
 
 		response = item_stock(customer.name, blocked_item.name)
+
+		self.assertFalse(response["success"])
+
+	def test_item_stock_rejects_inactive_item(self):
+		product_group = self._create_product_group("Stock PG Inactive Item")
+		item = self._create_item("Stock Item Inactive", product_group.name)
+		customer = self._create_active_customer("9000000113", "PG-STOCK-INACTIVE-ITEM-001")
+		self._create_stock_snapshot(item.name, "Inactive Item Godown", 10)
+		frappe.db.set_value("Tally Item", item.name, "is_active", 0)
+
+		response = item_stock(customer.name, item.name)
 
 		self.assertFalse(response["success"])
 

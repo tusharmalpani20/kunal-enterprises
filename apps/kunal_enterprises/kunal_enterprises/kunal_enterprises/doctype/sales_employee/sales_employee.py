@@ -37,13 +37,18 @@ class SalesEmployee(Document):
 			group = frappe.db.get_value(
 				"Tally Stock Group",
 				row.product_group,
-				["is_root", "is_active"],
+				["is_root", "is_active", "parent_stock_group"],
 				as_dict=True,
 			)
-			if not group or not group.is_root or not group.is_active:
+			if not group or not group.is_active:
 				frappe.throw(
-					_("Product Group Access can only include active root Product Groups"),
+					_("Product Group Access can only include active Product Groups"),
 					title=_("Invalid Product Group Access"),
+				)
+			if group.parent_stock_group and not frappe.db.exists("Tally Stock Group", group.parent_stock_group):
+				frappe.throw(
+					_("Product Group Access references a group with a missing parent"),
+					title=_("Invalid Product Group Hierarchy"),
 				)
 
 
