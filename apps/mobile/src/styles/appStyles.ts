@@ -244,6 +244,12 @@ export const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
+  segmentedButtonPressable: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
   segmentedButton: {
     flex: 1,
     minHeight: 42,
@@ -258,7 +264,12 @@ export const styles = StyleSheet.create({
   },
   segmentedButtonActive: {
     backgroundColor: colors.brandGreen,
-    borderColor: colors.brandGreen,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
   },
   segmentedButtonText: {
     color: '#111111',
@@ -267,7 +278,7 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
   },
   segmentedButtonTextActive: {
-    color: colors.onPrimary,
+    color: colors.primary,
   },
   rowButton: {
     backgroundColor: '#ffffff',
@@ -563,6 +574,30 @@ export const styles = StyleSheet.create({
   summaryItemTitle: {
     lineHeight: 20,
     flexWrap: 'wrap',
+  },
+  godownGroup: {
+    paddingTop: 8,
+  },
+  godownGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#d8d8d8',
+  },
+  godownGroupTitle: {
+    color: colors.brandGreen,
+    fontSize: 16,
+    fontFamily: fonts.semibold,
+  },
+  godownGroupTotal: {
+    color: '#666666',
+    fontSize: 12,
+    fontFamily: fonts.medium,
+  },
+  godownGroupDivider: {
+    height: 12,
   },
   contextBlock: {
     gap: 10,

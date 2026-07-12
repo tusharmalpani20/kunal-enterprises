@@ -9,9 +9,21 @@ import {
 	orderDetailForMobile,
 	orderSummaryForMobile,
 	orderPlacedByLabel,
+	groupGodownAllocationsForMobile,
 	saveCustomerProfileForMobile,
 	salesEmployeeProfileForMobile,
 } from '../src/domain/profileHistoryFlow.mjs';
+
+test('godown allocations are grouped by godown while preserving item rows', () => {
+  const groups = groupGodownAllocationsForMobile([
+    { item: 'ITEM-2', item_name: 'Second', godown: 'Kukatpally', requested_quantity: 2 },
+    { item: 'ITEM-1', item_name: 'First', godown: 'Goshamahal', requested_quantity: 1 },
+    { item: 'ITEM-3', item_name: 'Third', godown: 'Kukatpally', requested_quantity: 4 },
+  ]);
+
+  assert.deepEqual(groups.map((group) => group.godown), ['Goshamahal', 'Kukatpally']);
+  assert.deepEqual(groups[1].rows.map((row) => row.item), ['ITEM-2', 'ITEM-3']);
+});
 
 test('customer profile hides client code and only allows editable date and email fields', () => {
   const profile = customerProfileForMobile({

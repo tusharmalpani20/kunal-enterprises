@@ -123,6 +123,22 @@ export function orderDetailForMobile(order, { viewerIdentityType = 'Customer' } 
   };
 }
 
+export function groupGodownAllocationsForMobile(allocations = []) {
+  const groups = new Map();
+
+  for (const allocation of allocations) {
+    const godown = allocation.godown || 'Unassigned Godown';
+    if (!groups.has(godown)) {
+      groups.set(godown, []);
+    }
+    groups.get(godown).push(allocation);
+  }
+
+  return [...groups.entries()]
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([godown, rows]) => ({ godown, rows }));
+}
+
 export function stripBlockedOrderFields(value) {
   if (Array.isArray(value)) {
     return value.map(stripBlockedOrderFields);

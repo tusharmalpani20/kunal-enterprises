@@ -5,6 +5,7 @@ import { History } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
 import { BackButton, FeedbackPressable, GroupLogo, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
+import { groupGodownAllocationsForMobile } from '../../src/domain/profileHistoryFlow.mjs';
 import { colors, styles } from '../../src/styles/appStyles';
 
 type DetailView = 'overall' | 'godown';
@@ -21,12 +22,14 @@ export default function DetailScreen() {
     return map;
   }, [orderDetail]);
 
+  const godownRows = orderDetail?.godown_allocations || [];
+  const godownGroups = useMemo(() => groupGodownAllocationsForMobile(godownRows), [godownRows]);
+
   if (!orderDetail) {
     return <AppShell>{null}</AppShell>;
   }
 
   const overallRows = orderDetail.items || [];
-  const godownRows = orderDetail.godown_allocations || [];
 
   return (
     <AppShell>
@@ -37,20 +40,24 @@ export default function DetailScreen() {
         <Text style={styles.rowDetail}>Placed by {orderDetail.placed_by_label || orderDetail.placed_by || 'You'}</Text>
         <View style={styles.segmentedControl}>
           <FeedbackPressable
-            style={[styles.segmentedButton, detailView === 'overall' && styles.segmentedButtonActive]}
+            style={styles.segmentedButtonPressable}
             pressedStyle={detailView === 'overall' ? styles.segmentedButtonActive : styles.buttonPressed}
             rippleColor={detailView === 'overall' ? colors.primaryPressed : '#eeeeee'}
             onPress={() => setDetailView('overall')}
           >
-            <Text style={[styles.segmentedButtonText, detailView === 'overall' && styles.segmentedButtonTextActive]}>Overall</Text>
+            <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'overall' && styles.segmentedButtonActive]}>
+              <Text style={[styles.segmentedButtonText, detailView === 'overall' && styles.segmentedButtonTextActive]}>Overall</Text>
+            </View>
           </FeedbackPressable>
           <FeedbackPressable
-            style={[styles.segmentedButton, detailView === 'godown' && styles.segmentedButtonActive]}
+            style={styles.segmentedButtonPressable}
             pressedStyle={detailView === 'godown' ? styles.segmentedButtonActive : styles.buttonPressed}
             rippleColor={detailView === 'godown' ? colors.primaryPressed : '#eeeeee'}
             onPress={() => setDetailView('godown')}
           >
-            <Text style={[styles.segmentedButtonText, detailView === 'godown' && styles.segmentedButtonTextActive]}>Godown Summary</Text>
+            <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'godown' && styles.segmentedButtonActive]}>
+              <Text style={[styles.segmentedButtonText, detailView === 'godown' && styles.segmentedButtonTextActive]}>Godown Summary</Text>
+            </View>
           </FeedbackPressable>
         </View>
         {detailView === 'overall' ? (
@@ -73,19 +80,31 @@ export default function DetailScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.rowDetail}>No godown summary is available for this order.</Text>
             </View>
-          ) : godownRows.map((allocation) => {
-            const itemName = allocation.item_name || itemNameById.get(allocation.item) || allocation.item;
-            return (
-              <View key={`${allocation.item}:${allocation.godown}`} style={styles.summaryLine}>
-                <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(allocation.item))} size={24} fallbackLabel={itemName} style={styles.itemRowLogo} />
-                <View style={styles.summaryItemText}>
-                  <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{itemName}</Text>
-                  <Text style={styles.rowDetail}>{godownRowDetail(allocation)}</Text>
-                </View>
-                <Text style={styles.quantity}>{allocation.requested_quantity}</Text>
+          ) : godownGroups.map((group, groupIndex) => (
+            <View key={group.godown} style={styles.godownGroup}>
+              <View style={styles.godownGroupHeader}>
+                <Text style={styles.godownGroupTitle}>{group.godown}</Text>
+                <Text style={styles.godownGroupTotal}>
+                  {group.rows.reduce((total, row) => total + Number(row.requested_quantity || 0), 0)} total
+                </Text>
               </View>
-            );
-          })
+              {group.rows.map((allocation, rowIndex) => {
+                const itemName = allocation.item_name || itemNameById.get(allocation.item) || allocation.item;
+                const isLastRow = rowIndex === group.rows.length - 1;
+                return (
+                  <View key={`${allocation.item}:${allocation.godown}`} style={[styles.summaryLine, isLastRow && { borderBottomWidth: 0 }]}>
+                    <GroupLogo logoUrl={resolveLogoUrl(logoForItemName(allocation.item))} size={24} fallbackLabel={itemName} style={styles.itemRowLogo} />
+                    <View style={styles.summaryItemText}>
+                      <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{itemName}</Text>
+                      <Text style={styles.rowDetail}>{godownRowDetail(allocation)}</Text>
+                    </View>
+                    <Text style={styles.quantity}>{allocation.requested_quantity}</Text>
+                  </View>
+                );
+              })}
+              {groupIndex < godownGroups.length - 1 && <View style={styles.godownGroupDivider} />}
+            </View>
+          ))
         )}
       </Workspace>
     </AppShell>
@@ -108,13 +127,11 @@ function overallRowDetail(item: {
 }
 
 function godownRowDetail(allocation: {
-  godown: string;
   unit?: string;
   pending_quantity?: number;
   fulfilled_quantity?: number;
 }) {
   return [
-    allocation.godown,
     allocation.unit,
     quantityStatus(allocation),
   ].filter(Boolean).join('\n');
