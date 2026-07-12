@@ -13,8 +13,10 @@ def execute():
 		FROM `tabTally Stock Snapshot` snapshot
 		INNER JOIN `tabTally Item` item ON item.name = snapshot.item
 		INNER JOIN `tabTally Godown` godown ON godown.name = snapshot.godown
-		WHERE COALESCE(snapshot.tally_snapshot_key, '') = ''
-		GROUP BY item.tally_guid, godown.tally_guid
+			WHERE COALESCE(snapshot.tally_snapshot_key, '') = ''
+				AND COALESCE(item.tally_guid, '') != ''
+				AND COALESCE(godown.tally_guid, '') != ''
+			GROUP BY item.tally_guid, godown.tally_guid
 		HAVING COUNT(*) > 1
 		""",
 		pluck=True,
@@ -33,8 +35,10 @@ def execute():
 		INNER JOIN `tabTally Godown` godown ON godown.name = snapshot.godown
 		INNER JOIN `tabTally Stock Snapshot` keyed
 			ON keyed.tally_snapshot_key = CONCAT(item.tally_guid, ':', godown.tally_guid)
-		WHERE COALESCE(snapshot.tally_snapshot_key, '') = ''
-		""",
+			WHERE COALESCE(snapshot.tally_snapshot_key, '') = ''
+				AND COALESCE(item.tally_guid, '') != ''
+				AND COALESCE(godown.tally_guid, '') != ''
+			""",
 		pluck=True,
 	)
 	if existing_collisions:
