@@ -1,4 +1,4 @@
-export const LOCAL_BASE_URL = 'http://10.50.69.198:8000';
+export const LOCAL_BASE_URL = 'http://127.0.0.1:8000';
 export const REMOTE_BASE_URL = 'https://ke-dev.hopnet.co.in';
 
 export const isDevEnvironment = process.env.NODE_ENV !== 'production';
