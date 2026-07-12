@@ -1,7 +1,7 @@
 frappe.ui.form.on("Customer", {
 	refresh(frm) {
 		set_customer_read_only_fields(frm);
-		set_root_product_group_query(frm);
+		set_active_product_group_query(frm);
 
 		if (!frm.is_new() && frm.doc.mobile_verified) {
 			add_customer_access_buttons(frm);
@@ -15,10 +15,9 @@ function set_customer_read_only_fields(frm) {
 	});
 }
 
-function set_root_product_group_query(frm) {
+function set_active_product_group_query(frm) {
 	frm.set_query("product_group", "product_group_access", () => ({
 		filters: {
-			is_root: 1,
 			is_active: 1,
 		},
 	}));
