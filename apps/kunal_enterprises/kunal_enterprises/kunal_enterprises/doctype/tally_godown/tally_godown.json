@@ -25,7 +25,8 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Tally GUID",
-   "read_only": 1
+   "read_only": 1,
+   "unique": 1
   },
   {
    "default": "1",

@@ -14,6 +14,7 @@
   "uom",
   "as_on_date",
   "source_company",
+  "source_snapshot_id",
   "synced_at",
   "source_sync_run"
  ],
@@ -30,7 +31,8 @@
    "fieldname": "tally_snapshot_key",
    "fieldtype": "Data",
    "label": "Tally Snapshot Key",
-   "read_only": 1
+   "read_only": 1,
+   "unique": 1
   },
   {
    "fieldname": "godown",
@@ -63,9 +65,15 @@
    "label": "Source Company"
   },
   {
+   "fieldname": "source_snapshot_id",
+   "fieldtype": "Data",
+   "label": "Source Snapshot ID",
+   "read_only": 1
+  },
+  {
    "fieldname": "synced_at",
    "fieldtype": "Datetime",
-   "label": "Synced At"
+   "label": "Last Synced On"
   },
   {
    "fieldname": "source_sync_run",

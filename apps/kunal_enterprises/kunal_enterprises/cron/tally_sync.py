@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 
 import frappe
 from frappe.model.rename_doc import rename_doc
@@ -87,8 +88,24 @@ def _sync_tally_masters(records=None):
 	return run
 
 
-def sync_stock_snapshots(records=None, source_table=STOCK_SNAPSHOT_SOURCE_TABLE):
+def sync_stock_snapshots(
+	records=None,
+	source_table=STOCK_SNAPSHOT_SOURCE_TABLE,
+	snapshot_metadata=None,
+	reconcile_missing=False,
+):
+	lock_name = "kunal_enterprises:tally_stock_sync"
+	if not _acquire_sync_lock(lock_name):
+		frappe.throw("Tally stock sync is already running")
+	try:
+		return _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_missing)
+	finally:
+		_release_sync_lock(lock_name)
+
+
+def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_missing):
 	started_at = now_datetime()
+	snapshot_metadata = snapshot_metadata or {}
 	run = frappe.get_doc(
 		{
 			"doctype": "Tally Sync Run",
@@ -103,18 +120,56 @@ def sync_stock_snapshots(records=None, source_table=STOCK_SNAPSHOT_SOURCE_TABLE)
 	records = list(records or [])
 	processed = 0
 	errors = 0
+	processed_keys = set()
+	records_zeroed = 0
+	quantities = []
+	atomic_snapshot = bool(snapshot_metadata.get("snapshot_complete"))
+	savepoint = "tally_complete_stock_snapshot"
+	row_errors = []
+	if atomic_snapshot:
+		frappe.db.savepoint(savepoint)
 
 	for record in records:
+		raw_quantity = record.get("quantity")
+		if raw_quantity not in (None, ""):
+			try:
+				quantity = float(raw_quantity)
+				if math.isfinite(quantity):
+					quantities.append(quantity)
+			except (TypeError, ValueError):
+				pass
 		try:
-			_upsert_stock_snapshot(record, run.name)
+			processed_keys.add(_upsert_stock_snapshot(record, run.name))
 			processed += 1
 		except Exception as error:
 			errors += 1
+			if atomic_snapshot:
+				row_errors.append((record, error))
+			else:
+				_log_sync_error(run.name, record, error, source_table)
+
+	if atomic_snapshot and row_errors:
+		frappe.db.rollback(save_point=savepoint)
+		processed = 0
+		processed_keys.clear()
+		for record, error in row_errors:
 			_log_sync_error(run.name, record, error, source_table)
+	elif atomic_snapshot:
+		frappe.db.release_savepoint(savepoint)
+
+	if reconcile_missing and not errors and snapshot_metadata.get("snapshot_complete"):
+		records_zeroed = _reconcile_missing_stock_snapshots(run.name, processed_keys, snapshot_metadata, started_at)
 
 	run.records_seen = len(records)
 	run.records_processed = processed
 	run.errors_count = errors
+	run.negative_records = sum(1 for quantity in quantities if quantity < 0)
+	run.zero_records = sum(1 for quantity in quantities if quantity == 0)
+	run.records_zeroed = records_zeroed
+	run.source_refreshed_at = snapshot_metadata.get("source_refreshed_at")
+	run.source_as_on_date = snapshot_metadata.get("as_on_date")
+	run.source_snapshot_id = snapshot_metadata.get("snapshot_id")
+	run.snapshot_complete = int(bool(snapshot_metadata.get("snapshot_complete")))
 	run.status = "Completed" if errors == 0 else "Completed With Errors"
 	run.finished_at = now_datetime()
 	run.save(ignore_permissions=True)
@@ -156,21 +211,22 @@ def sync_tally_vouchers(records=None):
 
 
 def _upsert_stock_snapshot(record, sync_run):
-	item = record.get("item")
-	godown = record.get("godown")
-	if not item:
+	source_item = record.get("item")
+	source_godown = record.get("godown")
+	item_guid = record.get("item_guid")
+	godown_guid = record.get("godown_guid")
+	if not source_item:
 		frappe.throw("Stock snapshot row is missing item")
-	if not godown:
+	if not source_godown:
 		frappe.throw("Stock snapshot row is missing godown")
-	if not frappe.db.exists("Tally Item", item):
+	quantity = _stock_quantity(record)
+	if not item_guid and not frappe.db.exists("Tally Item", source_item):
 		if record.get("source_item_exists") is False:
-			frappe.throw(f"Stock snapshot item {item} is absent from mst_stock_item")
+			frappe.throw(f"Stock snapshot item {source_item} is absent from mst_stock_item")
 		if "source_item_parent" in record and record.get("source_item_parent") in (None, ""):
-			frappe.throw(f"Stock snapshot item {item} has blank parent in mst_stock_item")
-		frappe.throw(f"Tally Item {item} does not exist")
-	if not frappe.db.exists("Tally Godown", {"name": godown, "is_active": 1}):
-		frappe.throw(f"Tally Godown {godown} does not exist or is inactive")
-
+			frappe.throw(f"Stock snapshot item {source_item} has blank parent in mst_stock_item")
+	item = _resolve_tally_reference("Tally Item", source_item, item_guid)
+	godown = _resolve_tally_reference("Tally Godown", source_godown, godown_guid, require_active=True)
 	item_guid = frappe.db.get_value("Tally Item", item, "tally_guid")
 	godown_guid = frappe.db.get_value("Tally Godown", godown, "tally_guid")
 	if not item_guid:
@@ -195,35 +251,94 @@ def _upsert_stock_snapshot(record, sync_run):
 		"item": item,
 		"godown": godown,
 		"tally_snapshot_key": snapshot_key,
-		"quantity": float(record.get("quantity") or 0),
+		"quantity": quantity,
 		"uom": uom,
 		"as_on_date": record.get("as_on_date"),
 		"source_company": record.get("source_company"),
 		"synced_at": record.get("synced_at") or now_datetime(),
 		"source_sync_run": sync_run,
+		"source_snapshot_id": record.get("source_snapshot_id"),
 	}
 	if name:
-		if _stock_snapshot_changed(name, values):
-			frappe.db.set_value("Tally Stock Snapshot", name, values)
+		frappe.db.set_value("Tally Stock Snapshot", name, values, update_modified=False)
 	else:
 		frappe.get_doc({"doctype": "Tally Stock Snapshot", **values}).insert(ignore_permissions=True)
+	return snapshot_key
 
 
-def _stock_snapshot_changed(name, values):
-	existing = frappe.db.get_value(
-		"Tally Stock Snapshot",
-		name,
-		["quantity", "uom", "as_on_date", "source_company"],
+def _stock_quantity(record):
+	raw_quantity = record.get("quantity")
+	if raw_quantity in (None, ""):
+		frappe.throw("Stock snapshot row is missing quantity")
+	try:
+		quantity = float(raw_quantity)
+	except (TypeError, ValueError):
+		frappe.throw(f"Stock snapshot row has invalid quantity {raw_quantity!r}")
+	if not math.isfinite(quantity):
+		frappe.throw(f"Stock snapshot row has non-finite quantity {raw_quantity!r}")
+	return quantity
+
+
+def _resolve_tally_reference(doctype, source_name, source_guid=None, require_active=False):
+	if source_guid:
+		filters = {"tally_guid": source_guid}
+		if require_active:
+			filters["is_active"] = 1
+		resolved = frappe.db.get_value(doctype, filters, "name")
+		if resolved:
+			return resolved
+		status = " or is inactive" if require_active else ""
+		frappe.throw(f"{doctype} GUID {source_guid} does not exist{status} (source name: {source_name})")
+
+	filters = {"name": source_name}
+	if require_active:
+		filters["is_active"] = 1
+	if frappe.db.exists(doctype, filters):
+		return source_name
+	status = " or is inactive" if require_active else ""
+	frappe.throw(f"{doctype} {source_name} does not exist{status}")
+
+
+def _reconcile_missing_stock_snapshots(sync_run, processed_keys, snapshot_metadata, synced_at):
+	source_company = snapshot_metadata.get("source_company")
+	if not source_company:
+		frappe.throw("Cannot reconcile missing stock rows without source_company")
+	include_legacy_postgres_rows = int(snapshot_metadata.get("contract_version") == 2)
+
+	stale_rows = frappe.db.sql(
+		"""
+		select snapshot.name, snapshot.tally_snapshot_key, snapshot.quantity
+		from `tabTally Stock Snapshot` snapshot
+		left join `tabTally Sync Run` source_run on source_run.name = snapshot.source_sync_run
+		where source_run.source_table = %(source_table)s
+			and (
+				snapshot.source_company = %(source_company)s
+				or %(include_legacy_postgres_rows)s = 1
+			)
+		""",
+		{
+			"source_company": source_company,
+			"source_table": STOCK_SNAPSHOT_SOURCE_TABLE,
+			"include_legacy_postgres_rows": include_legacy_postgres_rows,
+		},
 		as_dict=True,
 	)
-	if not existing:
-		return True
-	return (
-		float(existing.quantity or 0) != float(values.get("quantity") or 0)
-		or (existing.uom or "") != (values.get("uom") or "")
-		or str(existing.as_on_date or "") != str(values.get("as_on_date") or "")
-		or (existing.source_company or "") != (values.get("source_company") or "")
-	)
+	stale_rows = [row for row in stale_rows if row.tally_snapshot_key not in processed_keys]
+	for row in stale_rows:
+		frappe.db.set_value(
+			"Tally Stock Snapshot",
+			row.name,
+			{
+				"quantity": 0,
+				"as_on_date": snapshot_metadata.get("as_on_date"),
+				"source_company": source_company,
+				"synced_at": synced_at,
+				"source_sync_run": sync_run,
+				"source_snapshot_id": snapshot_metadata.get("snapshot_id"),
+			},
+			update_modified=False,
+		)
+	return sum(1 for row in stale_rows if float(row.quantity or 0) != 0)
 
 
 def _upsert_tally_voucher(record):
@@ -285,16 +400,16 @@ def _upsert_tally_voucher(record):
 def _voucher_lines(record):
 	lines = []
 	for line in record.get("lines", []):
-		item = line.get("item")
-		godown = line.get("godown")
-		if not item:
+		source_item = line.get("item")
+		source_godown = line.get("godown")
+		if not source_item:
 			frappe.throw("Tally Voucher Line row is missing item")
-		if not godown:
+		if not source_godown:
 			frappe.throw("Tally Voucher Line row is missing godown")
-		if not frappe.db.exists("Tally Item", item):
-			frappe.throw(f"Tally Item {item} does not exist")
-		if not frappe.db.exists("Tally Godown", {"name": godown, "is_active": 1}):
-			frappe.throw(f"Tally Godown {godown} does not exist or is inactive")
+		item = _resolve_tally_reference("Tally Item", source_item, line.get("item_guid"))
+		godown = _resolve_tally_reference(
+			"Tally Godown", source_godown, line.get("godown_guid"), require_active=True
+		)
 		lines.append(
 			{
 				"item": item,
@@ -547,6 +662,8 @@ def _source_key(record):
 		return record.get("voucher_number")
 	if record.get("tally_guid"):
 		return record.get("tally_guid")
+	if record.get("item_guid") or record.get("godown_guid"):
+		return f"{record.get('item_guid') or '<missing-item-guid>'}:{record.get('godown_guid') or '<missing-godown-guid>'}"
 	item = record.get("item") or "<missing-item>"
 	godown = record.get("godown") or "<missing-godown>"
 	return f"{item}:{godown}"

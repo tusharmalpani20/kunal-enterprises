@@ -14,6 +14,13 @@
   "records_seen",
   "records_processed",
   "errors_count",
+  "negative_records",
+  "zero_records",
+  "records_zeroed",
+  "source_refreshed_at",
+  "source_as_on_date",
+  "source_snapshot_id",
+  "snapshot_complete",
   "source_table"
  ],
  "fields": [
@@ -63,6 +70,49 @@
    "fieldname": "errors_count",
    "fieldtype": "Int",
    "label": "Errors Count"
+  },
+  {
+   "default": "0",
+   "fieldname": "negative_records",
+   "fieldtype": "Int",
+   "label": "Negative Records"
+  },
+  {
+   "default": "0",
+   "fieldname": "zero_records",
+   "fieldtype": "Int",
+   "label": "Zero Records"
+  },
+  {
+   "default": "0",
+   "fieldname": "records_zeroed",
+   "fieldtype": "Int",
+   "label": "Missing Records Set To Zero"
+  },
+  {
+   "fieldname": "source_refreshed_at",
+   "fieldtype": "Datetime",
+   "label": "Source Refreshed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_as_on_date",
+   "fieldtype": "Date",
+   "label": "Stock As On Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_snapshot_id",
+   "fieldtype": "Data",
+   "label": "Source Snapshot ID",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "snapshot_complete",
+   "fieldtype": "Check",
+   "label": "Source Snapshot Complete",
+   "read_only": 1
   },
   {
    "fieldname": "source_table",

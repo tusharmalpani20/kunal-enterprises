@@ -2,6 +2,7 @@ import json
 import inspect
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -34,7 +35,13 @@ from kunal_enterprises.kunal_enterprises.doctype.tally_customer_ledger.tally_cus
 from kunal_enterprises.cron.tally_sync import sync_stock_snapshots
 from kunal_enterprises.cron.tally_sync import sync_tally_masters
 from kunal_enterprises.cron.tally_sync import sync_tally_vouchers
-from kunal_enterprises.integrations.tally_postgres import _build_dev_stock_snapshot_rows, seed_dev_stock_snapshots
+from kunal_enterprises.integrations.tally_postgres import (
+	STOCK_SNAPSHOT_V2_COLUMNS,
+	_build_dev_stock_snapshot_rows,
+	_fetch_stock_snapshots,
+	_validate_stock_snapshot_contract,
+	seed_dev_stock_snapshots,
+)
 from kunal_enterprises import hooks
 from kunal_enterprises.permission_query_conditions.orders import get_permission_query_conditions as order_permission_query
 from kunal_enterprises.permission_query_conditions.orders import has_permission as order_has_permission
@@ -4301,6 +4308,38 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(voucher.lines[0].quantity, 4)
 		self.assertFalse(voucher.reconciled)
 
+	def test_voucher_sync_resolves_item_and_godown_names_by_guid(self):
+		product_group = self._create_product_group("Voucher GUID PG")
+		item = self._create_item("Canonical Voucher GUID Item", product_group.name)
+		godown = self._create_godown("Canonical Voucher GUID Godown")
+
+		with patch.object(frappe.db, "commit"):
+			run = sync_tally_vouchers(
+				[
+					{
+						"voucher_type": "Sales Invoice",
+						"voucher_number": "SI-GUID-RESOLUTION-001",
+						"reference_number": "KE-26-08-0001",
+						"party_client_code": "SYNC-CUSTOMER-GUID",
+						"voucher_date": "2026-08-17",
+						"lines": [
+							{
+								"item": "Differently Spaced Voucher Item",
+								"item_guid": item.tally_guid,
+								"godown": "Differently Spaced Voucher Godown",
+								"godown_guid": godown.tally_guid,
+								"quantity": 3,
+							}
+						],
+					}
+				]
+			)
+
+		voucher = frappe.get_doc("Tally Voucher", "SI-GUID-RESOLUTION-001")
+		self.assertEqual(run.status, "Completed")
+		self.assertEqual(voucher.lines[0].item, item.name)
+		self.assertEqual(voucher.lines[0].godown, godown.name)
+
 	def test_owner_manual_voucher_sync_action_wraps_voucher_job(self):
 		product_group = self._create_product_group("Manual Voucher Sync PG")
 		item = self._create_item("Manual Voucher Sync Item", product_group.name)
@@ -4438,6 +4477,338 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(run.errors_count, 0)
 		self.assertEqual(snapshot.quantity, 8)
 		self.assertEqual(snapshot.source_sync_run, run.name)
+
+	def test_stock_snapshot_sync_resolves_names_by_guid_and_preserves_negative_quantity(self):
+		product_group = self._create_product_group("Negative GUID PG")
+		item = self._create_item("Canonical Negative Item", product_group.name)
+		godown = self._create_godown("Canonical Negative Godown")
+
+		with patch.object(frappe.db, "commit"):
+			run = sync_stock_snapshots(
+				[
+					{
+						"item": "Differently Spaced Negative Item",
+						"item_guid": item.tally_guid,
+						"godown": "Differently Spaced Negative Godown",
+						"godown_guid": godown.tally_guid,
+						"quantity": -7.5,
+						"uom": "PCS",
+						"as_on_date": "2026-08-17",
+						"source_company": "Kunal Test Company",
+						"source_snapshot_id": "negative-snapshot-001",
+					}
+				]
+			)
+
+		snapshot = frappe.get_doc("Tally Stock Snapshot", f"{item.name}-{godown.name}")
+		self.assertEqual(run.status, "Completed")
+		self.assertEqual(run.negative_records, 1)
+		self.assertEqual(snapshot.item, item.name)
+		self.assertEqual(snapshot.godown, godown.name)
+		self.assertEqual(snapshot.quantity, -7.5)
+		self.assertEqual(snapshot.as_on_date.strftime("%Y-%m-%d"), "2026-08-17")
+		self.assertEqual(snapshot.source_snapshot_id, "negative-snapshot-001")
+
+	def test_complete_stock_snapshot_sets_missing_previous_pairs_to_zero(self):
+		product_group = self._create_product_group("Complete Snapshot PG")
+		item_a = self._create_item("Complete Snapshot Item A", product_group.name)
+		item_b = self._create_item("Complete Snapshot Item B", product_group.name)
+		godown = self._create_godown("Complete Snapshot Godown")
+		company = "Complete Snapshot Company"
+
+		def stock_row(item, quantity, snapshot_id):
+			return {
+				"item": item.name,
+				"item_guid": item.tally_guid,
+				"godown": godown.name,
+				"godown_guid": godown.tally_guid,
+				"quantity": quantity,
+				"uom": "PCS",
+				"as_on_date": "2026-08-17",
+				"source_company": company,
+				"source_snapshot_id": snapshot_id,
+			}
+
+		with patch.object(frappe.db, "commit"):
+			sync_stock_snapshots([stock_row(item_a, 5, "complete-001"), stock_row(item_b, 9, "complete-001")])
+			run = sync_stock_snapshots(
+				[stock_row(item_a, 6, "complete-002")],
+				snapshot_metadata={
+					"snapshot_id": "complete-002",
+					"source_company": company,
+					"as_on_date": "2026-08-17",
+					"snapshot_complete": True,
+				},
+				reconcile_missing=True,
+			)
+
+		item_b_quantity = frappe.db.get_value(
+			"Tally Stock Snapshot", {"item": item_b.name, "godown": godown.name}, "quantity"
+		)
+		self.assertEqual(run.status, "Completed")
+		self.assertEqual(run.records_zeroed, 1)
+		self.assertEqual(item_b_quantity, 0)
+
+	def test_incomplete_stock_sync_does_not_zero_missing_previous_pairs(self):
+		product_group = self._create_product_group("Guarded Snapshot PG")
+		item = self._create_item("Guarded Snapshot Item", product_group.name)
+		godown = self._create_godown("Guarded Snapshot Godown")
+		company = "Guarded Snapshot Company"
+		base_row = {
+			"item": item.name,
+			"item_guid": item.tally_guid,
+			"godown": godown.name,
+			"godown_guid": godown.tally_guid,
+			"quantity": 11,
+			"source_company": company,
+			"source_snapshot_id": "guarded-001",
+		}
+		with patch.object(frappe.db, "commit"):
+			sync_stock_snapshots([base_row])
+
+			run = sync_stock_snapshots(
+				[
+					{
+						"item": "Unknown Source Item",
+						"item_guid": "UNKNOWN-ITEM-GUID",
+						"godown": godown.name,
+						"godown_guid": godown.tally_guid,
+						"quantity": 1,
+						"source_company": company,
+					}
+				],
+				snapshot_metadata={
+					"snapshot_id": "guarded-002",
+					"source_company": company,
+					"as_on_date": "2026-08-17",
+					"snapshot_complete": True,
+				},
+				reconcile_missing=True,
+			)
+
+		quantity = frappe.db.get_value(
+			"Tally Stock Snapshot", {"item": item.name, "godown": godown.name}, "quantity"
+		)
+		self.assertEqual(run.status, "Completed With Errors")
+		self.assertEqual(run.records_zeroed, 0)
+		self.assertEqual(quantity, 11)
+
+	def test_complete_stock_contract_rejects_mismatched_row_metadata(self):
+		state = {
+			"snapshot_id": "contract-001",
+			"source_company": "Kunal Test Company",
+			"as_on_date": "2026-08-17",
+			"source_refreshed_at": "2026-08-17 18:10:00",
+			"raw_rows": 1,
+			"accepted_rows": 1,
+			"positive_rows": 1,
+			"negative_rows": 0,
+			"zero_rows": 0,
+			"rejected_rows": 0,
+			"snapshot_complete": True,
+		}
+
+		with self.assertRaisesRegex(frappe.ValidationError, "source_snapshot_id"):
+			_validate_stock_snapshot_contract(
+				[
+					{
+						"item": "Contract Item",
+						"item_guid": "contract-item-guid",
+						"godown": "Contract Godown",
+						"godown_guid": "contract-godown-guid",
+						"source_snapshot_id": "different-snapshot",
+						"source_company": "Kunal Test Company",
+						"as_on_date": "2026-08-17",
+					}
+				],
+				state,
+			)
+
+	def test_complete_stock_contract_rejects_inconsistent_stored_metrics(self):
+		state = {
+			"snapshot_id": "contract-002",
+			"source_company": "Kunal Test Company",
+			"as_on_date": "2026-08-17",
+			"source_refreshed_at": "2026-08-17 18:10:00",
+			"raw_rows": 2,
+			"accepted_rows": 2,
+			"positive_rows": 1,
+			"negative_rows": 1,
+			"zero_rows": 0,
+			"rejected_rows": 0,
+			"snapshot_complete": True,
+			"contract_version": 2,
+		}
+		integrity = {
+			"stored_rows": 1,
+			"positive_rows": 1,
+			"negative_rows": 0,
+			"zero_rows": 0,
+			"invalid_quantity_rows": 0,
+			"invalid_identity_rows": 0,
+			"mismatched_metadata_rows": 0,
+		}
+
+		with self.assertRaisesRegex(frappe.ValidationError, "stored row count"):
+			_validate_stock_snapshot_contract([], state, integrity)
+
+	def test_complete_stock_snapshot_rolls_back_all_rows_when_one_guid_is_unknown(self):
+		product_group = self._create_product_group("Atomic Snapshot PG")
+		item = self._create_item("Atomic Snapshot Item", product_group.name)
+		godown = self._create_godown("Atomic Snapshot Godown")
+		company = "Atomic Snapshot Company"
+		base_row = {
+			"item": item.name,
+			"item_guid": item.tally_guid,
+			"godown": godown.name,
+			"godown_guid": godown.tally_guid,
+			"quantity": 5,
+			"source_company": company,
+			"source_snapshot_id": "atomic-001",
+			"as_on_date": "2026-08-17",
+		}
+
+		with patch.object(frappe.db, "commit"):
+			sync_stock_snapshots([base_row])
+			run = sync_stock_snapshots(
+				[
+					{**base_row, "quantity": 9, "source_snapshot_id": "atomic-002"},
+					{
+						**base_row,
+						"item": "Unknown Atomic Item",
+						"item_guid": "unknown-atomic-item-guid",
+						"quantity": 1,
+						"source_snapshot_id": "atomic-002",
+					},
+				],
+				snapshot_metadata={
+					"snapshot_id": "atomic-002",
+					"source_company": company,
+					"as_on_date": "2026-08-17",
+					"snapshot_complete": True,
+				},
+				reconcile_missing=True,
+			)
+
+		quantity = frappe.db.get_value(
+			"Tally Stock Snapshot", {"item": item.name, "godown": godown.name}, "quantity"
+		)
+		self.assertEqual(run.status, "Completed With Errors")
+		self.assertEqual(run.records_processed, 0)
+		self.assertEqual(run.errors_count, 1)
+		self.assertEqual(run.records_zeroed, 0)
+		self.assertEqual(quantity, 5)
+
+	def test_first_complete_snapshot_reconciles_legacy_postgres_rows_but_not_excel_rows(self):
+		product_group = self._create_product_group("Legacy Reconciliation PG")
+		current_item = self._create_item("Legacy Reconciliation Current Item", product_group.name)
+		legacy_item = self._create_item("Legacy Reconciliation Stale Item", product_group.name)
+		excel_item = self._create_item("Legacy Reconciliation Excel Item", product_group.name)
+		godown = self._create_godown("Legacy Reconciliation Godown")
+
+		def stock_row(item, quantity, source_company=None, snapshot_id=None):
+			return {
+				"item": item.name,
+				"item_guid": item.tally_guid,
+				"godown": godown.name,
+				"godown_guid": godown.tally_guid,
+				"quantity": quantity,
+				"source_company": source_company,
+				"source_snapshot_id": snapshot_id,
+				"as_on_date": "2026-08-17",
+			}
+
+		with patch.object(frappe.db, "commit"):
+			sync_stock_snapshots([stock_row(legacy_item, 7, "Previous Company")])
+			sync_stock_snapshots(
+				[stock_row(excel_item, 8, "Kunal Test Company")], source_table="tally_stock_excel"
+			)
+			run = sync_stock_snapshots(
+				[stock_row(current_item, 3, "Kunal Test Company", "legacy-migration-001")],
+				snapshot_metadata={
+					"snapshot_id": "legacy-migration-001",
+					"source_company": "Kunal Test Company",
+					"as_on_date": "2026-08-17",
+					"snapshot_complete": True,
+					"contract_version": 2,
+				},
+				reconcile_missing=True,
+			)
+
+		legacy_quantity = frappe.db.get_value(
+			"Tally Stock Snapshot", {"item": legacy_item.name, "godown": godown.name}, "quantity"
+		)
+		excel_quantity = frappe.db.get_value(
+			"Tally Stock Snapshot", {"item": excel_item.name, "godown": godown.name}, "quantity"
+		)
+		self.assertGreaterEqual(run.records_zeroed, 1)
+		self.assertEqual(legacy_quantity, 0)
+		self.assertEqual(excel_quantity, 8)
+
+	def test_complete_stock_contract_rejects_empty_snapshot(self):
+		state = {
+			"snapshot_id": "empty-contract-001",
+			"source_company": "Kunal Test Company",
+			"as_on_date": "2026-08-17",
+			"source_refreshed_at": "2026-08-17 18:10:00",
+			"raw_rows": 0,
+			"accepted_rows": 0,
+			"positive_rows": 0,
+			"negative_rows": 0,
+			"zero_rows": 0,
+			"rejected_rows": 0,
+			"snapshot_complete": True,
+			"contract_version": 2,
+		}
+		integrity = {
+			"stored_rows": 0,
+			"positive_rows": 0,
+			"negative_rows": 0,
+			"zero_rows": 0,
+			"invalid_quantity_rows": 0,
+			"invalid_identity_rows": 0,
+			"mismatched_metadata_rows": 0,
+		}
+
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be empty"):
+			_validate_stock_snapshot_contract([], state, integrity)
+
+	def test_legacy_stock_contract_is_not_inferred_from_extended_columns(self):
+		with (
+			patch(
+				"kunal_enterprises.integrations.tally_postgres._table_columns",
+				return_value=set(STOCK_SNAPSHOT_V2_COLUMNS),
+			),
+			patch("kunal_enterprises.integrations.tally_postgres._fetch_all", return_value=[]) as fetch_all,
+		):
+			self.assertEqual(_fetch_stock_snapshots(object(), contract_version=1), [])
+
+		query = str(fetch_all.call_args.args[1])
+		self.assertIn("group by item, godown", query)
+		self.assertNotIn("snapshot.item_guid", query)
+
+	def test_invalid_stock_quantity_is_logged_without_breaking_run_metrics(self):
+		product_group = self._create_product_group("Invalid Quantity PG")
+		item = self._create_item("Invalid Quantity Item", product_group.name)
+		godown = self._create_godown("Invalid Quantity Godown")
+
+		with patch.object(frappe.db, "commit"):
+			run = sync_stock_snapshots(
+				[
+					{
+						"item": item.name,
+						"item_guid": item.tally_guid,
+						"godown": godown.name,
+						"godown_guid": godown.tally_guid,
+						"quantity": "invalid",
+					}
+				]
+			)
+
+		self.assertEqual(run.status, "Completed With Errors")
+		self.assertEqual(run.errors_count, 1)
+		self.assertEqual(run.negative_records, 0)
+		self.assertEqual(run.zero_records, 0)
 
 	def test_stock_snapshot_sync_logs_bad_rows_without_dropping_good_rows(self):
 		product_group = self._create_product_group("Sync Error PG")

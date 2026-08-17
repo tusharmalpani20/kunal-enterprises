@@ -14,6 +14,21 @@ from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_m
 
 DEFAULT_SCHEMA = "public"
 STOCK_SNAPSHOT_TABLE = "stock_godown_summary"
+STOCK_SNAPSHOT_STATE_TABLE = "stock_godown_summary_state"
+STOCK_SNAPSHOT_V2_COLUMNS = frozenset(
+	{
+		"item",
+		"item_guid",
+		"godown",
+		"godown_guid",
+		"closing_qty",
+		"row_type",
+		"as_on_date",
+		"source_company",
+		"source_snapshot_id",
+		"imported_at",
+	}
+)
 
 
 def import_all(voucher_limit=None, run_reconciliation_after=True):
@@ -45,13 +60,33 @@ def import_masters():
 
 def import_stock_snapshots():
 	with _connect() as connection:
+		connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
 		if not _table_exists(connection, STOCK_SNAPSHOT_TABLE):
 			return {
 				"status": "Skipped",
 				"reason": f"{STOCK_SNAPSHOT_TABLE} table not found in Tally PostgreSQL mirror",
 			}
-		run = sync_stock_snapshots(_fetch_stock_snapshots(connection))
-		return _serialize_run(run)
+		snapshot_state = _fetch_stock_snapshot_state(connection)
+		if snapshot_state.get("contract_version") == 2 and not snapshot_state.get("snapshot_complete"):
+			return {
+				"status": "Skipped",
+				"reason": "Tally PostgreSQL stock snapshot is not marked complete",
+			}
+		integrity = None
+		if snapshot_state.get("contract_version") == 2:
+			missing_columns = sorted(STOCK_SNAPSHOT_V2_COLUMNS - _table_columns(connection, STOCK_SNAPSHOT_TABLE))
+			if missing_columns:
+				frappe.throw(f"Tally stock snapshot v2 table is missing columns: {', '.join(missing_columns)}")
+			if snapshot_state.get("snapshot_complete"):
+				integrity = _fetch_stock_snapshot_integrity(connection, snapshot_state)
+		records = _fetch_stock_snapshots(connection, contract_version=snapshot_state.get("contract_version"))
+		_validate_stock_snapshot_contract(records, snapshot_state, integrity)
+	run = sync_stock_snapshots(
+		records,
+		snapshot_metadata=snapshot_state,
+		reconcile_missing=bool(snapshot_state.get("snapshot_complete")),
+	)
+	return _serialize_run(run)
 
 
 def ensure_stock_snapshot_table():
@@ -63,16 +98,39 @@ def ensure_stock_snapshot_table():
 					"""
 					create table if not exists {} (
 						item text,
+						item_guid text,
 						godown text,
+						godown_guid text,
 						closing_qty numeric,
 						uom text,
 						closing_rate numeric,
 						closing_value numeric,
-						imported_at timestamp with time zone
+						stock_group text,
+						batch_name text,
+						row_type text not null default 'GODOWN',
+						as_on_date date,
+						source_company text,
+						source_snapshot_id text,
+						imported_at timestamp with time zone default now()
 					)
 					"""
 				).format(_table(STOCK_SNAPSHOT_TABLE))
 			)
+			for column_name, definition in (
+				("item_guid", "text"),
+				("godown_guid", "text"),
+				("stock_group", "text"),
+				("batch_name", "text"),
+				("row_type", "text not null default 'GODOWN'"),
+				("as_on_date", "date"),
+				("source_company", "text"),
+				("source_snapshot_id", "text"),
+			):
+				cursor.execute(
+					sql.SQL("alter table {} add column if not exists {} {}").format(
+						_table(STOCK_SNAPSHOT_TABLE), sql.Identifier(column_name), sql.SQL(definition)
+					)
+				)
 		connection.commit()
 		return {
 			"status": "Ready",
@@ -96,14 +154,14 @@ def seed_dev_stock_snapshots(
 	items = frappe.get_all(
 		"Tally Item",
 		filters={"is_active": 1},
-		fields=["name", "uom"],
+		fields=["name", "uom", "tally_guid"],
 		order_by="name asc",
 		limit_page_length=int(limit or 5000),
 	)
 	godowns = frappe.get_all(
 		"Tally Godown",
 		filters={"is_active": 1},
-		pluck="name",
+		fields=["name", "tally_guid"],
 		order_by="name asc",
 	)
 	rows = _build_dev_stock_snapshot_rows(
@@ -132,9 +190,15 @@ def seed_dev_stock_snapshots(
 						sql.SQL("delete from {} where item = any(%s)").format(_table(STOCK_SNAPSHOT_TABLE)),
 						(batch,),
 					)
+			item_guids = {item["name"]: item.get("tally_guid") for item in items}
+			godown_guids = {godown["name"]: godown.get("tally_guid") for godown in godowns}
+			inserted_at = now_datetime()
 			insert_query = sql.SQL(
 				"""
-				insert into {} (item, godown, closing_qty, uom, closing_rate, closing_value, imported_at)
+				insert into {} (
+					item, item_guid, godown, godown_guid, closing_qty, uom,
+					closing_rate, closing_value, as_on_date, imported_at
+				)
 				values %s
 				"""
 			).format(_table(STOCK_SNAPSHOT_TABLE)).as_string(connection)
@@ -145,12 +209,15 @@ def seed_dev_stock_snapshots(
 					[
 						(
 							row["item"],
+							item_guids.get(row["item"]),
 							row["godown"],
+							godown_guids.get(row["godown"]),
 							row["quantity"],
 							row["uom"],
 							0,
 							0,
 							row["as_on_date"],
+							inserted_at,
 						)
 						for row in batch
 					],
@@ -187,6 +254,7 @@ def diagnose():
 			"trn_voucher",
 			"trn_inventory",
 			STOCK_SNAPSHOT_TABLE,
+			STOCK_SNAPSHOT_STATE_TABLE,
 		]
 		table_status = {}
 		for table in tables:
@@ -278,6 +346,19 @@ def _table_exists(connection, table_name):
 def _table_count(connection, table_name):
 	rows = _fetch_all(connection, sql.SQL("select count(*) as count from {}").format(_table(table_name)))
 	return rows[0]["count"]
+
+
+def _table_columns(connection, table_name):
+	rows = _fetch_all(
+		connection,
+		"""
+		select column_name
+		from information_schema.columns
+		where table_schema = %s and table_name = %s
+		""",
+		[_schema(), table_name],
+	)
+	return {row["column_name"] for row in rows}
 
 
 def _voucher_filter_count(connection):
@@ -440,10 +521,45 @@ def _fetch_customer_ledgers(connection):
 	]
 
 
-def _fetch_stock_snapshots(connection):
-	rows = _fetch_all(
-		connection,
-		sql.SQL(
+def _fetch_stock_snapshots(connection, contract_version=None):
+	columns = _table_columns(connection, STOCK_SNAPSHOT_TABLE)
+	has_v2_identity = (
+		contract_version == 2
+		if contract_version is not None
+		else STOCK_SNAPSHOT_V2_COLUMNS.issubset(columns)
+	)
+	if has_v2_identity:
+		rows = _fetch_all(
+			connection,
+			sql.SQL(
+				"""
+				select
+					max(snapshot.item) as item,
+					max(snapshot.item_guid) as item_guid,
+					max(snapshot.godown) as godown,
+					max(snapshot.godown_guid) as godown_guid,
+					sum(coalesce(snapshot.closing_qty, 0)) as quantity,
+					max(snapshot.uom) as uom,
+					max(snapshot.as_on_date) as as_on_date,
+					max(snapshot.source_company) as source_company,
+					max(snapshot.source_snapshot_id) as source_snapshot_id,
+					max(snapshot.imported_at) as source_refreshed_at,
+					max(master.name) as source_item_name,
+					max(master.parent) as source_item_parent
+				from {} snapshot
+				left join {} master on master.guid = snapshot.item_guid
+				where coalesce(snapshot.item, '') != ''
+					and coalesce(snapshot.godown, '') != ''
+				group by
+					coalesce(nullif(snapshot.item_guid, ''), concat('name:', snapshot.item)),
+					coalesce(nullif(snapshot.godown_guid, ''), concat('name:', snapshot.godown))
+				"""
+			).format(_table(STOCK_SNAPSHOT_TABLE), _table("mst_stock_item")),
+		)
+	else:
+		rows = _fetch_all(
+			connection,
+			sql.SQL(
 				"""
 				select
 					snapshot.item,
@@ -451,6 +567,7 @@ def _fetch_stock_snapshots(connection):
 					snapshot.quantity,
 					snapshot.uom,
 					snapshot.as_on_date,
+					snapshot.source_refreshed_at,
 					master.name as source_item_name,
 					master.parent as source_item_parent
 				from (
@@ -459,7 +576,8 @@ def _fetch_stock_snapshots(connection):
 						godown,
 						sum(coalesce(closing_qty, 0)) as quantity,
 						max(uom) as uom,
-						max(imported_at)::date as as_on_date
+						max(imported_at)::date as as_on_date,
+						max(imported_at) as source_refreshed_at
 					from {}
 					where coalesce(item, '') != '' and coalesce(godown, '') != ''
 					group by item, godown
@@ -467,20 +585,149 @@ def _fetch_stock_snapshots(connection):
 				left join {} master on master.name = snapshot.item
 				"""
 			).format(_table(STOCK_SNAPSHOT_TABLE), _table("mst_stock_item")),
-	)
+		)
+
 	return [
 		{
 			"item": row["item"],
+			"item_guid": row.get("item_guid"),
 			"godown": row["godown"],
+			"godown_guid": row.get("godown_guid"),
 			"quantity": _number(row.get("quantity")),
 			"uom": row.get("uom"),
 			"as_on_date": row.get("as_on_date"),
+			"source_company": row.get("source_company"),
+			"source_snapshot_id": row.get("source_snapshot_id"),
+			"source_refreshed_at": row.get("source_refreshed_at"),
 			"source_item_exists": bool(row.get("source_item_name")),
 			"source_item_parent": row.get("source_item_parent"),
 			"synced_at": now_datetime(),
 		}
 		for row in rows
 	]
+
+
+def _fetch_stock_snapshot_state(connection):
+	if not _table_exists(connection, STOCK_SNAPSHOT_STATE_TABLE):
+		return {"snapshot_complete": False, "contract_version": 1}
+	rows = _fetch_all(
+		connection,
+		sql.SQL(
+			"""
+			select
+				snapshot_id,
+				source_company,
+				as_on_date,
+				refreshed_at as source_refreshed_at,
+				raw_rows,
+				accepted_rows,
+				positive_rows,
+				negative_rows,
+				zero_rows,
+				rejected_rows,
+				snapshot_complete
+			from {}
+			where singleton = true
+			limit 1
+			"""
+		).format(_table(STOCK_SNAPSHOT_STATE_TABLE)),
+	)
+	if not rows:
+		return {"snapshot_complete": False, "contract_version": 2}
+	state = dict(rows[0])
+	state["contract_version"] = 2
+	return state
+
+
+def _fetch_stock_snapshot_integrity(connection, state):
+	rows = _fetch_all(
+		connection,
+		sql.SQL(
+			"""
+			select
+				count(*)::integer as stored_rows,
+				count(*) filter (where closing_qty > 0)::integer as positive_rows,
+				count(*) filter (where closing_qty < 0)::integer as negative_rows,
+				count(*) filter (where closing_qty = 0)::integer as zero_rows,
+				count(*) filter (
+					where closing_qty is null
+						or closing_qty::text in ('NaN', 'Infinity', '-Infinity')
+				)::integer as invalid_quantity_rows,
+				count(*) filter (
+					where coalesce(btrim(item), '') = ''
+						or coalesce(btrim(item_guid), '') = ''
+						or coalesce(btrim(godown), '') = ''
+						or coalesce(btrim(godown_guid), '') = ''
+						or row_type is distinct from 'GODOWN'
+				)::integer as invalid_identity_rows,
+				count(*) filter (
+					where source_snapshot_id is distinct from %s
+						or source_company is distinct from %s
+						or as_on_date is distinct from %s
+				)::integer as mismatched_metadata_rows
+			from {}
+			"""
+		).format(_table(STOCK_SNAPSHOT_TABLE)),
+		[state.get("snapshot_id"), state.get("source_company"), state.get("as_on_date")],
+	)
+	return dict(rows[0])
+
+
+def _validate_stock_snapshot_contract(records, state, integrity=None):
+	if not state.get("snapshot_complete"):
+		return
+
+	required_fields = ("snapshot_id", "source_company", "as_on_date", "source_refreshed_at")
+	missing_fields = [
+		fieldname
+		for fieldname in required_fields
+		if state.get(fieldname) is None
+		or (isinstance(state.get(fieldname), str) and not state.get(fieldname).strip())
+	]
+	if missing_fields:
+		frappe.throw(f"Complete Tally stock snapshot is missing metadata: {', '.join(missing_fields)}")
+	if int(state.get("rejected_rows") or 0):
+		frappe.throw("Complete Tally stock snapshot cannot contain rejected rows")
+	if int(state.get("raw_rows") or 0) != int(state.get("accepted_rows") or 0) + int(
+		state.get("rejected_rows") or 0
+	):
+		frappe.throw("Complete Tally stock snapshot row metrics are inconsistent")
+	if int(state.get("accepted_rows") or 0) <= 0:
+		frappe.throw("Complete Tally stock snapshot cannot be empty")
+
+	if state.get("contract_version") == 2:
+		if not integrity:
+			frappe.throw("Complete Tally stock snapshot is missing its integrity summary")
+		if int(integrity.get("stored_rows") or 0) != int(state.get("accepted_rows") or 0):
+			frappe.throw("Tally stock snapshot stored row count does not match accepted_rows")
+		for fieldname in ("positive_rows", "negative_rows", "zero_rows"):
+			if int(integrity.get(fieldname) or 0) != int(state.get(fieldname) or 0):
+				frappe.throw(f"Tally stock snapshot {fieldname} does not match stored rows")
+		if int(integrity.get("invalid_quantity_rows") or 0):
+			frappe.throw("Tally stock snapshot contains null quantities")
+		if int(integrity.get("invalid_identity_rows") or 0):
+			frappe.throw("Tally stock snapshot contains invalid item or godown identities")
+		if int(integrity.get("mismatched_metadata_rows") or 0):
+			frappe.throw("Tally stock snapshot rows do not match the published snapshot metadata")
+
+	for record in records:
+		missing_identity = [
+			fieldname
+			for fieldname in ("item", "item_guid", "godown", "godown_guid")
+			if record.get(fieldname) is None
+			or (isinstance(record.get(fieldname), str) and not record.get(fieldname).strip())
+		]
+		if missing_identity:
+			frappe.throw(f"Complete Tally stock row is missing identity fields: {', '.join(missing_identity)}")
+		for record_field, state_field in (
+			("source_snapshot_id", "snapshot_id"),
+			("source_company", "source_company"),
+			("as_on_date", "as_on_date"),
+		):
+			if str(record.get(record_field) or "") != str(state.get(state_field) or ""):
+				frappe.throw(
+					f"Tally stock row metadata does not match the complete snapshot state ({record_field})"
+				)
 
 
 def _build_dev_stock_snapshot_rows(
@@ -563,7 +810,9 @@ def _fetch_vouchers(connection, limit=None):
 				v.date as voucher_date,
 				l.alias as party_client_code,
 				i.item,
+				i._item as item_guid,
 				i.godown,
+				i._godown as godown_guid,
 				i.quantity,
 				i.tracking_number
 			from {} v
@@ -602,7 +851,9 @@ def _fetch_vouchers(connection, limit=None):
 		voucher["lines"].append(
 			{
 				"item": row["item"],
+				"item_guid": row.get("item_guid"),
 				"godown": row["godown"],
+				"godown_guid": row.get("godown_guid"),
 				"quantity": abs(_number(row.get("quantity"))),
 				"tracking_number": row.get("tracking_number"),
 			}
@@ -629,7 +880,7 @@ def _number(value):
 
 
 def _serialize_run(run):
-	return {
+	result = {
 		"run": run.name,
 		"sync_type": run.sync_type,
 		"status": run.status,
@@ -637,3 +888,15 @@ def _serialize_run(run):
 		"records_processed": run.records_processed,
 		"errors_count": run.errors_count,
 	}
+	for fieldname in (
+		"negative_records",
+		"zero_records",
+		"records_zeroed",
+		"source_refreshed_at",
+		"source_as_on_date",
+		"source_snapshot_id",
+		"snapshot_complete",
+	):
+		if run.meta.has_field(fieldname):
+			result[fieldname] = run.get(fieldname)
+	return result
