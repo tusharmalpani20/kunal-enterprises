@@ -1,6 +1,6 @@
 import json
 import inspect
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,6 +38,7 @@ from kunal_enterprises.cron.tally_sync import sync_tally_vouchers
 from kunal_enterprises.integrations.tally_postgres import (
 	STOCK_SNAPSHOT_V2_COLUMNS,
 	_build_dev_stock_snapshot_rows,
+	_frappe_datetime,
 	_fetch_stock_snapshots,
 	_validate_stock_snapshot_contract,
 	enqueue_import_all,
@@ -4257,7 +4258,8 @@ class TestTallyStockSync(FrappeTestCase):
 
 	def test_scheduled_postgres_import_uses_deduplicated_long_queue(self):
 		with patch("kunal_enterprises.integrations.tally_postgres.frappe.enqueue") as enqueue:
-			enqueue_import_all()
+			enqueue.return_value.id = "test-tally-import-job"
+			result = enqueue_import_all()
 
 		enqueue.assert_called_once_with(
 			"kunal_enterprises.integrations.tally_postgres.import_all",
@@ -4266,10 +4268,13 @@ class TestTallyStockSync(FrappeTestCase):
 			job_id="kunal_enterprises:tally_postgres_import_all",
 			deduplicate=True,
 		)
+		self.assertEqual(result, {"status": "Queued", "job_id": "test-tally-import-job"})
 
 	def test_postgres_import_all_runs_masters_before_stock_and_reconciliation(self):
 		calls = []
 		with (
+			patch("kunal_enterprises.integrations.tally_postgres._acquire_import_lock", return_value=True),
+			patch("kunal_enterprises.integrations.tally_postgres._release_import_lock") as release_lock,
 			patch(
 				"kunal_enterprises.integrations.tally_postgres.import_masters",
 				side_effect=lambda: calls.append("masters") or {"status": "Completed"},
@@ -4295,6 +4300,18 @@ class TestTallyStockSync(FrappeTestCase):
 
 		self.assertEqual(calls, ["masters", "stock", "vouchers", "reconciliation"])
 		self.assertEqual(result["stock"]["status"], "Completed")
+		release_lock.assert_called_once_with()
+
+	def test_postgres_import_all_skips_when_pipeline_lock_is_busy(self):
+		with (
+			patch("kunal_enterprises.integrations.tally_postgres._acquire_import_lock", return_value=False),
+			patch("kunal_enterprises.integrations.tally_postgres.import_masters") as import_masters,
+		):
+			result = import_all()
+
+		self.assertEqual(result["status"], "Skipped")
+		self.assertIn("already running", result["reason"])
+		import_masters.assert_not_called()
 
 	def test_voucher_sync_upserts_headers_and_lines_for_reconciliation(self):
 		product_group = self._create_product_group("Voucher Sync PG")
@@ -4729,6 +4746,14 @@ class TestTallyStockSync(FrappeTestCase):
 
 		_validate_stock_snapshot_contract([record], state, integrity)
 
+	def test_postgres_timestamp_is_converted_to_naive_frappe_system_time(self):
+		source = datetime(2026, 8, 18, 17, 3, 7, 520000, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+
+		converted = _frappe_datetime(source)
+
+		self.assertIsNone(converted.tzinfo)
+		self.assertEqual(converted, datetime(2026, 8, 18, 17, 3, 7, 520000))
+
 	def test_complete_stock_snapshot_skips_unknown_guid_without_rolling_back_valid_rows(self):
 		product_group = self._create_product_group("Atomic Snapshot PG")
 		item = self._create_item("Atomic Snapshot Item", product_group.name)
@@ -4754,7 +4779,7 @@ class TestTallyStockSync(FrappeTestCase):
 						**base_row,
 						"item": "Unknown Atomic Item",
 						"item_guid": "unknown-atomic-item-guid",
-						"quantity": 1,
+						"quantity": -1,
 						"source_snapshot_id": "atomic-002",
 					},
 				],
@@ -4774,6 +4799,7 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(run.status, "Completed With Errors")
 		self.assertEqual(run.records_processed, 1)
 		self.assertEqual(run.errors_count, 1)
+		self.assertEqual(run.negative_records, 0)
 		self.assertEqual(quantity, 9)
 		error = frappe.get_all(
 			"Tally Sync Error", filters={"sync_run": run.name}, fields=["source_key", "error_message"]
@@ -4822,6 +4848,34 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(run.errors_count, 1)
 		self.assertEqual(run.records_zeroed, 0)
 		self.assertEqual(quantity, 5)
+
+	def test_unhandled_stock_failure_marks_run_failed(self):
+		source_table = "stock_failure_test"
+		with (
+			patch.object(frappe.db, "commit"),
+			patch.object(frappe.db, "rollback"),
+			patch(
+				"kunal_enterprises.cron.tally_sync._execute_stock_snapshot_run",
+				side_effect=RuntimeError("unexpected stock failure"),
+			),
+			self.assertRaisesRegex(RuntimeError, "unexpected stock failure"),
+		):
+			sync_stock_snapshots([], source_table=source_table)
+
+		run = frappe.get_all(
+			"Tally Sync Run",
+			filters={"source_table": source_table},
+			fields=["name", "status", "finished_at", "errors_count"],
+			order_by="started_at desc",
+			limit_page_length=1,
+		)[0]
+		self.assertEqual(run.status, "Failed")
+		self.assertIsNotNone(run.finished_at)
+		self.assertEqual(run.errors_count, 1)
+		error = frappe.get_all(
+			"Tally Sync Error", filters={"sync_run": run.name}, fields=["error_message"]
+		)[0]
+		self.assertIn("unexpected stock failure", error.error_message)
 
 	def test_complete_v2_stock_snapshot_logs_and_skips_rows_without_guids(self):
 		product_group = self._create_product_group("Missing GUID Snapshot PG")

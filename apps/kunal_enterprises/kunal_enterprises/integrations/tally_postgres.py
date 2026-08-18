@@ -6,7 +6,7 @@ import frappe
 import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
-from frappe.utils import now_datetime, nowdate
+from frappe.utils import convert_utc_to_system_timezone, now_datetime, nowdate
 
 from kunal_enterprises.cron.reconciliation import run_reconciliation
 from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_masters, sync_tally_vouchers
@@ -16,6 +16,7 @@ DEFAULT_SCHEMA = "public"
 STOCK_SNAPSHOT_TABLE = "stock_godown_summary"
 STOCK_SNAPSHOT_STATE_TABLE = "stock_godown_summary_state"
 SCHEDULED_IMPORT_JOB_ID = "kunal_enterprises:tally_postgres_import_all"
+SCHEDULED_IMPORT_LOCK = "kunal_enterprises:tally_postgres_import_all"
 STOCK_SNAPSHOT_V2_COLUMNS = frozenset(
 	{
 		"item",
@@ -34,25 +35,41 @@ STOCK_SNAPSHOT_V2_COLUMNS = frozenset(
 
 def enqueue_import_all():
 	"""Queue one sequential Tally import on the long worker without overlapping runs."""
-	return frappe.enqueue(
+	job = frappe.enqueue(
 		"kunal_enterprises.integrations.tally_postgres.import_all",
 		queue="long",
 		timeout=1500,
 		job_id=SCHEDULED_IMPORT_JOB_ID,
 		deduplicate=True,
 	)
+	if not job:
+		return {"status": "Skipped", "reason": "The Tally import pipeline is already queued or running"}
+	return {"status": "Queued", "job_id": job.id}
 
 
 def import_all(voucher_limit=None, run_reconciliation_after=True):
 	"""Import Tally mirror data sequentially so stock never races ahead of its masters."""
-	results = {
-		"masters": import_masters(),
-		"stock": import_stock_snapshots(),
-		"vouchers": import_vouchers(limit=voucher_limit),
-	}
-	if run_reconciliation_after:
-		results["reconciliation"] = _serialize_run(run_reconciliation())
-	return results
+	if not _acquire_import_lock():
+		return {"status": "Skipped", "reason": "A Tally PostgreSQL import pipeline is already running"}
+	try:
+		results = {
+			"masters": import_masters(),
+			"stock": import_stock_snapshots(),
+			"vouchers": import_vouchers(limit=voucher_limit),
+		}
+		if run_reconciliation_after:
+			results["reconciliation"] = _serialize_run(run_reconciliation())
+		return results
+	finally:
+		_release_import_lock()
+
+
+def _acquire_import_lock():
+	return bool(frappe.db.sql("SELECT GET_LOCK(%s, 0)", SCHEDULED_IMPORT_LOCK)[0][0])
+
+
+def _release_import_lock():
+	frappe.db.sql("SELECT RELEASE_LOCK(%s)", SCHEDULED_IMPORT_LOCK)
 
 
 def import_masters():
@@ -647,8 +664,15 @@ def _fetch_stock_snapshot_state(connection):
 	if not rows:
 		return {"snapshot_complete": False, "contract_version": 2}
 	state = dict(rows[0])
+	state["source_refreshed_at"] = _frappe_datetime(state.get("source_refreshed_at"))
 	state["contract_version"] = 2
 	return state
+
+
+def _frappe_datetime(value):
+	if value is not None and getattr(value, "tzinfo", None) is not None:
+		return convert_utc_to_system_timezone(value).replace(tzinfo=None)
+	return value
 
 
 def _fetch_stock_snapshot_integrity(connection, state):

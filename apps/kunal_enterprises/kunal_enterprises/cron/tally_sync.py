@@ -120,7 +120,21 @@ def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_mi
 		}
 	).insert(ignore_permissions=True)
 	frappe.db.commit()
+	try:
+		return _execute_stock_snapshot_run(
+			run,
+			started_at,
+			records,
+			source_table,
+			snapshot_metadata,
+			reconcile_missing,
+		)
+	except Exception as error:
+		_record_stock_sync_failure(run.name, error, source_table, snapshot_metadata)
+		raise
 
+
+def _execute_stock_snapshot_run(run, started_at, records, source_table, snapshot_metadata, reconcile_missing):
 	records = list(records or [])
 	processed = 0
 	errors = 0
@@ -137,17 +151,10 @@ def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_mi
 		frappe.db.savepoint(savepoint)
 
 	for record in records:
-		raw_quantity = record.get("quantity")
-		if raw_quantity not in (None, ""):
-			try:
-				quantity = float(raw_quantity)
-				if math.isfinite(quantity):
-					quantities.append(quantity)
-			except (TypeError, ValueError):
-				pass
 		try:
 			processed_keys.add(_upsert_stock_snapshot(record, run.name, require_guids=require_guids))
 			processed += 1
+			quantities.append(float(record.get("quantity")))
 		except IgnoredStockRowError as error:
 			errors += 1
 			protected_key = _source_snapshot_key(record)
@@ -170,6 +177,7 @@ def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_mi
 		frappe.db.rollback(save_point=savepoint)
 		processed = 0
 		processed_keys.clear()
+		quantities.clear()
 		for record, error in ignored_row_errors + fatal_row_errors:
 			_log_sync_error(run.name, record, error, source_table)
 	elif atomic_snapshot:
@@ -199,6 +207,29 @@ def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_mi
 	run.finished_at = now_datetime()
 	run.save(ignore_permissions=True)
 	return run
+
+
+def _record_stock_sync_failure(run_name, error, source_table, snapshot_metadata):
+	frappe.db.rollback()
+	try:
+		run = frappe.get_doc("Tally Sync Run", run_name)
+		run.status = "Failed"
+		run.finished_at = now_datetime()
+		run.errors_count = int(run.errors_count or 0) + 1
+		run.source_as_on_date = snapshot_metadata.get("as_on_date")
+		run.source_snapshot_id = snapshot_metadata.get("snapshot_id")
+		run.snapshot_complete = int(bool(snapshot_metadata.get("snapshot_complete")))
+		run.save(ignore_permissions=True)
+		_log_sync_error(
+			run.name,
+			{"source_snapshot_id": snapshot_metadata.get("snapshot_id")},
+			error,
+			source_table,
+		)
+		frappe.db.commit()
+	except Exception:
+		frappe.db.rollback()
+		frappe.log_error(title=f"Unable to finalize failed Tally stock sync {run_name}")
 
 
 def sync_tally_vouchers(records=None):
