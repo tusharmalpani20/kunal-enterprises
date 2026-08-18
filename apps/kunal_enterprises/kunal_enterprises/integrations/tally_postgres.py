@@ -15,6 +15,7 @@ from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_m
 DEFAULT_SCHEMA = "public"
 STOCK_SNAPSHOT_TABLE = "stock_godown_summary"
 STOCK_SNAPSHOT_STATE_TABLE = "stock_godown_summary_state"
+SCHEDULED_IMPORT_JOB_ID = "kunal_enterprises:tally_postgres_import_all"
 STOCK_SNAPSHOT_V2_COLUMNS = frozenset(
 	{
 		"item",
@@ -31,8 +32,19 @@ STOCK_SNAPSHOT_V2_COLUMNS = frozenset(
 )
 
 
+def enqueue_import_all():
+	"""Queue one sequential Tally import on the long worker without overlapping runs."""
+	return frappe.enqueue(
+		"kunal_enterprises.integrations.tally_postgres.import_all",
+		queue="long",
+		timeout=1500,
+		job_id=SCHEDULED_IMPORT_JOB_ID,
+		deduplicate=True,
+	)
+
+
 def import_all(voucher_limit=None, run_reconciliation_after=True):
-	"""Import available Tally mirror data from the configured PostgreSQL database."""
+	"""Import Tally mirror data sequentially so stock never races ahead of its masters."""
 	results = {
 		"masters": import_masters(),
 		"stock": import_stock_snapshots(),
@@ -551,8 +563,8 @@ def _fetch_stock_snapshots(connection, contract_version=None):
 				where coalesce(snapshot.item, '') != ''
 					and coalesce(snapshot.godown, '') != ''
 				group by
-					coalesce(nullif(snapshot.item_guid, ''), concat('name:', snapshot.item)),
-					coalesce(nullif(snapshot.godown_guid, ''), concat('name:', snapshot.godown))
+					coalesce(nullif(btrim(snapshot.item_guid), ''), concat('name:', snapshot.item)),
+					coalesce(nullif(btrim(snapshot.godown_guid), ''), concat('name:', snapshot.godown))
 				"""
 			).format(_table(STOCK_SNAPSHOT_TABLE), _table("mst_stock_item")),
 		)
@@ -655,11 +667,13 @@ def _fetch_stock_snapshot_integrity(connection, state):
 				)::integer as invalid_quantity_rows,
 				count(*) filter (
 					where coalesce(btrim(item), '') = ''
-						or coalesce(btrim(item_guid), '') = ''
 						or coalesce(btrim(godown), '') = ''
-						or coalesce(btrim(godown_guid), '') = ''
 						or row_type is distinct from 'GODOWN'
 				)::integer as invalid_identity_rows,
+				count(*) filter (
+					where coalesce(btrim(item_guid), '') = ''
+						or coalesce(btrim(godown_guid), '') = ''
+				)::integer as missing_guid_rows,
 				count(*) filter (
 					where source_snapshot_id is distinct from %s
 						or source_company is distinct from %s
@@ -706,14 +720,14 @@ def _validate_stock_snapshot_contract(records, state, integrity=None):
 		if int(integrity.get("invalid_quantity_rows") or 0):
 			frappe.throw("Tally stock snapshot contains null quantities")
 		if int(integrity.get("invalid_identity_rows") or 0):
-			frappe.throw("Tally stock snapshot contains invalid item or godown identities")
+			frappe.throw("Tally stock snapshot contains invalid item or godown names or row types")
 		if int(integrity.get("mismatched_metadata_rows") or 0):
 			frappe.throw("Tally stock snapshot rows do not match the published snapshot metadata")
 
 	for record in records:
 		missing_identity = [
 			fieldname
-			for fieldname in ("item", "item_guid", "godown", "godown_guid")
+			for fieldname in ("item", "godown")
 			if record.get(fieldname) is None
 			or (isinstance(record.get(fieldname), str) and not record.get(fieldname).strip())
 		]

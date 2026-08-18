@@ -30,10 +30,7 @@ fixtures = [
 scheduler_events = {
 	"cron": {
 		"*/5 * * * *": [
-			"kunal_enterprises.integrations.tally_postgres.import_masters",
-			"kunal_enterprises.integrations.tally_postgres.import_stock_snapshots",
-			"kunal_enterprises.integrations.tally_postgres.import_vouchers",
-			"kunal_enterprises.cron.reconciliation.run_reconciliation",
+			"kunal_enterprises.integrations.tally_postgres.enqueue_import_all",
 		]
 	}
 }

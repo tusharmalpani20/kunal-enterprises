@@ -21,6 +21,10 @@ MASTER_NAME_FIELDS = {
 }
 
 
+class IgnoredStockRowError(Exception):
+	"""A source stock row that cannot be linked safely to Frappe masters."""
+
+
 def sync_tally_masters(records=None):
 	lock_name = "kunal_enterprises:tally_master_sync"
 	if not _acquire_sync_lock(lock_name):
@@ -124,8 +128,11 @@ def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_mi
 	records_zeroed = 0
 	quantities = []
 	atomic_snapshot = bool(snapshot_metadata.get("snapshot_complete"))
+	require_guids = atomic_snapshot and int(snapshot_metadata.get("contract_version") or 0) == 2
 	savepoint = "tally_complete_stock_snapshot"
-	row_errors = []
+	ignored_row_errors = []
+	fatal_row_errors = []
+	unprotected_ignored_rows = 0
 	if atomic_snapshot:
 		frappe.db.savepoint(savepoint)
 
@@ -139,25 +146,43 @@ def _sync_stock_snapshots(records, source_table, snapshot_metadata, reconcile_mi
 			except (TypeError, ValueError):
 				pass
 		try:
-			processed_keys.add(_upsert_stock_snapshot(record, run.name))
+			processed_keys.add(_upsert_stock_snapshot(record, run.name, require_guids=require_guids))
 			processed += 1
+		except IgnoredStockRowError as error:
+			errors += 1
+			protected_key = _source_snapshot_key(record)
+			if protected_key:
+				processed_keys.add(protected_key)
+			else:
+				unprotected_ignored_rows += 1
+			if atomic_snapshot:
+				ignored_row_errors.append((record, error))
+			else:
+				_log_sync_error(run.name, record, error, source_table)
 		except Exception as error:
 			errors += 1
 			if atomic_snapshot:
-				row_errors.append((record, error))
+				fatal_row_errors.append((record, error))
 			else:
 				_log_sync_error(run.name, record, error, source_table)
 
-	if atomic_snapshot and row_errors:
+	if atomic_snapshot and fatal_row_errors:
 		frappe.db.rollback(save_point=savepoint)
 		processed = 0
 		processed_keys.clear()
-		for record, error in row_errors:
+		for record, error in ignored_row_errors + fatal_row_errors:
 			_log_sync_error(run.name, record, error, source_table)
 	elif atomic_snapshot:
 		frappe.db.release_savepoint(savepoint)
+		for record, error in ignored_row_errors:
+			_log_sync_error(run.name, record, error, source_table)
 
-	if reconcile_missing and not errors and snapshot_metadata.get("snapshot_complete"):
+	if (
+		reconcile_missing
+		and not fatal_row_errors
+		and not unprotected_ignored_rows
+		and snapshot_metadata.get("snapshot_complete")
+	):
 		records_zeroed = _reconcile_missing_stock_snapshots(run.name, processed_keys, snapshot_metadata, started_at)
 
 	run.records_seen = len(records)
@@ -210,29 +235,43 @@ def sync_tally_vouchers(records=None):
 	return run
 
 
-def _upsert_stock_snapshot(record, sync_run):
+def _upsert_stock_snapshot(record, sync_run, require_guids=False):
 	source_item = record.get("item")
 	source_godown = record.get("godown")
-	item_guid = record.get("item_guid")
-	godown_guid = record.get("godown_guid")
+	item_guid = _clean_guid(record.get("item_guid"))
+	godown_guid = _clean_guid(record.get("godown_guid"))
 	if not source_item:
-		frappe.throw("Stock snapshot row is missing item")
+		raise IgnoredStockRowError("Ignored stock snapshot row because item is missing")
 	if not source_godown:
-		frappe.throw("Stock snapshot row is missing godown")
+		raise IgnoredStockRowError("Ignored stock snapshot row because godown is missing")
+	if require_guids:
+		missing_guids = [
+			fieldname for fieldname, value in (("item_guid", item_guid), ("godown_guid", godown_guid)) if not value
+		]
+		if missing_guids:
+			raise IgnoredStockRowError(
+				f"Ignored stock snapshot row because it is missing {', '.join(missing_guids)}"
+			)
 	quantity = _stock_quantity(record)
 	if not item_guid and not frappe.db.exists("Tally Item", source_item):
 		if record.get("source_item_exists") is False:
-			frappe.throw(f"Stock snapshot item {source_item} is absent from mst_stock_item")
+			raise IgnoredStockRowError(f"Stock snapshot item {source_item} is absent from mst_stock_item")
 		if "source_item_parent" in record and record.get("source_item_parent") in (None, ""):
-			frappe.throw(f"Stock snapshot item {source_item} has blank parent in mst_stock_item")
-	item = _resolve_tally_reference("Tally Item", source_item, item_guid)
-	godown = _resolve_tally_reference("Tally Godown", source_godown, godown_guid, require_active=True)
-	item_guid = frappe.db.get_value("Tally Item", item, "tally_guid")
-	godown_guid = frappe.db.get_value("Tally Godown", godown, "tally_guid")
+			raise IgnoredStockRowError(f"Stock snapshot item {source_item} has blank parent in mst_stock_item")
+	item = _resolve_tally_reference("Tally Item", source_item, item_guid, error_class=IgnoredStockRowError)
+	godown = _resolve_tally_reference(
+		"Tally Godown",
+		source_godown,
+		godown_guid,
+		require_active=True,
+		error_class=IgnoredStockRowError,
+	)
+	item_guid = _clean_guid(frappe.db.get_value("Tally Item", item, "tally_guid"))
+	godown_guid = _clean_guid(frappe.db.get_value("Tally Godown", godown, "tally_guid"))
 	if not item_guid:
-		frappe.throw(f"Tally Item {item} is missing tally_guid")
+		raise IgnoredStockRowError(f"Tally Item {item} is missing tally_guid")
 	if not godown_guid:
-		frappe.throw(f"Tally Godown {godown} is missing tally_guid")
+		raise IgnoredStockRowError(f"Tally Godown {godown} is missing tally_guid")
 	snapshot_key = f"{item_guid}:{godown_guid}"
 	existing_names = frappe.get_all(
 		"Tally Stock Snapshot", filters={"tally_snapshot_key": snapshot_key}, pluck="name", limit_page_length=2
@@ -279,7 +318,7 @@ def _stock_quantity(record):
 	return quantity
 
 
-def _resolve_tally_reference(doctype, source_name, source_guid=None, require_active=False):
+def _resolve_tally_reference(doctype, source_name, source_guid=None, require_active=False, error_class=None):
 	if source_guid:
 		filters = {"tally_guid": source_guid}
 		if require_active:
@@ -288,7 +327,10 @@ def _resolve_tally_reference(doctype, source_name, source_guid=None, require_act
 		if resolved:
 			return resolved
 		status = " or is inactive" if require_active else ""
-		frappe.throw(f"{doctype} GUID {source_guid} does not exist{status} (source name: {source_name})")
+		message = f"{doctype} GUID {source_guid} does not exist{status} (source name: {source_name})"
+		if error_class:
+			raise error_class(message)
+		frappe.throw(message)
 
 	filters = {"name": source_name}
 	if require_active:
@@ -296,7 +338,29 @@ def _resolve_tally_reference(doctype, source_name, source_guid=None, require_act
 	if frappe.db.exists(doctype, filters):
 		return source_name
 	status = " or is inactive" if require_active else ""
-	frappe.throw(f"{doctype} {source_name} does not exist{status}")
+	message = f"{doctype} {source_name} does not exist{status}"
+	if error_class:
+		raise error_class(message)
+	frappe.throw(message)
+
+
+def _source_snapshot_key(record):
+	item_guid = _clean_guid(record.get("item_guid"))
+	godown_guid = _clean_guid(record.get("godown_guid"))
+	if not item_guid and record.get("item"):
+		item_guid = _clean_guid(frappe.db.get_value("Tally Item", record.get("item"), "tally_guid"))
+	if not godown_guid and record.get("godown"):
+		godown_guid = _clean_guid(frappe.db.get_value("Tally Godown", record.get("godown"), "tally_guid"))
+	if item_guid and godown_guid:
+		return f"{item_guid}:{godown_guid}"
+	return None
+
+
+def _clean_guid(value):
+	if value is None:
+		return None
+	value = str(value).strip()
+	return value or None
 
 
 def _reconcile_missing_stock_snapshots(sync_run, processed_keys, snapshot_metadata, synced_at):
