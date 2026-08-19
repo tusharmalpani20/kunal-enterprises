@@ -84,6 +84,8 @@ def item_stock(customer, item, sales_employee=None, headers=None):
 			fields=["name", "item", "godown", "quantity", "uom", "as_on_date", "synced_at"],
 			order_by="godown asc",
 		)
+		for snapshot in snapshots:
+			snapshot["quantity"] = _mobile_stock_quantity(snapshot.get("quantity"))
 		return create_success_response(
 			"Item stock by godown",
 			{
@@ -254,11 +256,16 @@ def _apply_godown_stock_totals(item_rows):
 	)
 	totals = {}
 	for row in snapshot_rows:
-		totals[row["item"]] = totals.get(row["item"], 0) + (row.get("quantity") or 0)
+		totals[row["item"]] = totals.get(row["item"], 0) + _mobile_stock_quantity(row.get("quantity"))
 
 	for item in item_rows:
-		if item["name"] in totals:
-			item["total_closing_balance"] = totals[item["name"]]
+		item["total_closing_balance"] = _mobile_stock_quantity(
+			totals.get(item["name"], item.get("total_closing_balance"))
+		)
+
+
+def _mobile_stock_quantity(quantity):
+	return quantity if quantity and quantity > 0 else 0
 
 
 def _apply_mobile_summary_groups(item_rows):

@@ -1635,11 +1635,27 @@ class TestProductGroupAccess(FrappeTestCase):
 		)
 		self._create_stock_snapshot(item.name, "Snapshot Godown A", 37)
 		self._create_stock_snapshot(item.name, "Snapshot Godown B", 240)
+		self._create_stock_snapshot(item.name, "Snapshot Negative Godown", -50)
 
 		response = allowed_items(customer.name, product_group.name)
 
 		self.assertTrue(response["success"])
 		self.assertEqual(response["data"]["items"][0]["total_closing_balance"], 277)
+
+	def test_allowed_items_clamp_negative_master_balance_without_snapshots(self):
+		product_group = self._create_product_group("PG Negative Master Total")
+		item = self._create_item("Negative Master Total Item", product_group.name)
+		customer = self._create_active_customer(
+			"9000000443",
+			"PG-NEGATIVE-MASTER-TOTAL-001",
+			product_groups=[product_group.name],
+		)
+		frappe.db.set_value("Tally Item", item.name, "total_closing_balance", -25)
+
+		response = allowed_items(customer.name, product_group.name)
+
+		self.assertTrue(response["success"])
+		self.assertEqual(response["data"]["items"][0]["total_closing_balance"], 0)
 
 	def test_allowed_items_resolve_nearest_marked_mobile_summary_group(self):
 		root_group = self._create_product_group("PG Mobile Summary Root")
@@ -1749,6 +1765,7 @@ class TestProductGroupAccess(FrappeTestCase):
 		item = self._create_item("Stock Item Allowed", product_group.name)
 		customer = self._create_active_customer("9000000111", "PG-STOCK-001")
 		self._create_stock_snapshot(item.name, "Main Godown", 12)
+		negative_snapshot = self._create_stock_snapshot(item.name, "Negative Godown", -5)
 		self._create_stock_snapshot(item.name, "Zero Godown", 0)
 
 		response = item_stock(customer.name, item.name)
@@ -1757,8 +1774,9 @@ class TestProductGroupAccess(FrappeTestCase):
 		self.assertTrue(response["data"]["stock_is_advisory"])
 		self.assertEqual(
 			{row["godown"]: row["quantity"] for row in response["data"]["godowns"]},
-			{"Main Godown": 12, "Zero Godown": 0},
+			{"Main Godown": 12, "Negative Godown": 0, "Zero Godown": 0},
 		)
+		self.assertEqual(frappe.db.get_value("Tally Stock Snapshot", negative_snapshot.name, "quantity"), -5)
 
 	def test_product_item_and_stock_reads_require_matching_customer_token_when_headers_are_supplied(self):
 		product_group = self._create_product_group("PG Token")
