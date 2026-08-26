@@ -10,7 +10,7 @@
   "export": 1,
   "if_owner": 0,
   "import": 1,
-  "modified": "2026-06-30 19:45:00.000000",
+  "modified": "2026-06-30 19:45:00",
   "name": "kunal-user-full-administrator",
   "parent": "User",
   "permlevel": 0,
@@ -34,7 +34,7 @@
   "export": 0,
   "if_owner": 0,
   "import": 0,
-  "modified": "2026-06-30 19:55:00.000000",
+  "modified": "2026-06-30 19:55:00",
   "name": "kunal-user-role-fields-administrator",
   "parent": "User",
   "permlevel": 1,
@@ -50,8 +50,8 @@
  {
   "amend": 0,
   "cancel": 0,
-  "create": 0,
-  "delete": 0,
+  "create": 1,
+  "delete": 1,
   "docstatus": 0,
   "doctype": "Custom DocPerm",
   "email": 0,
@@ -66,10 +66,10 @@
   "read": 1,
   "report": 0,
   "role": "Owner",
-  "select": 0,
+  "select": 1,
   "share": 0,
   "submit": 0,
-  "write": 0
+  "write": 1
  },
  {
   "amend": 0,
@@ -82,7 +82,7 @@
   "export": 1,
   "if_owner": 0,
   "import": 1,
-  "modified": "2026-06-30 19:45:00.000000",
+  "modified": "2026-06-30 19:45:00",
   "name": "kunal-role-full-administrator",
   "parent": "Role",
   "permlevel": 0,
@@ -98,8 +98,8 @@
  {
   "amend": 0,
   "cancel": 0,
-  "create": 0,
-  "delete": 0,
+  "create": 1,
+  "delete": 1,
   "docstatus": 0,
   "doctype": "Custom DocPerm",
   "email": 0,
@@ -114,10 +114,10 @@
   "read": 1,
   "report": 0,
   "role": "Admin",
-  "select": 0,
+  "select": 1,
   "share": 0,
   "submit": 0,
-  "write": 0
+  "write": 1
  },
  {
   "amend": 0,
@@ -130,7 +130,7 @@
   "export": 1,
   "if_owner": 0,
   "import": 1,
-  "modified": "2026-06-30 19:45:00.000000",
+  "modified": "2026-06-30 19:45:00",
   "name": "kunal-role-profile-full-administrator",
   "parent": "Role Profile",
   "permlevel": 0,
