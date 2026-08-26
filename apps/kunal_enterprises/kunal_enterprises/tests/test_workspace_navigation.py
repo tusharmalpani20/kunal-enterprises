@@ -57,6 +57,7 @@ ADMIN_SHORTCUTS = {
 		"stats_filter": [["Sales Employee", "status", "=", "Disabled", False]],
 	},
 	"Portal Branch": {"link_to": "Portal Branch", "stats_filter": None},
+	"Mobile OTP": {"link_to": "Mobile OTP", "stats_filter": None},
 	"Users": {"link_to": "User", "stats_filter": None},
 	"Role Profiles": {"link_to": "Role Profile", "stats_filter": None},
 	"Roles": {"link_to": "Role", "stats_filter": None},
@@ -76,7 +77,6 @@ FORBIDDEN_WORKSPACE_TARGETS = {
 	"Tally Voucher Line",
 	"Branch Godown Mapping",
 	"Order Reconciliation Log",
-	"Mobile OTP",
 	"Mobile Auth Token",
 	"Order Reference Sequence",
 	"Order Item",
@@ -97,6 +97,14 @@ class TestWorkspaceNavigation(FrappeTestCase):
 			workspace_fixture["filters"],
 			[["name", "in", ["Operation", "Admin"]]],
 		)
+
+	def test_custom_docperm_fixture_covers_mobile_otp_permission(self):
+		custom_docperm_fixture = next(
+			fixture for fixture in hooks.fixtures if (fixture.get("dt") or fixture.get("doctype")) == "Custom DocPerm"
+		)
+
+		parent_filter = next(filter_item for filter_item in custom_docperm_fixture["filters"] if filter_item[0] == "parent")
+		self.assertIn("Mobile OTP", parent_filter[2])
 
 	def test_boot_session_workspace_filter_is_registered(self):
 		self.assertEqual(
@@ -129,10 +137,10 @@ class TestWorkspaceNavigation(FrappeTestCase):
 		self.assert_workspace_shortcuts(workspaces["Operation"], OPERATION_SHORTCUTS)
 		self.assert_workspace_shortcuts(workspaces["Admin"], ADMIN_SHORTCUTS)
 
-	def test_admin_workspace_targets_have_read_only_owner_admin_permissions(self):
+	def test_admin_workspace_targets_have_expected_owner_admin_permissions(self):
 		custom_docperms = self._custom_docperm_fixtures()
 
-		for doctype in ADMIN_NAVIGATION_DOCTYPES:
+		for doctype in ("Role", "Role Profile"):
 			for role in ("Owner", "Admin"):
 				permission = custom_docperms.get((doctype, role, 0))
 				self.assertIsNotNone(permission, f"Missing {role} read permission for {doctype}")
@@ -140,6 +148,31 @@ class TestWorkspaceNavigation(FrappeTestCase):
 				self.assertEqual(permission["write"], 0)
 				self.assertEqual(permission["create"], 0)
 				self.assertEqual(permission["delete"], 0)
+
+		for role in ("Owner", "Admin"):
+			permission = custom_docperms.get(("User", role, 0))
+			self.assertIsNotNone(permission, f"Missing {role} User permission")
+			for field in ("read", "write", "create", "delete", "select"):
+				self.assertEqual(permission[field], 1)
+
+		mobile_otp_permission = custom_docperms.get(("Mobile OTP", "Admin", 0))
+		self.assertIsNotNone(mobile_otp_permission, "Missing Admin Mobile OTP permission")
+		self.assertEqual(mobile_otp_permission["read"], 1)
+		self.assertEqual(mobile_otp_permission["select"], 1)
+		for field in ("write", "create", "delete", "import", "share"):
+			self.assertEqual(mobile_otp_permission[field], 0)
+		self.assertEqual(mobile_otp_permission["export"], 1)
+
+	def test_user_role_fields_are_editable_for_owner_admin(self):
+		custom_docperms = self._custom_docperm_fixtures()
+
+		for role in ("Owner", "Admin"):
+			permission = custom_docperms.get(("User", role, 1))
+			self.assertIsNotNone(permission, f"Missing {role} User role-field permission")
+			self.assertEqual(permission["read"], 1)
+			self.assertEqual(permission["write"], 1)
+			self.assertEqual(permission["create"], 0)
+			self.assertEqual(permission["delete"], 0)
 
 	def test_admin_navigation_permissions_preserve_builtin_administrator_actions(self):
 		custom_docperms = self._custom_docperm_fixtures()

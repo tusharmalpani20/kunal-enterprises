@@ -163,6 +163,58 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 		self.assertEqual(branch_user.first_name, "Admin Edited Branch")
 		self.assertFalse(branch_user.enabled)
 
+	def test_admin_can_create_pending_user_then_assign_kunal_role(self):
+		frappe.set_user(self.admin.name)
+
+		pending_user = self._new_user("guard.admin.pending@example.com").insert()
+		self.assertEqual(pending_user.owner, self.admin.name)
+
+		pending_user.role_profile_name = "Branch Employee"
+		pending_user.save()
+		pending_user.reload()
+
+		self.assertEqual(pending_user.role_profile_name, "Branch Employee")
+
+	def test_admin_cannot_save_pending_user_without_assigning_kunal_role(self):
+		frappe.set_user(self.admin.name)
+		pending_user = self._new_user("guard.admin.pending.unassigned@example.com").insert()
+
+		with self.assertRaises(frappe.PermissionError):
+			pending_user.save()
+
+	def test_owner_can_create_pending_user_then_assign_kunal_role(self):
+		frappe.set_user(self.owner.name)
+
+		pending_user = self._new_user("guard.owner.pending@example.com").insert()
+		self.assertEqual(pending_user.owner, self.owner.name)
+
+		pending_user.role_profile_name = "Owner"
+		pending_user.save()
+		pending_user.reload()
+
+		self.assertEqual(pending_user.role_profile_name, "Owner")
+
+	def test_pending_user_is_visible_only_to_the_creator_until_role_assignment(self):
+		frappe.set_user(self.admin.name)
+		pending_user = self._new_user("guard.admin.pending.private@example.com").insert()
+
+		self.assertEqual(
+			frappe.get_list("User", filters={"name": pending_user.name}, pluck="name"),
+			[pending_user.name],
+		)
+		self.assertFalse(
+			frappe.has_permission(
+				"User",
+				ptype="read",
+				doc=pending_user,
+				user=self.owner.name,
+			)
+		)
+		self.assertEqual(
+			frappe.get_list("User", filters={"name": pending_user.name}, pluck="name", user=self.owner.name),
+			[],
+		)
+
 	def test_admin_cannot_assign_system_manager_or_manage_unrelated_users(self):
 		frappe.set_user(self.admin.name)
 

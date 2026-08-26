@@ -22,6 +22,9 @@ def guard_user_write(doc, method=None):
 	if actor not in (OWNER_ROLE, ADMIN_ROLE):
 		_deny("Only Owner or Admin can manage Kunal portal users.")
 
+	if _is_initial_pending_user(doc):
+		return
+
 	_validate_user_scope(doc, actor)
 
 
@@ -117,9 +120,9 @@ def user_query(user=None):
 	if _is_unrestricted_user(user):
 		return None
 	if actor == OWNER_ROLE:
-		return _kunal_user_condition(include_owner=True)
+		return f"({_kunal_user_condition(include_owner=True)} or {_pending_user_condition(user)})"
 	if actor == ADMIN_ROLE:
-		return _kunal_user_condition(include_owner=False)
+		return f"({_kunal_user_condition(include_owner=False)} or {_pending_user_condition(user)})"
 	return "1 = 0"
 
 
@@ -181,12 +184,17 @@ def has_user_permission(doc, user=None, permission_type=None):
 		return True
 
 	actor = _actor_class(user)
+	if actor in (OWNER_ROLE, ADMIN_ROLE) and _is_initial_pending_user(doc):
+		return True
+
 	roles = _roles_from_user_doc(doc) or _roles_for_user(doc.name)
 	profile = doc.get("role_profile_name") or _role_profile_for_user(doc.name)
 	if actor == OWNER_ROLE:
-		return _is_kunal_state(roles, profile)
+		return _is_kunal_state(roles, profile) or (_is_pending_user(doc) and _is_user_owner(doc, user))
 	if actor == ADMIN_ROLE:
-		return _is_kunal_state(roles, profile) and not _is_owner_state(roles, profile)
+		return (_is_kunal_state(roles, profile) and not _is_owner_state(roles, profile)) or (
+			_is_pending_user(doc) and _is_user_owner(doc, user)
+		)
 	return False
 
 
@@ -317,6 +325,37 @@ def _validate_user_scope(doc, actor):
 		_deny("Admin can assign only non-Owner Kunal role profiles.")
 	if any(role not in ADMIN_ASSIGNABLE_ROLES for role in proposed_roles):
 		_deny("Admin can assign only non-Owner Kunal roles.")
+
+
+def _is_initial_pending_user(doc):
+	return doc.is_new() and not _roles_from_user_doc(doc) and not doc.get("role_profile_name")
+
+
+def _is_pending_user(doc):
+	roles = _roles_from_user_doc(doc)
+	profile = doc.get("role_profile_name")
+	if not doc.is_new():
+		roles = roles or _roles_for_user(doc.name)
+		profile = profile or _role_profile_for_user(doc.name)
+	return not roles and not profile
+
+
+def _is_user_owner(doc, user):
+	return bool(doc.get("owner") and doc.owner.lower() == user.lower())
+
+
+def _pending_user_condition(user):
+	user_table = _table("User")
+	return f"""
+		{user_table}.{_column('owner')} = {frappe.db.escape(user)}
+		and coalesce({user_table}.{_column('role_profile_name')}, '') = ''
+		and not exists (
+			select 1
+			from {_table('Has Role')} pending_role
+			where pending_role.parenttype = 'User'
+				and pending_role.parent = {user_table}.{_column('name')}
+		)
+	"""
 
 
 def _validate_user_permission_scope(doc, actor):

@@ -19,7 +19,10 @@ fixtures = [
 	},
 	{
 		"dt": "Custom DocPerm",
-		"filters": [["parent", "in", ["User", "Role", "Role Profile"]], ["role", "in", ["Owner", "Admin", "Administrator"]]],
+		"filters": [
+			["parent", "in", ["User", "Role", "Role Profile", "Mobile OTP"]],
+			["role", "in", ["Owner", "Admin", "Administrator"]],
+		],
 	},
 	{
 		"dt": "Workspace",
