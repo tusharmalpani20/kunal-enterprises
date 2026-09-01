@@ -22,7 +22,7 @@ The app uses one `expo-router` entry screen, `apps/mobile/app/index.tsx`, with s
 | --- | --- |
 | Login/signup entry | `step === 'auth'`, mode `Customer`, `Workspace title="WhatsApp OTP"` with Login/Signup selector, mobile number, OTP, Send OTP/Start signup, and Verify OTP controls. |
 | Customer signup | Signup mode renders Customer name, business/legal name, GSTIN, email ID, date of birth, and date of anniversary fields; `validateCustomerSignupInput(...)` blocks missing required fields, then `requestOtp()` calls `api.startCustomerSignup(buildCustomerSignupPayload(...))` with the entered values. |
-| Existing Customer OTP login | `requestOtp()` calls `api.startCustomerOtp(mobileNumber)` when Login is selected, using the shared backend OTP endpoint with `identity_type = Customer`. |
+| Existing Customer OTP login | `requestOtp()` calls `api.startLoginOtp(mobileNumber)` when Login is selected; the backend resolves the mobile number to Customer or Sales Employee in one request. |
 | OTP entry and resend state | `step === 'auth'` renders OTP input, uses `otpResendState` / backend cooldown values, and calls `api.resendOtp(...)` for post-cooldown resend requests only when the same mode, intent, and mobile number requested the prior OTP. |
 | Pending approval/access | `step === 'pending'`, `Workspace title="Access Pending"` and `pendingAccessMessage()`. |
 | Home/order entry | Customer mode loads allowed Product Groups only after the active Customer session is present, then uses the header/status strip plus Product Group workspace as the order home. |
@@ -59,7 +59,7 @@ The app uses one `expo-router` entry screen, `apps/mobile/app/index.tsx`, with s
 | Goal 3 shared state | Current implementation |
 | --- | --- |
 | No network | Utility button sets `{ kind: 'no_network' }`; API failures are classified through `requestBanner`. |
-| Slow request/loading | `submitOrder()` sets `{ kind: 'loading' }`; `requestBanner` maps loading/slow request state. |
+| Slow request/loading | OTP send and verification disable their actions and show a spinner while the request is in flight; `submitOrder()` also sets `{ kind: 'loading' }`, and `requestBanner` maps loading/slow request state. |
 | Expired/invalid session | Frappe provider invalid-token interceptor logs out; domain tests cover invalid stored sessions. |
 | Disabled/access removed | Utility button sets `{ kind: 'access_removed' }`; session/bootstrap tests cover disabled/access-removed backend responses. |
 | Pending approval | Customer OTP route can move to `pending`; pending workspace is rendered. |

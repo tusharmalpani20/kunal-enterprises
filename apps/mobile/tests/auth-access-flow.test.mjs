@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildCustomerSignupPayload,
+  canStartOtpRequest,
   customerOtpRouteAfterAccessCheck,
   nextAuthStepFromCustomerOtp,
   nextStepFromCustomerAccessStatus,
@@ -13,11 +14,17 @@ import {
   pendingAccessRequestFromCustomerOtp,
   salesEmployeeSessionFromOtpResponse,
   shouldLogoutForApiError,
-  shouldTrySalesEmployeeOtpAfterCustomerOtpError,
   shouldUseOtpResend,
   sessionFromOtpResponse,
   validateCustomerSignupInput,
 } from '../src/domain/authAccessFlow.mjs';
+
+test('OTP request gate allows one request and blocks duplicates or cooldown requests', () => {
+  assert.equal(canStartOtpRequest({ inFlight: false, canResend: true }), true);
+  assert.equal(canStartOtpRequest({ inFlight: true, canResend: true }), false);
+  assert.equal(canStartOtpRequest({ inFlight: false, canResend: false }), false);
+  assert.equal(canStartOtpRequest({ inFlight: false, canResend: false, hasCurrentRequest: false }), true);
+});
 
 test('customer signup payload captures required fields but never sends client code', () => {
   const payload = buildCustomerSignupPayload({
@@ -248,9 +255,4 @@ test('invalid-token backend errors trigger mobile logout', () => {
   assert.equal(shouldLogoutForApiError('Invalid or inactive token'), true);
   assert.equal(shouldLogoutForApiError('App Update Required'), true);
   assert.equal(shouldLogoutForApiError('Backend validation error'), false);
-});
-
-test('sign in can infer sales employee login only after customer mobile lookup misses', () => {
-  assert.equal(shouldTrySalesEmployeeOtpAfterCustomerOtpError('Customer was not found for this mobile number'), true);
-  assert.equal(shouldTrySalesEmployeeOtpAfterCustomerOtpError('Customer cannot receive OTP in current status'), false);
 });

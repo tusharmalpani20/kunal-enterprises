@@ -229,6 +229,30 @@ export const mockApi = {
     };
   },
 
+  async startLoginOtp(mobileNumber) {
+    if (otpResponses[mobileNumber]) {
+      return {
+        mobile_number: mobileNumber,
+        identity_type: 'Customer',
+        status: 'Pending OTP',
+        next_step: 'verify_otp',
+        cooldown_seconds: 45,
+        expires_in_seconds: 300,
+      };
+    }
+    if (salesEmployeeOtpResponses[mobileNumber]) {
+      return {
+        mobile_number: mobileNumber,
+        identity_type: 'Sales Employee',
+        status: 'Pending OTP',
+        next_step: 'verify_otp',
+        cooldown_seconds: 45,
+        expires_in_seconds: 300,
+      };
+    }
+    throw new Error('Customer or Sales Employee was not found for this mobile number');
+  },
+
   async verifyCustomerOtp(mobileNumber, _otpCode) {
     return otpResponses[mobileNumber] || otpResponses['9000000001'];
   },

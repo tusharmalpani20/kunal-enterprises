@@ -1,5 +1,7 @@
+import hashlib
 import json
 import secrets
+import time
 
 import frappe
 from frappe import _
@@ -19,6 +21,10 @@ OTP_TYPES = {
 	"Customer Verification": "Account Verification",
 	"Sales Employee Login": "Login",
 }
+
+
+class OtpRateLimitError(frappe.ValidationError):
+	pass
 
 
 @frappe.whitelist(allow_guest=True)
@@ -91,14 +97,33 @@ def send_otp(mobile_number, identity_type):
 		purpose = _purpose_for_identity(identity_type)
 		_validate_otp_identity(mobile_number, identity_type)
 		otp_type = _otp_type_for_identity(mobile_number, identity_type, purpose)
-		_issue_otp(mobile_number, purpose, otp_type=otp_type)
+		_issue_otp_with_cooldown(mobile_number, purpose, otp_type=otp_type)
 
 		return create_success_response("OTP sent", _otp_response(mobile_number, identity_type, purpose, otp_type))
 	except Exception as error:
 		return handle_error_response(
 			error,
 			"Unable to send OTP",
-			status_code=400,
+			status_code=429 if isinstance(error, OtpRateLimitError) else 400,
+		)
+
+
+@frappe.whitelist(allow_guest=True)
+def send_login_otp(mobile_number):
+	try:
+		mobile_number = (mobile_number or "").strip()
+		identity_type = _resolve_login_identity(mobile_number)
+		purpose = _purpose_for_identity(identity_type)
+		_validate_otp_identity(mobile_number, identity_type)
+		otp_type = _otp_type_for_identity(mobile_number, identity_type, purpose)
+		_issue_otp_with_cooldown(mobile_number, purpose, otp_type=otp_type)
+
+		return create_success_response("OTP sent", _otp_response(mobile_number, identity_type, purpose, otp_type))
+	except Exception as error:
+		return handle_error_response(
+			error,
+			"Unable to send OTP",
+			status_code=429 if isinstance(error, OtpRateLimitError) else 400,
 		)
 
 
@@ -108,9 +133,8 @@ def resend_otp(mobile_number, identity_type):
 		mobile_number = (mobile_number or "").strip()
 		purpose = _purpose_for_identity(identity_type)
 		_validate_otp_identity(mobile_number, identity_type)
-		_wait_for_cooldown(mobile_number, purpose)
 		otp_type = _otp_type_for_identity(mobile_number, identity_type, purpose)
-		_issue_otp(mobile_number, purpose, otp_type=otp_type)
+		_issue_otp_with_cooldown(mobile_number, purpose, otp_type=otp_type)
 
 		return create_success_response("OTP resent", _otp_response(mobile_number, identity_type, purpose, otp_type))
 	except Exception as error:
@@ -280,6 +304,32 @@ def _validate_otp_identity(mobile_number, identity_type):
 	frappe.throw(_("Unsupported OTP identity type"))
 
 
+def _resolve_login_identity(mobile_number):
+	if not mobile_number:
+		frappe.throw(_("Mobile Number is required"))
+
+	customer_name = frappe.db.exists("Customer", {"mobile_number": mobile_number})
+	sales_employee_name = frappe.db.exists("Sales Employee", {"mobile_number": mobile_number})
+	if customer_name and sales_employee_name:
+		frappe.throw(_("This mobile number is linked to more than one login identity"))
+	if customer_name:
+		return "Customer"
+	if sales_employee_name:
+		return "Sales Employee"
+	if frappe.db.exists(
+		"Mobile OTP",
+		{
+			"mobile_number": mobile_number,
+			"purpose": "Customer Signup",
+			"otp_type": "Account Creation",
+			"status": "Open",
+		},
+	):
+		return "Customer"
+
+	frappe.throw(_("Customer or Sales Employee was not found for this mobile number"))
+
+
 def _wait_for_cooldown(mobile_number, purpose):
 	open_otp = frappe.db.get_value(
 		"Mobile OTP",
@@ -298,7 +348,48 @@ def _wait_for_cooldown(mobile_number, purpose):
 	elapsed_seconds = cint(time_diff_in_seconds(now_datetime(), open_otp.modified))
 	if elapsed_seconds < OTP_COOLDOWN_SECONDS:
 		remaining_seconds = OTP_COOLDOWN_SECONDS - elapsed_seconds
-		frappe.throw(_("Please wait {0} seconds before requesting another OTP").format(remaining_seconds))
+		frappe.throw(
+			_("Please wait {0} seconds before requesting another OTP").format(remaining_seconds),
+			OtpRateLimitError,
+		)
+
+
+def _issue_otp_with_cooldown(mobile_number, purpose, otp_type=None, pending_payload=None):
+	started_at = time.monotonic()
+	lock_name = _otp_lock_name(mobile_number, purpose)
+	lock_result = frappe.db.sql("SELECT GET_LOCK(%s, 0)", lock_name)
+	lock_acquired = bool(lock_result and lock_result[0][0])
+	if not lock_acquired:
+		frappe.throw(
+			_("Another OTP request is already in progress. Please try again shortly."),
+			OtpRateLimitError,
+		)
+
+	outcome = "rejected"
+	try:
+		_wait_for_cooldown(mobile_number, purpose)
+		otp = _issue_otp(
+			mobile_number,
+			purpose,
+			otp_type=otp_type,
+			pending_payload=pending_payload,
+		)
+		outcome = "issued"
+		return otp
+	except Exception:
+		outcome = "rejected"
+		raise
+	finally:
+		frappe.db.sql("SELECT RELEASE_LOCK(%s)", lock_name)
+		elapsed_ms = round((time.monotonic() - started_at) * 1000)
+		frappe.logger("kunal_enterprises.otp").info(
+			f"OTP request outcome={outcome} purpose={purpose} duration_ms={elapsed_ms}"
+		)
+
+
+def _otp_lock_name(mobile_number, purpose):
+	lock_key = f"{mobile_number}\0{purpose}".encode()
+	return "kunal_enterprises:otp:" + hashlib.sha256(lock_key).hexdigest()[:40]
 
 
 def _issue_otp(mobile_number, purpose, otp_type=None, pending_payload=None):

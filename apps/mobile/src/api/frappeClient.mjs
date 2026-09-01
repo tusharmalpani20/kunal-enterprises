@@ -5,6 +5,7 @@ import { MAX_CUSTOMER_SEARCH_RESULTS, sanitizeCustomerForSalesEmployee } from '.
 const METHODS = {
   startCustomerSignup: 'kunal_enterprises.api.otp.start_customer_signup',
   sendOtp: 'kunal_enterprises.api.otp.send_otp',
+  sendLoginOtp: 'kunal_enterprises.api.otp.send_login_otp',
   resendOtp: 'kunal_enterprises.api.otp.resend_otp',
   verifyCustomerOtp: 'kunal_enterprises.api.otp.verify_customer_otp',
   verifySalesEmployeeOtp: 'kunal_enterprises.api.otp.verify_sales_employee_otp',
@@ -25,52 +26,46 @@ const METHODS = {
 export function createFrappeApiClient(call) {
   return {
     async startCustomerSignup(payload) {
-      return unwrap(await call.post(METHODS.startCustomerSignup, { payload }));
+      return postOtp(call, METHODS.startCustomerSignup, { payload });
     },
 
     async startCustomerOtp(mobileNumber) {
-      return unwrap(
-        await call.post(METHODS.sendOtp, {
-          mobile_number: mobileNumber,
-          identity_type: 'Customer',
-        }),
-      );
+      return postOtp(call, METHODS.sendOtp, {
+        mobile_number: mobileNumber,
+        identity_type: 'Customer',
+      });
+    },
+
+    async startLoginOtp(mobileNumber) {
+      return postOtp(call, METHODS.sendLoginOtp, { mobile_number: mobileNumber });
     },
 
     async startSalesEmployeeOtp(mobileNumber) {
-      return unwrap(
-        await call.post(METHODS.sendOtp, {
-          mobile_number: mobileNumber,
-          identity_type: 'Sales Employee',
-        }),
-      );
+      return postOtp(call, METHODS.sendOtp, {
+        mobile_number: mobileNumber,
+        identity_type: 'Sales Employee',
+      });
     },
 
     async resendOtp(mobileNumber, identityType) {
-      return unwrap(
-        await call.post(METHODS.resendOtp, {
-          mobile_number: mobileNumber,
-          identity_type: identityType,
-        }),
-      );
+      return postOtp(call, METHODS.resendOtp, {
+        mobile_number: mobileNumber,
+        identity_type: identityType,
+      });
     },
 
     async verifyCustomerOtp(mobileNumber, otpCode) {
-      return unwrap(
-        await call.post(METHODS.verifyCustomerOtp, {
-          mobile_number: mobileNumber,
-          otp_code: otpCode,
-        }),
-      );
+      return postOtp(call, METHODS.verifyCustomerOtp, {
+        mobile_number: mobileNumber,
+        otp_code: otpCode,
+      });
     },
 
     async verifySalesEmployeeOtp(mobileNumber, otpCode) {
-      return unwrap(
-        await call.post(METHODS.verifySalesEmployeeOtp, {
-          mobile_number: mobileNumber,
-          otp_code: otpCode,
-        }),
-      );
+      return postOtp(call, METHODS.verifySalesEmployeeOtp, {
+        mobile_number: mobileNumber,
+        otp_code: otpCode,
+      });
     },
 
     async currentSession() {
@@ -197,6 +192,17 @@ export function unwrap(response) {
     throw new Error(envelope.error?.message || envelope.message || 'Frappe API request failed');
   }
   return envelope.data ?? envelope;
+}
+
+async function postOtp(call, method, params) {
+  try {
+    return unwrap(await call.post(method, params));
+  } catch (error) {
+    if (/timeout|network request failed|failed to fetch|data.*undefined|undefined.*data|couldn'?t connect/i.test(String(error?.message || error))) {
+      throw new Error('Unable to reach the server. Please check your connection and try again.');
+    }
+    throw error;
+  }
 }
 
 export { METHODS as FRAPPE_METHODS };

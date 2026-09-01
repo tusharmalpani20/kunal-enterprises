@@ -17,6 +17,7 @@ test('request timing distinguishes loading from slow request', () => {
 
 test('api failures classify no network, expired session, access removed, and validation errors', () => {
   assert.equal(classifyApiFailure({ message: 'Network request failed' }).kind, 'no_network');
+  assert.equal(classifyApiFailure({ message: "Cannot read properties of undefined (reading 'data')" }).kind, 'no_network');
   assert.equal(classifyApiFailure({ message: 'Invalid or inactive token' }).kind, 'expired_session');
   assert.equal(classifyApiFailure({ message: 'Customer App Access is not active' }).kind, 'access_removed');
   assert.equal(classifyApiFailure({ message: 'Order Quantity must be positive' }).kind, 'validation_error');

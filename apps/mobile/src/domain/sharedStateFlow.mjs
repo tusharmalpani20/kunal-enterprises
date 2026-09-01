@@ -10,7 +10,7 @@ export function requestStateFromTiming({ isLoading, elapsedMs }) {
 
 export function classifyApiFailure(error) {
   const message = apiErrorMessage(error);
-  if (/network request failed|failed to fetch|offline|data.*undefined|timeout|couldn'?t connect/i.test(message)) {
+  if (/network request failed|failed to fetch|offline|data.*undefined|undefined.*data|timeout|couldn'?t connect/i.test(message)) {
     return { kind: 'no_network', message };
   }
   if (message === 'Invalid or inactive token' || message === 'Error verifying token') {
@@ -71,7 +71,7 @@ export function requestBanner(state) {
     },
     no_network: {
       title: 'No network',
-      message: 'Internet is required for final order submission.',
+      message: 'Check your internet connection and try again.',
       action: 'Retry',
     },
     expired_session: {

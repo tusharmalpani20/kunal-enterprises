@@ -337,7 +337,7 @@ test('mobile UI coverage maps Goal 3 screens and shared states to implementation
 		'Login/Signup selector',
 		'Customer signup',
 		'Existing Customer OTP login',
-		'api.startCustomerOtp',
+		'api.startLoginOtp',
 		'Pending approval/access',
 		'Product Group list',
 		'Item list/search',

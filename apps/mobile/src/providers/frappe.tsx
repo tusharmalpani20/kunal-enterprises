@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { FrappeApp, FrappeAuth, FrappeCall, FrappeDB, FrappeFileUpload } from 'frappe-js-sdk';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { APP_CONFIG, FALLBACK_BASE_URL, PRIMARY_BASE_URL } from '../constants/config';
+import { APP_CONFIG, FALLBACK_BASE_URL, MOBILE_API_TIMEOUT_MS, PRIMARY_BASE_URL } from '../constants/config';
 import { resolveBaseUrl } from '../domain/baseUrlResolver.mjs';
 import { AuthContext } from './auth';
 
@@ -110,7 +110,7 @@ export { FrappeContext, FrappeProvider };
 export type { FrappeContextType };
 
 function createFrappeApp(baseUrl: string, accessToken: string | null) {
-  return new FrappeApp(
+  const frappe = new FrappeApp(
     baseUrl,
     {
       useToken: false,
@@ -123,6 +123,8 @@ function createFrappeApp(baseUrl: string, accessToken: string | null) {
         }
       : undefined,
   );
+  frappe.axios.defaults.timeout = MOBILE_API_TIMEOUT_MS;
+  return frappe;
 }
 
 function frappeHealthProbe(url: string, method: string, timeoutMs: number) {

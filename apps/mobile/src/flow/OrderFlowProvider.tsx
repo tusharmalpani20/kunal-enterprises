@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform } from 'react-native';
 import { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { createMobileApi } from '../api/mobileApi';
 import {
   buildCustomerSignupPayload,
+  canStartOtpRequest,
   customerOtpRouteAfterAccessCheck,
   nextAuthStepFromSalesEmployeeOtp,
   otpCooldownSecondsFromResponse,
@@ -14,7 +15,6 @@ import {
   otpResendState,
   pendingAccessRequestFromCustomerOtp,
   salesEmployeeSessionFromOtpResponse,
-  shouldTrySalesEmployeeOtpAfterCustomerOtpError,
   shouldUseOtpResend,
   validateCustomerSignupInput,
 } from '../domain/authAccessFlow.mjs';
@@ -125,7 +125,7 @@ function useOrderFlowState() {
   const [itemSearch, setItemSearch] = useState('');
   const [quantity, setQuantity] = useState('14');
   const [mobileNumber, setMobileNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('1234');
+  const [otpCode, setOtpCode] = useState('');
   const [customerAuthIntent, setCustomerAuthIntent] = useState<'login' | 'signup'>('login');
   const [otpIdentityType, setOtpIdentityType] = useState<Mode | null>(null);
   const [signupDetailsReview, setSignupDetailsReview] = useState(false);
@@ -138,6 +138,11 @@ function useOrderFlowState() {
   const [otpSentAtMs, setOtpSentAtMs] = useState<number | null>(null);
   const [lastOtpRequestKey, setLastOtpRequestKey] = useState<string | null>(null);
   const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(45);
+  const [otpRequestLoading, setOtpRequestLoading] = useState(false);
+  const otpRequestInFlightRef = useRef(false);
+  const otpRequestKeyRef = useRef<string | null>(null);
+  const [otpVerificationLoading, setOtpVerificationLoading] = useState(false);
+  const otpVerificationInFlightRef = useRef(false);
   const [pendingAccessRequest, setPendingAccessRequest] = useState<Record<string, string> | null>(null);
   const [pendingAccessRefreshing, setPendingAccessRefreshing] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
@@ -294,6 +299,10 @@ function useOrderFlowState() {
   const resend = otpResendState({ lastSentAtMs: otpSentAtMs, nowMs: Date.now(), waitSeconds: otpCooldownSeconds });
   const currentOtpIdentityType = customerAuthIntent === 'signup' ? 'Customer' : otpIdentityType || 'Customer';
   const currentOtpRequestKey = otpRequestKey({ mode: currentOtpIdentityType, mobileNumber, customerAuthIntent });
+  const hasCurrentOtpRequest = otpSentAtMs !== null && lastOtpRequestKey === currentOtpRequestKey;
+  useEffect(() => {
+    otpRequestKeyRef.current = currentOtpRequestKey;
+  }, [currentOtpRequestKey]);
   const canUseOtpResend = shouldUseOtpResend({
     lastSentAtMs: otpSentAtMs,
     canResend: resend.canResend,
@@ -575,35 +584,60 @@ function useOrderFlowState() {
   }
 
   async function requestOtp() {
-    if (!resend.canResend) return;
+    if (!canStartOtpRequest({
+      inFlight: otpRequestInFlightRef.current,
+      canResend: resend.canResend,
+      hasCurrentRequest: hasCurrentOtpRequest,
+    })) return;
+
+    const requestNumber = mobileNumber.trim();
+    const requestKey = currentOtpRequestKey;
+    otpRequestInFlightRef.current = true;
+    setOtpRequestLoading(true);
+    setSystemState({ kind: 'loading' });
+
     try {
+      if (!requestNumber) {
+        setSystemState({ kind: 'validation_error', message: 'Mobile Number is required.' });
+        return;
+      }
       if (canUseOtpResend) {
         const identityType = currentOtpIdentityType;
-        const response = await api.resendOtp(mobileNumber, identityType);
+        const response = await api.resendOtp(requestNumber, identityType);
+        if (otpRequestKeyRef.current !== requestKey) {
+          setSystemState({ kind: 'idle' });
+          return;
+        }
         setOtpCooldownSeconds(otpCooldownSecondsFromResponse(response, otpCooldownSeconds));
         setOtpSentAtMs(Date.now());
-        setLastOtpRequestKey(currentOtpRequestKey);
+        setLastOtpRequestKey(requestKey);
         setOtpCode('');
-        showToast('success', 'OTP resent', `A new code was sent to ${mobileNumber}.`);
+        setSystemState({ kind: 'idle' });
+        showToast('success', 'OTP resent', `A new code was sent to ${requestNumber}.`);
         return;
       }
       if (customerAuthIntent === 'login') {
-        const response = await requestInferredSignInOtp(mobileNumber);
+        const response = await requestSignInOtp(requestNumber);
+        if (otpRequestKeyRef.current !== requestKey) {
+          setSystemState({ kind: 'idle' });
+          return;
+        }
         const inferredIdentityType = response.identity_type as Mode;
         setMode(inferredIdentityType);
         setOtpIdentityType(inferredIdentityType);
         setOtpCooldownSeconds(otpCooldownSecondsFromResponse(response, otpCooldownSeconds));
         setOtpSentAtMs(Date.now());
-        setLastOtpRequestKey(otpRequestKey({ mode: inferredIdentityType, mobileNumber, customerAuthIntent }));
+        setLastOtpRequestKey(otpRequestKey({ mode: inferredIdentityType, mobileNumber: requestNumber, customerAuthIntent }));
         setOtpCode('');
-        showToast('success', 'Sign in OTP sent', `Enter the code sent to ${mobileNumber}.`);
+        setSystemState({ kind: 'idle' });
+        showToast('success', 'Sign in OTP sent', `Enter the code sent to ${requestNumber}.`);
         return;
       }
       const signupInput = {
         customerName: signupCustomerName,
         businessLegalName: signupBusinessLegalName,
         gstin: signupGstin,
-        mobileNumber,
+        mobileNumber: requestNumber,
         emailId: signupEmailId,
         dateOfBirth: signupDateOfBirth,
         dateOfAnniversary: signupDateOfAnniversary,
@@ -619,19 +653,35 @@ function useOrderFlowState() {
       setSignupDetailsReview(false);
       setOtpCooldownSeconds(otpCooldownSecondsFromResponse(response, otpCooldownSeconds));
       setOtpSentAtMs(Date.now());
-      setLastOtpRequestKey(currentOtpRequestKey);
+      setLastOtpRequestKey(requestKey);
       setOtpCode('');
-      showToast('success', 'Sign up OTP sent', `Enter the code sent to ${mobileNumber}.`);
+      setSystemState({ kind: 'idle' });
+      showToast('success', 'Sign up OTP sent', `Enter the code sent to ${requestNumber}.`);
     } catch (error) {
       const failure = classifyApiFailure(error);
       setSystemState(failure);
+    } finally {
+      otpRequestInFlightRef.current = false;
+      setOtpRequestLoading(false);
     }
   }
 
   async function verifyOtp() {
+    if (otpVerificationInFlightRef.current) return;
+
+    otpVerificationInFlightRef.current = true;
+    setOtpVerificationLoading(true);
+    setSystemState({ kind: 'loading' });
+
     try {
+      const requestNumber = mobileNumber.trim();
+      const requestCode = otpCode.trim();
+      if (!requestNumber || !requestCode) {
+        setSystemState({ kind: 'validation_error', message: 'Enter the OTP before verifying.' });
+        return;
+      }
       if (otpIdentityType === 'Sales Employee') {
-        const response = await api.verifySalesEmployeeOtp(mobileNumber, otpCode);
+        const response = await api.verifySalesEmployeeOtp(requestNumber, requestCode);
         const employeeSession = salesEmployeeSessionFromOtpResponse(response);
         const nextStep = nextAuthStepFromSalesEmployeeOtp(response);
         if (employeeSession) {
@@ -646,7 +696,7 @@ function useOrderFlowState() {
         showToast('info', 'Sign in pending', 'Access must be active before ordering.');
         return;
       }
-      const response = await api.verifyCustomerOtp(mobileNumber, otpCode);
+      const response = await api.verifyCustomerOtp(requestNumber, requestCode);
       const route = await customerOtpRouteAfterAccessCheck({
         otpResponse: response,
         customerAccessStatus: api.customerAccessStatus,
@@ -670,19 +720,14 @@ function useOrderFlowState() {
     } catch (error) {
       const failure = classifyApiFailure(error);
       setSystemState(failure);
+    } finally {
+      otpVerificationInFlightRef.current = false;
+      setOtpVerificationLoading(false);
     }
   }
 
-  async function requestInferredSignInOtp(number: string) {
-    try {
-      return await api.startCustomerOtp(number);
-    } catch (error) {
-      const failure = classifyApiFailure(error);
-      if (!shouldTrySalesEmployeeOtpAfterCustomerOtpError(failure.message)) {
-        throw error;
-      }
-      return api.startSalesEmployeeOtp(number);
-    }
+  async function requestSignInOtp(number: string) {
+    return api.startLoginOtp(number);
   }
 
   async function refreshPendingAccess() {
@@ -1016,6 +1061,8 @@ function useOrderFlowState() {
     otpCode, setOtpCode,
     customerAuthIntent, setCustomerAuthIntent,
     otpIdentityType, setOtpIdentityType,
+    otpRequestLoading,
+    otpVerificationLoading,
     signupDetailsReview, setSignupDetailsReview,
     signupCustomerName, setSignupCustomerName,
     signupBusinessLegalName, setSignupBusinessLegalName,

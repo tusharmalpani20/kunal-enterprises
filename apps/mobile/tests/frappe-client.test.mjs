@@ -51,6 +51,31 @@ test('frappe client submits orders through the backend order endpoint', async ()
   });
 });
 
+test('frappe client resolves login OTP identity in one backend request', async () => {
+  const fake = fakeCall({
+    'kunal_enterprises.api.otp.send_login_otp': {
+      message: {
+        success: true,
+        data: {
+          mobile_number: '9000000101',
+          identity_type: 'Sales Employee',
+          next_step: 'verify_otp',
+        },
+      },
+    },
+  });
+  const client = createFrappeApiClient(fake.call);
+
+  const response = await client.startLoginOtp('9000000101');
+
+  assert.equal(response.identity_type, 'Sales Employee');
+  assert.deepEqual(fake.calls[0], {
+    verb: 'post',
+    method: 'kunal_enterprises.api.otp.send_login_otp',
+    params: { mobile_number: '9000000101' },
+  });
+});
+
 test('frappe client loads allowed customers with Client Code for search compatibility', async () => {
   const fake = fakeCall({
     'kunal_enterprises.api.sales_employees.allowed_customers': {
@@ -202,6 +227,19 @@ test('frappe client unwraps backend errors from the response envelope', async ()
   await assert.rejects(
     () => client.allowedProductGroups('CUST-001'),
     /Customer App Access is not active/,
+  );
+});
+
+test('frappe client turns no-response OTP failures into a retryable message', async () => {
+  const client = createFrappeApiClient({
+    post: async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'data')");
+    },
+  });
+
+  await assert.rejects(
+    () => client.startLoginOtp('9000000101'),
+    /Unable to reach the server\. Please check your connection and try again\./,
   );
 });
 

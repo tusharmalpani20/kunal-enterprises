@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 
 import { AuthShell } from '../../src/components/AuthShell';
@@ -31,10 +31,13 @@ export default function SignInScreen() {
     showSignupDetails,
     signupDetailsReadOnly,
     otpRequestedForCurrentFlow,
+    otpRequestLoading,
+    otpVerificationLoading,
     requestOtp,
     verifyOtp,
     editSignupDetails,
   } = useOrderFlow();
+  const otpActionLoading = otpRequestLoading || otpVerificationLoading;
 
   return (
     <AuthShell>
@@ -45,7 +48,7 @@ export default function SignInScreen() {
             <TextInput
               value={mobileNumber}
               onChangeText={setMobileNumber}
-              editable={!signupDetailsReadOnly}
+              editable={!signupDetailsReadOnly && !otpActionLoading}
               keyboardType="phone-pad"
               placeholder="Enter mobile number"
               placeholderTextColor="#9a9a9a"
@@ -59,7 +62,7 @@ export default function SignInScreen() {
             <TextInput
               value={signupCustomerName}
               onChangeText={setSignupCustomerName}
-              editable={!signupDetailsReadOnly}
+              editable={!signupDetailsReadOnly && !otpActionLoading}
               placeholder="Enter customer name"
               placeholderTextColor="#9a9a9a"
               style={[styles.input, signupDetailsReadOnly && styles.readOnlyInput]}
@@ -68,7 +71,7 @@ export default function SignInScreen() {
             <TextInput
               value={signupBusinessLegalName}
               onChangeText={setSignupBusinessLegalName}
-              editable={!signupDetailsReadOnly}
+              editable={!signupDetailsReadOnly && !otpActionLoading}
               placeholder="Enter business or legal name"
               placeholderTextColor="#9a9a9a"
               style={[styles.input, signupDetailsReadOnly && styles.readOnlyInput]}
@@ -77,7 +80,7 @@ export default function SignInScreen() {
             <TextInput
               value={signupGstin}
               onChangeText={setSignupGstin}
-              editable={!signupDetailsReadOnly}
+              editable={!signupDetailsReadOnly && !otpActionLoading}
               autoCapitalize="characters"
               placeholder="Enter GSTIN"
               placeholderTextColor="#9a9a9a"
@@ -87,7 +90,7 @@ export default function SignInScreen() {
             <TextInput
               value={signupEmailId}
               onChangeText={setSignupEmailId}
-              editable={!signupDetailsReadOnly}
+              editable={!signupDetailsReadOnly && !otpActionLoading}
               keyboardType="email-address"
               autoCapitalize="none"
               placeholder="Enter email address"
@@ -98,14 +101,14 @@ export default function SignInScreen() {
             <DatePickerButton
               value={signupDateOfBirth}
               placeholder="DD-MM-YYYY"
-              disabled={signupDetailsReadOnly}
+              disabled={signupDetailsReadOnly || otpActionLoading}
               onPress={() => setDatePickerTarget('signupDateOfBirth')}
             />
             <Text style={styles.fieldLabel}>Date of Anniversary</Text>
             <DatePickerButton
               value={signupDateOfAnniversary}
               placeholder="DD-MM-YYYY"
-              disabled={signupDetailsReadOnly}
+              disabled={signupDetailsReadOnly || otpActionLoading}
               onPress={() => setDatePickerTarget('signupDateOfAnniversary')}
             />
           </>
@@ -141,26 +144,40 @@ export default function SignInScreen() {
             style={[styles.primaryAction, styles.authPrimaryAction]}
             pressedStyle={styles.primaryActionPressed}
             rippleColor={colors.primaryPressed}
+            disabled={otpActionLoading}
             onPress={otpRequestedForCurrentFlow ? verifyOtp : requestOtp}
           >
-            <Text style={styles.primaryActionText}>
-              {otpRequestedForCurrentFlow
-                ? 'Verify OTP'
-                : customerAuthIntent === 'signup'
-                  ? 'Send OTP and create request'
-                  : 'Send OTP'}
-            </Text>
+            {otpRequestLoading ? (
+              <>
+                <ActivityIndicator color="#ffffff" />
+                <Text style={styles.primaryActionText}>Sending OTP...</Text>
+              </>
+            ) : otpVerificationLoading ? (
+              <>
+                <ActivityIndicator color="#ffffff" />
+                <Text style={styles.primaryActionText}>Verifying OTP...</Text>
+              </>
+            ) : (
+              <Text style={styles.primaryActionText}>
+                {otpRequestedForCurrentFlow
+                  ? 'Verify OTP'
+                  : customerAuthIntent === 'signup'
+                    ? 'Send OTP and create request'
+                    : 'Send OTP'}
+              </Text>
+            )}
           </FeedbackPressable>
         )}
         {otpRequestedForCurrentFlow && !signupDetailsReview && (
-          <FeedbackPressable style={styles.textAction} onPress={requestOtp}>
+          <FeedbackPressable style={styles.textAction} disabled={otpActionLoading || !resend.canResend} onPress={requestOtp}>
             <Text style={styles.textActionText}>
-              {resend.canResend ? 'Resend OTP' : `Resend available in ${resend.secondsRemaining}s`}
+              {otpRequestLoading ? 'Sending OTP...' : otpVerificationLoading ? 'Verifying OTP...' : resend.canResend ? 'Resend OTP' : `Resend available in ${resend.secondsRemaining}s`}
             </Text>
           </FeedbackPressable>
         )}
         <FeedbackPressable
           style={styles.authTextAction}
+          disabled={otpActionLoading}
           onPress={() => {
             setCustomerAuthIntent(customerAuthIntent === 'signup' ? 'login' : 'signup');
             setMode('Customer');

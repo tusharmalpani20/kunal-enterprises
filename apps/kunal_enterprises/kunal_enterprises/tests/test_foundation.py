@@ -21,6 +21,7 @@ from kunal_enterprises.api.sync_admin import (
 	sync_vouchers_now,
 )
 from kunal_enterprises.api.order_controls import cancel_order, partially_close_order, resolve_manual_review
+from kunal_enterprises.api import otp as otp_api
 from kunal_enterprises.api.otp import resend_otp, send_otp, start_customer_signup, verify_customer_otp, verify_sales_employee_otp
 from kunal_enterprises.api.product_groups import allowed as allowed_product_groups
 from kunal_enterprises.api.product_groups import item_stock
@@ -1189,6 +1190,59 @@ class TestSalesEmployeeAuth(FrappeTestCase):
 				},
 			)
 		)
+
+	def test_send_sales_employee_otp_is_blocked_until_cooldown_expires(self):
+		frappe.get_doc(
+			{
+				"doctype": "Sales Employee",
+				"sales_employee_name": "Cooldown OTP Employee",
+				"mobile_number": "9000000030",
+				"status": "Active",
+				"mobile_verified": 1,
+			}
+		).insert()
+
+		first_response = send_otp("9000000030", "Sales Employee")
+		first_otp = frappe.get_doc(
+			"Mobile OTP",
+			{
+				"mobile_number": "9000000030",
+				"purpose": "Sales Employee Login",
+				"status": "Open",
+			}
+		)
+		second_response = send_otp("9000000030", "Sales Employee")
+
+		self.assertTrue(first_response["success"])
+		self.assertFalse(second_response["success"])
+		self.assertEqual(second_response["http_status_code"], 429)
+		self.assertIn("wait", second_response["error"]["message"].lower())
+		self.assertTrue(
+			frappe.db.exists(
+				"Mobile OTP",
+				{
+					"name": first_otp.name,
+					"status": "Open",
+				},
+			)
+		)
+
+	def test_send_login_otp_resolves_sales_employee_without_customer_fallback(self):
+		frappe.get_doc(
+			{
+				"doctype": "Sales Employee",
+				"sales_employee_name": "Resolved Login Employee",
+				"mobile_number": "9000000031",
+				"status": "Active",
+				"mobile_verified": 1,
+			}
+		).insert()
+
+		response = otp_api.send_login_otp("9000000031")
+
+		self.assertTrue(response["success"])
+		self.assertEqual(response["data"]["identity_type"], "Sales Employee")
+		self.assertEqual(response["data"]["purpose"], "Sales Employee Login")
 
 	def test_send_sales_employee_otp_blocks_disabled_employee(self):
 		frappe.get_doc(

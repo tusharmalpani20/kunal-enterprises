@@ -124,6 +124,10 @@ export function otpResendState({ lastSentAtMs, nowMs, waitSeconds = 45 }) {
   };
 }
 
+export function canStartOtpRequest({ inFlight, canResend, hasCurrentRequest = true }) {
+  return !inFlight && (!hasCurrentRequest || canResend);
+}
+
 export function otpCooldownSecondsFromResponse(response, fallbackSeconds = 45) {
   const cooldownSeconds = Number(response?.cooldown_seconds);
   if (!Number.isFinite(cooldownSeconds) || cooldownSeconds <= 0) {
@@ -148,8 +152,4 @@ export function shouldUseOtpResend({ lastSentAtMs, canResend, currentRequestKey,
 
 export function shouldLogoutForApiError(message) {
   return ['Invalid or inactive token', 'App Update Required', 'Error verifying token'].includes(message);
-}
-
-export function shouldTrySalesEmployeeOtpAfterCustomerOtpError(message) {
-  return /Customer was not found for this mobile number/i.test(String(message || ''));
 }

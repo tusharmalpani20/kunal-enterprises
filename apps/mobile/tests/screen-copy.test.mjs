@@ -94,3 +94,19 @@ test('customer signup screen captures required fields without fixture defaults',
 	assert.match(flowSource, /businessLegalName: signupBusinessLegalName/);
 	assert.match(flowSource, /emailId: signupEmailId/);
 });
+
+test('sign-in OTP actions expose a loading state while a request is in flight', () => {
+	const signInSource = readFileSync(new URL('../app/(auth)/sign-in.tsx', import.meta.url), 'utf8');
+	const flowSource = readFileSync(new URL('../src/flow/OrderFlowProvider.tsx', import.meta.url), 'utf8');
+
+	assert.match(signInSource, /otpRequestLoading/);
+	assert.match(signInSource, /otpVerificationLoading/);
+	assert.match(signInSource, /disabled=\{otpActionLoading/);
+	assert.match(signInSource, /Sending OTP/);
+	assert.match(signInSource, /Verifying OTP/);
+	assert.match(signInSource, /editable=\{!signupDetailsReadOnly && !otpActionLoading\}/);
+	assert.match(signInSource, /disabled=\{signupDetailsReadOnly \|\| otpActionLoading\}/);
+	assert.match(flowSource, /otpRequestInFlightRef/);
+	assert.match(flowSource, /otpVerificationInFlightRef/);
+	assert.match(flowSource, /const \[otpCode, setOtpCode\] = useState\(''\);/);
+});

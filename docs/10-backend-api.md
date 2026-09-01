@@ -121,7 +121,23 @@ Response:
 }
 ```
 
-Customer signup, Customer OTP send/resend, and Sales Employee OTP send/resend create a `Mobile OTP` record queued for the `frappe_whatsapp` provider. The record stores the OTP request payload, provider response metadata, provider status, cooldown, expiry, and verification status so OTP dispatch has an install-visible audit trail.
+Customer signup, Customer OTP send/resend, and Sales Employee OTP send/resend create a `Mobile OTP` record queued for the `frappe_whatsapp` provider. The record stores the OTP request payload, provider response metadata, provider status, cooldown, expiry, and verification status so OTP dispatch has an install-visible audit trail. Login and resend OTP creation is protected by a 45-second server-side cooldown and a per-mobile lock, so duplicate taps or simultaneous requests cannot invalidate the first code.
+
+### Send Login OTP
+
+```http
+POST /api/method/kunal_enterprises.api.otp.send_login_otp
+```
+
+Request:
+
+```json
+{
+  "mobile_number": "9000000002"
+}
+```
+
+This endpoint resolves the mobile number to exactly one Customer or Sales Employee identity, validates its status, and then creates the OTP. The mobile app uses this endpoint for login so it does not make a failed Customer request followed by a second Sales Employee request.
 
 ### Send OTP
 
