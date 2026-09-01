@@ -67,7 +67,7 @@ Fixture mode:
 - Used when the Frappe provider has no live `call` object.
 - Provides deterministic Customer and Sales Employee OTP responses.
 - Provides fixture Product Groups, items, stock, customers, orders, Sales Employee history across Customers, order detail, profile, current-session, revoke, and profile-update behavior.
-- Keeps Client Code searchable and displays it on authorized Sales Employee customer-selection cards.
+- Keeps Client Code searchable for Sales Employee lookup, but does not display it on customer-selection cards.
 
 Live Frappe mode:
 

@@ -29,7 +29,7 @@ test('customer search returns no results until at least two non-space characters
   assert.deepEqual(filterAllowedCustomers(customers, ' a '), []);
 });
 
-test('sales employee search can match and display client code on the customer card', () => {
+test('sales employee search can match Client Code', () => {
   const results = filterAllowedCustomers(customers, 'ledger-001').map(sanitizeCustomerForSalesEmployee);
 
   assert.equal(results.length, 1);

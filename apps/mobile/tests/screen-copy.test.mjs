@@ -50,10 +50,10 @@ test('sales employee selected customer copy stays concise', () => {
 	assert.doesNotMatch(subtitle, /Internal note/i);
 });
 
-test('sales employee customer cards include Client Code', () => {
+test('sales employee customer cards do not display Client Code', () => {
 	const source = readFileSync(new URL('../app/(app)/customer.tsx', import.meta.url), 'utf8');
 
-	assert.match(source, /customer\.client_code/);
+	assert.doesNotMatch(source, /customer\.client_code/);
 });
 
 test('visible mobile UI copy does not mention pricing fields', () => {

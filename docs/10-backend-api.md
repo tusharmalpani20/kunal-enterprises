@@ -336,7 +336,7 @@ GET /api/method/kunal_enterprises.api.sales_employees.allowed_customers?sales_em
 Auth-Token: Bearer <access_token>
 ```
 
-Search matches the internal Customer ID, Client Code, customer name, and business/legal name. Client Code is returned for the authorized Sales Employee customer-selection card. Results are limited to 60 customers per request; an empty search returns the first 60 customers ordered by customer name.
+Search matches the internal Customer ID, Client Code, customer name, and business/legal name. Client Code remains in the authorized lookup response for search compatibility, but the mobile customer-selection card currently displays only the business/legal name. Results are limited to 60 customers per request; an empty search returns the first 60 customers ordered by customer name.
 The token must be a Sales Employee token matching `sales_employee`.
 
 Response:

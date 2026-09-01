@@ -51,7 +51,7 @@ test('frappe client submits orders through the backend order endpoint', async ()
   });
 });
 
-test('frappe client loads allowed customers with client code for Sales Employee cards', async () => {
+test('frappe client loads allowed customers with Client Code for search compatibility', async () => {
   const fake = fakeCall({
     'kunal_enterprises.api.sales_employees.allowed_customers': {
       message: {
