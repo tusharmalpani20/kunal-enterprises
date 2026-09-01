@@ -12,7 +12,7 @@ import {
   orderSummaryForMobile,
   salesEmployeeProfileForMobile,
 } from '../domain/profileHistoryFlow.mjs';
-import { sortGodownStockForMobile } from '../domain/mobileFlow.mjs';
+import { searchItemsForMobile, sortGodownStockForMobile } from '../domain/mobileFlow.mjs';
 
 const productGroups = [
   { name: 'Cotton Fabric', group_name: 'Cotton Fabric', full_path: 'Cotton Fabric', product_group_logo: '/files/cotton_fabric_logo.jpeg' },
@@ -309,8 +309,14 @@ export const mockApi = {
     return productGroups;
   },
 
-  async allowedItems(_customer, productGroup) {
-    return items.filter((item) => item.root_stock_group === productGroup);
+  async allowedItems(_customer, productGroup, _salesEmployee, options = {}) {
+    const scopedItems = productGroup
+      ? items.filter((item) => item.root_stock_group === productGroup)
+      : items;
+    const filteredItems = searchItemsForMobile(scopedItems, options.search || '');
+    const offset = Number.isFinite(options.offset) ? options.offset : 0;
+    const limit = Number.isFinite(options.limit) ? options.limit : filteredItems.length;
+    return filteredItems.slice(offset, offset + limit);
   },
 
   async itemStock(_customer, item) {

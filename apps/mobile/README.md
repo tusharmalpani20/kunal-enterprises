@@ -76,6 +76,7 @@ Live Frappe mode:
 - Maps backend whitelisted methods through `src/api/frappeClient.mjs`.
 - Sanitizes Sales Employee allowed-customer responses to the fields needed by the authorized customer-selection card.
 - Loads at most 60 Sales Employee customer results at a time, with a short search debounce to keep large customer lists responsive.
+- Loads Product Groups separately, then requests at most 60 allowed items per search or Product Group selection; item search is sent to the backend instead of loading the full catalogue into the device.
 - Normalizes backend response envelopes and throws backend validation messages for UI banner classification.
 
 Backend method coverage:

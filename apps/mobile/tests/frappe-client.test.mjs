@@ -385,6 +385,64 @@ test('frappe client passes sales employee context to item and stock access APIs'
   ]);
 });
 
+test('frappe client sends bounded item search parameters for one product group', async () => {
+  const fake = fakeCall({
+    'kunal_enterprises.api.product_groups.items': {
+      message: {
+        success: true,
+        data: {
+          items: [{ name: 'ITEM-COTTON-001', item_name: 'Blue Cotton', root_stock_group: 'Cotton Fabric' }],
+          has_more: true,
+          next_offset: 60,
+        },
+      },
+    },
+  });
+  const client = createFrappeApiClient(fake.call);
+
+  const items = await client.allowedItems('CUST-001', 'Cotton Fabric', 'SE-001', {
+    search: 'blue',
+    limit: 60,
+    offset: 0,
+  });
+
+  assert.equal(items.length, 1);
+  assert.deepEqual(fake.calls[0], {
+    verb: 'get',
+    method: 'kunal_enterprises.api.product_groups.items',
+    params: {
+      customer: 'CUST-001',
+      product_group: 'Cotton Fabric',
+      sales_employee: 'SE-001',
+      search: 'blue',
+      limit: 60,
+      offset: 0,
+    },
+  });
+});
+
+test('frappe client can request a bounded all-products item page', async () => {
+  const fake = fakeCall({
+    'kunal_enterprises.api.product_groups.items': {
+      message: {
+        success: true,
+        data: { items: [] },
+      },
+    },
+  });
+  const client = createFrappeApiClient(fake.call);
+
+  await client.allowedItems('CUST-001', undefined, undefined, { limit: 60, offset: 0 });
+
+  assert.deepEqual(fake.calls[0].params, {
+    customer: 'CUST-001',
+    product_group: undefined,
+    sales_employee: undefined,
+    limit: 60,
+    offset: 0,
+  });
+});
+
 test('frappe client normalizes live order history and detail for mobile safety', async () => {
   const fake = fakeCall({
     'kunal_enterprises.api.orders.history': {

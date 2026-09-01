@@ -17,6 +17,7 @@ export default function CustomerScreen() {
     clearDraftCart,
     customers,
     customerSearchLoading,
+    groupsLoading,
     customerSearch, setCustomerSearch,
     chooseCustomer,
   } = useOrderFlow();
@@ -72,11 +73,18 @@ export default function CustomerScreen() {
         {!customerSearchLoading && customerSearch.trim().length === 1 && (
           <Text style={styles.helperText}>Enter at least 2 characters to search customers.</Text>
         )}
+        {groupsLoading && (
+          <View style={styles.loadingProducts}>
+            <ActivityIndicator color="#111111" />
+            <Text style={styles.helperText}>Loading product groups</Text>
+          </View>
+        )}
         {!customerSearchLoading && customers.map((customer) => (
           <RowButton
             key={customer.customer}
             title={customer.customer_name}
             detail={customer.business_legal_name}
+            disabled={groupsLoading}
             onPress={() => chooseCustomer(customer)}
           />
         ))}

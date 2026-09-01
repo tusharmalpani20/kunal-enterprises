@@ -112,13 +112,24 @@ export function createFrappeApiClient(call) {
       return groups;
     },
 
-    async allowedItems(customer, productGroup, salesEmployee = undefined) {
+    async allowedItems(customer, productGroup, salesEmployee = undefined, options = {}) {
+      const params = {
+        customer,
+        product_group: productGroup,
+        sales_employee: salesEmployee,
+      };
+      const search = String(options.search || '').trim();
+      if (search) {
+        params.search = search;
+      }
+      if (options.limit !== undefined) {
+        params.limit = options.limit;
+      }
+      if (options.offset !== undefined) {
+        params.offset = options.offset;
+      }
       const data = unwrap(
-        await call.get(METHODS.allowedItems, {
-          customer,
-          product_group: productGroup,
-          sales_employee: salesEmployee,
-        }),
+        await call.get(METHODS.allowedItems, params),
       );
       return data.items;
     },

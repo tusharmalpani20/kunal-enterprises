@@ -57,13 +57,14 @@ import { navigationActionForStep, routeForStep, stepForRoute } from './stepRoute
 import { AuthContext } from '../providers/auth';
 import { useFrappe } from '../providers/frappe';
 import { cartKeyForOrderContext, cartOwnerKeyForSession, clearAllCarts, clearCart, ensureCartOwner, listSalesEmployeeDraftCarts, loadCart, saveCart } from '../storage/mobileStorage';
-import { dateFromIsoDate, isoDateFromDate, showToast, searchProductGroups, uniqueItemsByName } from '../utils/orderFormatting';
+import { dateFromIsoDate, isoDateFromDate, showToast, searchProductGroups } from '../utils/orderFormatting';
 import type { AllowedCustomer, CartAllocation, ItemStock, OrderDetail, OrderSummary, ProductGroup, TallyItem } from '../types';
 import type { DatePickerTarget, DraftCartSummary, Mode, Step } from './types';
 
 const MAX_VISIBLE_GROUPS = 40;
 const MAX_VISIBLE_ITEMS = 60;
 const CUSTOMER_SEARCH_DEBOUNCE_MS = 300;
+const ITEM_SEARCH_DEBOUNCE_MS = 300;
 const HISTORY_PAGE_SIZE = 20;
 
 export type OrderFlowValue = ReturnType<typeof useOrderFlowState>;
@@ -106,8 +107,13 @@ function useOrderFlowState() {
   const [mode, setMode] = useState<Mode>('Customer');
   const [groups, setGroups] = useState<ProductGroup[]>([]);
   const [items, setItems] = useState<TallyItem[]>([]);
+  const [itemIndex, setItemIndex] = useState<Record<string, TallyItem>>({});
   const [catalogLoadedKey, setCatalogLoadedKey] = useState<string | null>(null);
-  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [itemsLoadedKey, setItemsLoadedKey] = useState<string | null>(null);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const catalogRequestIdRef = useRef(0);
+  const itemsRequestIdRef = useRef(0);
   const [stockRows, setStockRows] = useState<ItemStock[]>([]);
   const [customers, setCustomers] = useState<AllowedCustomer[]>([]);
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
@@ -158,6 +164,7 @@ function useOrderFlowState() {
   const [systemState, setSystemState] = useState<{ kind: string; message?: string }>({ kind: 'idle' });
   const hasActiveModeSession = canUseProtectedMobileApi({ mode, session });
   const protectedCallReady = !session?.accessToken || callAccessToken === session.accessToken;
+  const catalogLoading = groupsLoading || itemsLoading;
 
   useEffect(() => {
     const banner = requestBanner(systemState);
@@ -170,37 +177,57 @@ function useOrderFlowState() {
   const loadCatalogForCustomer = useCallback(
     async (customer: string, salesEmployee?: string) => {
       const catalogKey = `${customer}:${salesEmployee || ''}`;
+      const sameCatalogContext = catalogLoadedKey === catalogKey;
+      const requestId = ++catalogRequestIdRef.current;
+      itemsRequestIdRef.current += 1;
       try {
-        setCatalogLoading(true);
+        setGroupsLoading(true);
+        setItemsLoading(false);
+        setGroups([]);
+        setCatalogLoadedKey(null);
+        setItems([]);
+        if (!sameCatalogContext) {
+          setItemIndex({});
+        }
+        setItemsLoadedKey(null);
         const catalogApi = api as any;
         const allowedGroups = await catalogApi.allowedProductGroups(customer, salesEmployee);
+        if (requestId !== catalogRequestIdRef.current) {
+          return false;
+        }
         setGroups(allowedGroups);
-        const groupedItems = await Promise.all(
-          allowedGroups.map((group: ProductGroup) => catalogApi.allowedItems(customer, group.name, salesEmployee)),
-        );
-        setItems(uniqueItemsByName(groupedItems.flat()));
+        setSelectedGroup((current) => current && allowedGroups.some((group: ProductGroup) => group.name === current.name) ? current : null);
         setCatalogLoadedKey(catalogKey);
+        return true;
       } catch (error) {
+        if (requestId !== catalogRequestIdRef.current) {
+          return false;
+        }
         const failure = classifyApiFailure(error);
         setSystemState(failure);
         setCatalogLoadedKey(null);
+        setGroups([]);
+        setItems([]);
+        setItemIndex({});
+        setItemsLoadedKey(null);
         if (failure.kind === 'expired_session') {
           await logout();
-          setGroups([]);
-          setItems([]);
           setCart([]);
           setSelectedCustomer(null);
           setSelectedGroup(null);
           setSelectedItem(null);
           setGodownSelectorOpen(false);
           setStep('auth');
-          return;
+          return false;
         }
+        return false;
       } finally {
-        setCatalogLoading(false);
+        if (requestId === catalogRequestIdRef.current) {
+          setGroupsLoading(false);
+        }
       }
     },
-    [api, logout],
+    [api, catalogLoadedKey, logout],
   );
 
   useEffect(() => {
@@ -215,12 +242,29 @@ function useOrderFlowState() {
 
   useEffect(() => {
     if (!hasActiveModeSession) {
+      catalogRequestIdRef.current += 1;
+      itemsRequestIdRef.current += 1;
+      setGroupsLoading(false);
+      setItemsLoading(false);
       setGroups([]);
+      setItems([]);
+      setItemIndex({});
+      setCatalogLoadedKey(null);
+      setItemsLoadedKey(null);
       setCustomers([]);
       setCustomerSearchLoading(false);
       return;
     }
     if (!protectedCallReady) {
+      catalogRequestIdRef.current += 1;
+      itemsRequestIdRef.current += 1;
+      setGroupsLoading(false);
+      setItemsLoading(false);
+      setGroups([]);
+      setItems([]);
+      setItemIndex({});
+      setCatalogLoadedKey(null);
+      setItemsLoadedKey(null);
       setCustomerSearchLoading(false);
       return;
     }
@@ -230,7 +274,7 @@ function useOrderFlowState() {
       setCustomers([]);
       setCustomerSearchLoading(false);
       const catalogKey = `${customer}:`;
-      if (catalogLoadedKey !== catalogKey) {
+      if (catalogLoadedKey !== catalogKey && !groupsLoading) {
         loadCatalogForCustomer(customer);
       }
       return;
@@ -282,6 +326,89 @@ function useOrderFlowState() {
     };
   }, [api, catalogLoadedKey, customerSearch, hasActiveModeSession, loadCatalogForCustomer, logout, mode, protectedCallReady, step, session]);
 
+  useEffect(() => {
+    if (!hasActiveModeSession || !protectedCallReady || groupsLoading || step !== 'groups') {
+      return;
+    }
+
+    const customer = activeCustomer();
+    const salesEmployee = activeSalesEmployeeContext();
+    const expectedCatalogKey = `${customer}:${salesEmployee || ''}`;
+    if (!customer || catalogLoadedKey !== expectedCatalogKey) {
+      return;
+    }
+
+    const productGroup = selectedGroup?.name;
+    const search = itemSearch.trim();
+    const itemQueryKey = `${expectedCatalogKey}:${productGroup || ''}:${search}`;
+    if (itemsLoadedKey === itemQueryKey) {
+      return;
+    }
+
+    let cancelled = false;
+    let requestId = 0;
+    const searchTimer = setTimeout(async () => {
+      if (cancelled) {
+        return;
+      }
+
+      requestId = ++itemsRequestIdRef.current;
+      setItemsLoading(true);
+      try {
+        const catalogApi = api as any;
+        const nextItems = await catalogApi.allowedItems(customer, productGroup, salesEmployee, {
+          search,
+          limit: MAX_VISIBLE_ITEMS,
+          offset: 0,
+        });
+        if (cancelled || requestId !== itemsRequestIdRef.current) {
+          return;
+        }
+        setItems(nextItems);
+        setItemIndex((current) => {
+          const next = { ...current };
+          for (const item of nextItems) {
+            next[item.name] = item;
+          }
+          return next;
+        });
+        setItemsLoadedKey(itemQueryKey);
+      } catch (error) {
+        if (cancelled || requestId !== itemsRequestIdRef.current) {
+          return;
+        }
+        const failure = classifyApiFailure(error);
+        setSystemState(failure);
+        setItems([]);
+        setItemsLoadedKey(null);
+        if (failure.kind === 'expired_session') {
+          await logout();
+          setGroups([]);
+          setItems([]);
+          setItemIndex({});
+          setItemsLoadedKey(null);
+          setSelectedCustomer(null);
+          setSelectedGroup(null);
+          setSelectedItem(null);
+          setStep('auth');
+        }
+      } finally {
+        if (!cancelled && requestId === itemsRequestIdRef.current) {
+          setItemsLoading(false);
+        }
+      }
+    }, ITEM_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+      if (requestId && requestId === itemsRequestIdRef.current) {
+        itemsRequestIdRef.current += 1;
+        setItemsLoading(false);
+      }
+    };
+  }, [api, catalogLoadedKey, groupsLoading, hasActiveModeSession, itemSearch, itemsLoadedKey, logout, mode, protectedCallReady, selectedCustomer, selectedGroup, session, step]);
+
   const totals = useMemo(() => orderTotals(cart), [cart]);
   const notes = useMemo(() => buildConfirmationNotes(cart, stockRows), [cart, stockRows]);
   const visibleGroups = useMemo(() => searchProductGroups(groups, itemSearch), [groups, itemSearch]);
@@ -322,8 +449,8 @@ function useOrderFlowState() {
   const cartOwnerKey = useMemo(() => cartOwnerKeyForSession(session), [session]);
   const groupLogoMap = useMemo(() => productGroupLogoMap(groups), [groups]);
   const groupedCart = useMemo(
-    () => groupCartByProductGroup(cart, items, groupLogoMap),
-    [cart, items, groupLogoMap],
+    () => groupCartByProductGroup(cart, Object.values(itemIndex), groupLogoMap),
+    [cart, groupLogoMap, itemIndex],
   );
   useEffect(() => {
     if (groups.length === 0) return;
@@ -337,10 +464,10 @@ function useOrderFlowState() {
   const logoForTallyItem = useCallback((item: TallyItem) => logoForItem(groupLogoMap, item), [groupLogoMap]);
   const logoForItemName = useCallback(
     (itemName: string) => {
-      const item = items.find((row) => row.name === itemName);
+      const item = itemIndex[itemName];
       return item ? logoForItem(groupLogoMap, item) : null;
     },
-    [groupLogoMap, items],
+    [groupLogoMap, itemIndex],
   );
   const resolveLogoUrl = useCallback((path: string | null | undefined) => resolveFrappeFileUrl(path, baseUrl || PRIMARY_BASE_URL), [baseUrl]);
 
@@ -355,7 +482,9 @@ function useOrderFlowState() {
       setSelectedItem(null);
       setGroups([]);
       setItems([]);
+      setItemIndex({});
       setCatalogLoadedKey(null);
+      setItemsLoadedKey(null);
     });
     return () => {
       cancelled = true;
@@ -403,6 +532,9 @@ function useOrderFlowState() {
 
   function chooseGroup(group: ProductGroup | null) {
     setSelectedGroup(group);
+    setItemSearch('');
+    setItems([]);
+    setItemsLoadedKey(null);
   }
 
   async function chooseItem(item: TallyItem) {
@@ -421,8 +553,10 @@ function useOrderFlowState() {
     setSelectedCustomer(customer);
     setSelectedGroup(null);
     setItemSearch('');
-    await loadCatalogForCustomer(customer.customer, activeSalesEmployeeIdentity());
-    setStep('groups');
+    const loaded = await loadCatalogForCustomer(customer.customer, activeSalesEmployeeIdentity());
+    if (loaded) {
+      setStep('groups');
+    }
   }
 
   async function chooseDraftCart(draft: DraftCartSummary) {
@@ -792,10 +926,17 @@ function useOrderFlowState() {
     setLastOtpRequestKey(null);
     setOtpCooldownSeconds(45);
     setCart([]);
+    catalogRequestIdRef.current += 1;
+    itemsRequestIdRef.current += 1;
+    setGroupsLoading(false);
+    setItemsLoading(false);
     setSelectedCustomer(null);
     setSelectedGroup(null);
     setSelectedItem(null);
     setCatalogLoadedKey(null);
+    setItemsLoadedKey(null);
+    setItemIndex({});
+    setItems([]);
     setGodownSelectorOpen(false);
   }
 
@@ -826,7 +967,13 @@ function useOrderFlowState() {
     setItemSearch('');
     setGroups([]);
     setItems([]);
+    setItemIndex({});
+    setItemsLoadedKey(null);
     setCatalogLoadedKey(null);
+    catalogRequestIdRef.current += 1;
+    itemsRequestIdRef.current += 1;
+    setGroupsLoading(false);
+    setItemsLoading(false);
     setStep('customer');
   }
 
@@ -954,6 +1101,8 @@ function useOrderFlowState() {
     setCatalogLoadedKey(null);
     setGroups([]);
     setItems([]);
+    setItemIndex({});
+    setItemsLoadedKey(null);
     setReference(null);
     setOrderDetail(null);
   }
@@ -1041,6 +1190,8 @@ function useOrderFlowState() {
     step, setStep,
     groups,
     catalogLoading,
+    groupsLoading,
+    itemsLoading,
     items,
     stockRows,
     customers,

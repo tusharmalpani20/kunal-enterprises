@@ -115,10 +115,68 @@ test('auth provider validates stored sessions through the Frappe SDK by default'
 test('sales employee item and stock requests include sales employee context', () => {
   const source = combinedMobileSource();
 
-  assert.match(source, /catalogApi\.allowedItems\(customer, group\.name, salesEmployee\)/);
+  assert.match(source, /catalogApi\.allowedItems\(customer, productGroup, salesEmployee/);
   assert.match(source, /api\.itemStock\(activeCustomer\(\), item\.name, activeSalesEmployeeContext\(\)\)/);
   assert.match(source, /api\.itemStock\(activeCustomer\(\), item, activeSalesEmployeeContext\(\)\)/);
   assert.match(source, /function activeSalesEmployeeContext\(\)/);
+});
+
+test('catalogue selection loads groups separately and item pages are bounded', () => {
+  const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+
+  assert.doesNotMatch(source, /const groupedItems = await Promise\.all\(/);
+  assert.match(source, /const allowedGroups = await catalogApi\.allowedProductGroups\(customer, salesEmployee\)/);
+  assert.match(source, /setStep\('groups'\)/);
+  assert.match(source, /itemsLoading/);
+  assert.match(source, /limit: MAX_VISIBLE_ITEMS/);
+});
+
+test('catalogue request invalidation clears loading state when the session changes', () => {
+  const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+  const inactiveSessionBranch = source.match(/if \(!hasActiveModeSession\) \{([\s\S]*?)\n    \}/)?.[1] || '';
+
+  assert.match(inactiveSessionBranch, /catalogRequestIdRef\.current \+= 1/);
+  assert.match(inactiveSessionBranch, /itemsRequestIdRef\.current \+= 1/);
+  assert.match(inactiveSessionBranch, /setGroupsLoading\(false\)/);
+  assert.match(inactiveSessionBranch, /setItemsLoading\(false\)/);
+});
+
+test('catalogue cache is cleared while the protected API client changes tokens', () => {
+  const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+  const protectedClientBranch = source.match(/if \(!protectedCallReady\) \{([\s\S]*?)\n    \}/)?.[1] || '';
+
+  assert.match(protectedClientBranch, /catalogRequestIdRef\.current \+= 1/);
+  assert.match(protectedClientBranch, /itemsRequestIdRef\.current \+= 1/);
+  assert.match(protectedClientBranch, /setCatalogLoadedKey\(null\)/);
+  assert.match(protectedClientBranch, /setItemsLoadedKey\(null\)/);
+});
+
+test('mode switching invalidates catalogue requests and clears their loading state', () => {
+  const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+  const modeSwitchBody = source.match(/function switchMode\(nextMode: Mode\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+
+  assert.match(modeSwitchBody, /catalogRequestIdRef\.current \+= 1/);
+  assert.match(modeSwitchBody, /itemsRequestIdRef\.current \+= 1/);
+  assert.match(modeSwitchBody, /setGroupsLoading\(false\)/);
+  assert.match(modeSwitchBody, /setItemsLoading\(false\)/);
+});
+
+test('switching customers invalidates catalogue requests and clears their loading state', () => {
+  const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+  const switchCustomerBody = source.match(/function switchCustomer\(\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+
+  assert.match(switchCustomerBody, /catalogRequestIdRef\.current \+= 1/);
+  assert.match(switchCustomerBody, /itemsRequestIdRef\.current \+= 1/);
+  assert.match(switchCustomerBody, /setGroupsLoading\(false\)/);
+  assert.match(switchCustomerBody, /setItemsLoading\(false\)/);
+});
+
+test('same-customer catalogue refresh preserves known item metadata for cart summaries', () => {
+  const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+  const catalogLoaderBody = source.match(/const loadCatalogForCustomer = useCallback\(([\s\S]*?)\n  \);/)?.[1] || '';
+
+  assert.match(catalogLoaderBody, /catalogLoadedKey === catalogKey/);
+  assert.match(catalogLoaderBody, /if \(!sameCatalogContext\) \{[\s\S]*?setItemIndex\(\{\}\)/);
 });
 
 test('customer order screen keeps continuous catalog search, group filters, godown selection, and cart review', () => {
@@ -133,12 +191,10 @@ test('customer order screen keeps continuous catalog search, group filters, godo
     'ItemSearchRow',
     'cartQuantityForItem(cart, item.name)',
     'Choose godown to order from',
-    'Back to product search',
     'function BackButton',
     'items in cart',
-    'start building this order',
     'Open carts',
-    'Confirm order',
+    'Confirm',
   ]) {
     assert.match(source, new RegExp(escapeRegExp(phrase)));
   }

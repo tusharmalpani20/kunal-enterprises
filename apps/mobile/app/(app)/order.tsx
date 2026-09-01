@@ -11,7 +11,7 @@ import type { TallyItem } from '../../src/types';
 export default function OrderScreen() {
   const {
     groups,
-    catalogLoading,
+    itemsLoading,
     selectedGroup,
     chooseGroup,
     renderedGroups,
@@ -72,7 +72,7 @@ export default function OrderScreen() {
             </FeedbackPressable>
           ))}
         </ScrollView>
-        {catalogLoading ? (
+        {itemsLoading ? (
           <View style={styles.loadingProducts}>
             <ActivityIndicator color="#111111" />
             <Text style={styles.helperText}>Loading products</Text>
@@ -86,10 +86,10 @@ export default function OrderScreen() {
               onPress={() => chooseItem(item)}
             />
           ))}
-        {!catalogLoading && visibleItems.length === 0 && (
+        {!itemsLoading && visibleItems.length === 0 && (
           <Text style={styles.helperText}>No items match this search and product group filter.</Text>
         )}
-        {!catalogLoading && visibleItems.length > renderedItems.length && (
+        {!itemsLoading && visibleItems.length > renderedItems.length && (
           <Text style={styles.helperText}>
             Showing {renderedItems.length} of {visibleItems.length} matches. Refine search to narrow results.
           </Text>

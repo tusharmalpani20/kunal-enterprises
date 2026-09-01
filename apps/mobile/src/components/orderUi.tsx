@@ -149,12 +149,14 @@ export function RowButton({
   title,
   detail,
   onPress,
+  disabled = false,
   tone = 'default',
   actionLabel,
 }: {
   title: string;
   detail: string;
   onPress: () => void;
+  disabled?: boolean;
   tone?: 'default' | 'warn';
   actionLabel?: string;
 }) {
@@ -163,6 +165,7 @@ export function RowButton({
       rippleColor={tone === 'warn' ? '#fed7aa' : '#eeeeee'}
       pressedStyle={tone === 'warn' ? styles.warningRowPressed : styles.rowButtonPressed}
       style={[styles.rowButton, tone === 'warn' && styles.warningRow]}
+      disabled={disabled}
       onPress={onPress}
     >
       <View style={styles.rowButtonTextBlock}>
