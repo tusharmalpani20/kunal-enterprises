@@ -413,9 +413,11 @@ Response:
 ### Allowed Items
 
 ```http
-GET /api/method/kunal_enterprises.api.product_groups.items?customer=9000000001&product_group=Cotton%20Fabric
+GET /api/method/kunal_enterprises.api.product_groups.items?customer=9000000001&product_group=Cotton%20Fabric&search=cotton&limit=60&offset=0
 Auth-Token: Bearer <access_token>
 ```
+
+`product_group` is optional. When omitted, the endpoint returns a bounded page across all Product Groups visible to the Customer (and, when supplied, the Sales Employee). `search` matches the item code, item name, or root Product Group name. `limit` defaults to 60 and is capped at 60; `offset` defaults to 0.
 
 Response:
 
@@ -426,6 +428,8 @@ Response:
   "data": {
     "customer": "9000000001",
     "product_group": "Cotton Fabric",
+    "has_more": false,
+    "next_offset": null,
     "items": [
       {
         "name": "ITEM-COTTON-001",

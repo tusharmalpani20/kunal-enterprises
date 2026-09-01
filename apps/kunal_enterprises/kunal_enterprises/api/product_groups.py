@@ -5,6 +5,9 @@ from kunal_enterprises.api.utils import create_success_response, handle_error_re
 from kunal_enterprises.kunal_enterprises.doctype.customer.customer import has_sales_employee_order_access
 
 
+MOBILE_ITEM_PAGE_SIZE = 60
+
+
 @frappe.whitelist(allow_guest=True, methods=["GET"])
 def allowed(customer, sales_employee=None, headers=None):
 	try:
@@ -25,33 +28,27 @@ def allowed(customer, sales_employee=None, headers=None):
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def items(customer, product_group, sales_employee=None, headers=None):
+def items(customer, product_group=None, sales_employee=None, search=None, limit=MOBILE_ITEM_PAGE_SIZE, offset=0, headers=None):
 	try:
 		token_error = _validate_product_token(customer, sales_employee, headers)
 		if token_error:
 			return token_error
 		access = resolve_product_access(customer, sales_employee)
-		if product_group not in access["visible_root_names"]:
+		if product_group and product_group not in access["visible_root_names"]:
 			frappe.throw("Product Group is not allowed", title="Product Group Access Required")
 
-		item_rows = frappe.get_all(
-			"Tally Item",
-			filters={
-				"root_stock_group": product_group,
-				"is_active": 1,
-			},
-		fields=[
-			"name",
-			"item_name",
-			"immediate_stock_group",
-			"root_stock_group",
-			"uom",
-			"total_closing_balance",
-			"is_active",
-		],
-			order_by="item_name asc",
+		item_limit = _coerce_mobile_item_limit(limit)
+		item_offset = _coerce_mobile_item_offset(offset)
+		item_rows = _load_mobile_item_page(
+			access,
+			product_group=product_group,
+			search=str(search or "").strip(),
+			limit=item_limit,
+			offset=item_offset,
 		)
 		item_rows = [row for row in item_rows if item_is_allowed(row, access)]
+		has_more = len(item_rows) > item_limit
+		item_rows = item_rows[:item_limit]
 		_apply_godown_stock_totals(item_rows)
 		_apply_mobile_summary_groups(item_rows)
 
@@ -62,10 +59,74 @@ def items(customer, product_group, sales_employee=None, headers=None):
 				"sales_employee": sales_employee,
 				"product_group": product_group,
 				"items": item_rows,
+				"has_more": has_more,
+				"next_offset": item_offset + item_limit if has_more else None,
 			},
 		)
 	except Exception as error:
 		return handle_error_response(error, "Unable to load allowed items")
+
+
+def _coerce_mobile_item_limit(value):
+	try:
+		requested_limit = int(value)
+	except (TypeError, ValueError):
+		return MOBILE_ITEM_PAGE_SIZE
+	return max(1, min(requested_limit, MOBILE_ITEM_PAGE_SIZE))
+
+
+def _coerce_mobile_item_offset(value):
+	try:
+		requested_offset = int(value)
+	except (TypeError, ValueError):
+		return 0
+	return max(0, requested_offset)
+
+
+def _load_mobile_item_page(access, product_group=None, search="", limit=MOBILE_ITEM_PAGE_SIZE, offset=0):
+	visible_roots = [product_group] if product_group else access["visible_root_names"]
+	allowed_groups = tuple(sorted(access["effective_group_names"]))
+	if not visible_roots or not allowed_groups:
+		return []
+
+	conditions = [
+		"item.is_active = 1",
+		"item.root_stock_group IN %(visible_roots)s",
+		"COALESCE(NULLIF(item.immediate_stock_group, ''), item.root_stock_group) IN %(allowed_groups)s",
+	]
+	values = {
+		"visible_roots": tuple(visible_roots),
+		"allowed_groups": allowed_groups,
+		"limit": limit + 1,
+		"offset": offset,
+	}
+
+	if search:
+		values["search"] = f"%{search.lower()}%"
+		conditions.append(
+			"(LOWER(item.name) LIKE %(search)s "
+			"OR LOWER(item.item_name) LIKE %(search)s "
+			"OR LOWER(item.root_stock_group) LIKE %(search)s)"
+		)
+
+	return frappe.db.sql(
+		f"""
+		SELECT
+			item.name,
+			item.item_name,
+			item.immediate_stock_group,
+			item.root_stock_group,
+			item.uom,
+			item.total_closing_balance,
+			item.is_active
+		FROM `tabTally Item` item
+		WHERE {' AND '.join(conditions)}
+		ORDER BY item.item_name ASC, item.name ASC
+		LIMIT %(limit)s OFFSET %(offset)s
+		""",
+		values,
+		as_dict=True,
+	)
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])

@@ -1742,6 +1742,55 @@ class TestProductGroupAccess(FrappeTestCase):
 		self.assertTrue(response["success"])
 		self.assertEqual(response["data"]["items"][0]["total_closing_balance"], 277)
 
+	def test_allowed_items_support_bounded_search_pages(self):
+		product_group = self._create_product_group("PG Bounded Items")
+		customer = self._create_active_customer(
+			"9000000444",
+			"PG-BOUNDED-ITEMS-001",
+			product_groups=[product_group.name],
+		)
+		for index in range(65):
+			self._create_item(f"Bounded Search Item {index:02d}", product_group.name)
+
+		first_page = allowed_items(customer.name, search="Bounded Search", limit=60, offset=0)
+		second_page = allowed_items(customer.name, search="Bounded Search", limit=60, offset=60)
+
+		self.assertTrue(first_page["success"])
+		self.assertEqual(len(first_page["data"]["items"]), 60)
+		self.assertTrue(first_page["data"]["has_more"])
+		self.assertEqual(first_page["data"]["next_offset"], 60)
+		self.assertEqual(len(second_page["data"]["items"]), 5)
+		self.assertFalse(second_page["data"]["has_more"])
+		self.assertIsNone(second_page["data"]["next_offset"])
+
+	def test_allowed_items_supports_bounded_all_product_search(self):
+		first_group = self._create_product_group("PG All Search A")
+		second_group = self._create_product_group("PG All Search B")
+		customer = self._create_active_customer("9000000445", "PG-ALL-SEARCH-001")
+		self._create_item("All Search Item A", first_group.name)
+		self._create_item("All Search Item B", second_group.name)
+
+		response = allowed_items(customer.name, search="All Search", limit=1, offset=0)
+
+		self.assertTrue(response["success"])
+		self.assertEqual(len(response["data"]["items"]), 1)
+		self.assertTrue(response["data"]["has_more"])
+
+	def test_allowed_items_treat_blank_immediate_group_as_root_group(self):
+		product_group = self._create_product_group("PG Blank Immediate Group")
+		item = self._create_item("Blank Immediate Group Item", product_group.name)
+		frappe.db.set_value("Tally Item", item.name, "immediate_stock_group", "")
+		customer = self._create_active_customer(
+			"9000000446",
+			"PG-BLANK-IMMEDIATE-001",
+			product_groups=[product_group.name],
+		)
+
+		response = allowed_items(customer.name, product_group.name)
+
+		self.assertTrue(response["success"])
+		self.assertEqual([row["name"] for row in response["data"]["items"]], [item.name])
+
 	def test_allowed_items_clamp_negative_master_balance_without_snapshots(self):
 		product_group = self._create_product_group("PG Negative Master Total")
 		item = self._create_item("Negative Master Total Item", product_group.name)
