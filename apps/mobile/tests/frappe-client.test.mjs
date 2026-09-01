@@ -51,7 +51,7 @@ test('frappe client submits orders through the backend order endpoint', async ()
   });
 });
 
-test('frappe client loads allowed customers without exposing client code', async () => {
+test('frappe client loads allowed customers with client code for Sales Employee cards', async () => {
   const fake = fakeCall({
     'kunal_enterprises.api.sales_employees.allowed_customers': {
       message: {
@@ -74,7 +74,7 @@ test('frappe client loads allowed customers without exposing client code', async
   const customers = await client.allowedCustomers('SE-001', 'asha', 60);
 
   assert.equal(customers.length, 1);
-  assert.equal(Object.hasOwn(customers[0], 'client_code'), false);
+  assert.equal(customers[0].client_code, 'ASHA-LEDGER-001');
   assert.equal(fake.calls[0].method, 'kunal_enterprises.api.sales_employees.allowed_customers');
   assert.deepEqual(fake.calls[0].params, { sales_employee: 'SE-001', search: 'asha', limit: 60 });
 });

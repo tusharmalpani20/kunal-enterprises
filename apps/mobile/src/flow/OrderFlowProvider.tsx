@@ -433,6 +433,7 @@ function useOrderFlowState() {
           customer: draft.customer,
           customer_name: draft.customer,
           business_legal_name: 'Draft cart',
+          client_code: '',
         },
       );
     } catch (error) {

@@ -26,6 +26,7 @@ export function sanitizeCustomerForSalesEmployee(customer) {
     customer: customer.customer,
     customer_name: customer.customer_name,
     business_legal_name: customer.business_legal_name,
+    client_code: customer.client_code,
   };
 }
 

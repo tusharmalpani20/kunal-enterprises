@@ -67,14 +67,14 @@ Fixture mode:
 - Used when the Frappe provider has no live `call` object.
 - Provides deterministic Customer and Sales Employee OTP responses.
 - Provides fixture Product Groups, items, stock, customers, orders, Sales Employee history across Customers, order detail, profile, current-session, revoke, and profile-update behavior.
-- Keeps Client Code searchable for Sales Employee fixtures but never returns it to mobile screens.
+- Keeps Client Code searchable and displays it on authorized Sales Employee customer-selection cards.
 
 Live Frappe mode:
 
 - Used automatically when `FrappeProvider` creates a `frappe-js-sdk` call object from a stored access token.
 - Sends the custom mobile auth header as `Auth-Token: Bearer <accessToken>`.
 - Maps backend whitelisted methods through `src/api/frappeClient.mjs`.
-- Sanitizes Sales Employee allowed-customer responses so Client Code never reaches mobile screen state, even if a backend response includes it.
+- Sanitizes Sales Employee allowed-customer responses to the fields needed by the authorized customer-selection card.
 - Loads at most 60 Sales Employee customer results at a time, with a short search debounce to keep large customer lists responsive.
 - Normalizes backend response envelopes and throws backend validation messages for UI banner classification.
 

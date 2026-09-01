@@ -33,7 +33,7 @@ test('customer-facing access copy hides internal Client Code terminology', () =>
   assertNoInternalAccessTerms(pendingAccessMessage());
 });
 
-test('sales employee customer selection copy explains search without displaying Client Code', () => {
+test('sales employee customer selection copy explains search without exposing access terms', () => {
 	const subtitle = orderHeaderSubtitle({ mode: 'Sales Employee', selectedCustomer: null });
 
 	assert.match(subtitle, /Select a Customer/);
@@ -48,6 +48,12 @@ test('sales employee selected customer copy stays concise', () => {
 
 	assert.equal(subtitle, 'HELLO selected.');
 	assert.doesNotMatch(subtitle, /Internal note/i);
+});
+
+test('sales employee customer cards include Client Code', () => {
+	const source = readFileSync(new URL('../app/(app)/customer.tsx', import.meta.url), 'utf8');
+
+	assert.match(source, /customer\.client_code/);
 });
 
 test('visible mobile UI copy does not mention pricing fields', () => {

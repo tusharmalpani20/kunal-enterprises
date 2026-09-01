@@ -29,14 +29,14 @@ test('customer search returns no results until at least two non-space characters
   assert.deepEqual(filterAllowedCustomers(customers, ' a '), []);
 });
 
-test('sales employee search can match client code but never displays it', () => {
+test('sales employee search can match and display client code on the customer card', () => {
   const results = filterAllowedCustomers(customers, 'ledger-001').map(sanitizeCustomerForSalesEmployee);
 
   assert.equal(results.length, 1);
   assert.equal(results[0].customer, 'CUST-001');
   assert.equal(results[0].customer_name, 'Asha Textiles');
   assert.equal(results[0].business_legal_name, 'Asha Textiles Pvt Ltd');
-  assert.equal(Object.hasOwn(results[0], 'client_code'), false);
+  assert.equal(results[0].client_code, 'ASHA-LEDGER-001');
 });
 
 test('sales employee order payload includes selected customer and optional internal note', () => {

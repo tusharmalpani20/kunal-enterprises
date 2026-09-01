@@ -1295,6 +1295,7 @@ class TestSalesEmployeeCustomerAccess(FrappeTestCase):
 			customers = get_allowed_customers(sales_employee, search="alpha", limit=60)
 
 		self.assertEqual(customers[0]["customer"], "CUST-SEARCH-001")
+		self.assertEqual(customers[0]["client_code"], "SEARCH-ALPHA")
 		query_args = get_all.call_args.kwargs
 		self.assertEqual(query_args["limit_page_length"], 60)
 		self.assertEqual(query_args["limit_start"], 0)
@@ -1308,7 +1309,7 @@ class TestSalesEmployeeCustomerAccess(FrappeTestCase):
 			],
 		)
 
-	def test_allowed_customer_search_respects_assignments_and_hides_client_code(self):
+	def test_allowed_customer_search_respects_assignments_and_returns_client_code(self):
 		alpha = self._create_active_customer("9000000013", "SEARCH-ALPHA", "Alpha Customer", "Alpha Business")
 		beta = self._create_active_customer("9000000014", "SEARCH-BETA", "Beta Customer", "Beta Business")
 		disabled = self._create_active_customer("9000000015", "SEARCH-DISABLED", "Disabled Customer", "Disabled Business")
@@ -1326,7 +1327,7 @@ class TestSalesEmployeeCustomerAccess(FrappeTestCase):
 
 		self.assertTrue(open_response["success"])
 		self.assertEqual([row["customer"] for row in open_response["data"]["customers"]], [alpha.name])
-		self.assertNotIn("client_code", open_response["data"]["customers"][0])
+		self.assertEqual(open_response["data"]["customers"][0]["client_code"], "SEARCH-ALPHA")
 		self.assertTrue(assigned_response["success"])
 		self.assertEqual([row["customer"] for row in assigned_response["data"]["customers"]], [beta.name])
 		self.assertTrue(limited_search_response["success"])

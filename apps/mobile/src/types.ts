@@ -41,6 +41,7 @@ export interface AllowedCustomer {
   customer: string;
   customer_name: string;
   business_legal_name: string;
+  client_code: string;
 }
 
 export interface AllowedCustomerFixture extends AllowedCustomer {

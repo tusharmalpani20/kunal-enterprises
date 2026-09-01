@@ -76,7 +76,10 @@ export default function CustomerScreen() {
           <RowButton
             key={customer.customer}
             title={customer.customer_name}
-            detail={customer.business_legal_name}
+            detail={[
+              customer.business_legal_name,
+              customer.client_code ? `Client Code: ${customer.client_code}` : null,
+            ].filter(Boolean).join(' · ')}
             onPress={() => chooseCustomer(customer)}
           />
         ))}

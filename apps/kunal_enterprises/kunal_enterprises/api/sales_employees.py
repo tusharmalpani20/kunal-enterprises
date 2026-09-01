@@ -97,6 +97,7 @@ def get_allowed_customers(sales_employee, search=None, limit=CUSTOMER_SEARCH_RES
 				"customer": customer.name,
 				"customer_name": customer.customer_name,
 				"business_legal_name": customer.business_legal_name,
+				"client_code": customer.client_code,
 			}
 		)
 
