@@ -155,13 +155,14 @@ class TestWorkspaceNavigation(FrappeTestCase):
 			for field in ("read", "write", "create", "delete", "select"):
 				self.assertEqual(permission[field], 1)
 
-		mobile_otp_permission = custom_docperms.get(("Mobile OTP", "Admin", 0))
-		self.assertIsNotNone(mobile_otp_permission, "Missing Admin Mobile OTP permission")
-		self.assertEqual(mobile_otp_permission["read"], 1)
-		self.assertEqual(mobile_otp_permission["select"], 1)
-		for field in ("write", "create", "delete", "import", "share"):
-			self.assertEqual(mobile_otp_permission[field], 0)
-		self.assertEqual(mobile_otp_permission["export"], 1)
+		for role in ("Owner", "Admin"):
+			mobile_otp_permission = custom_docperms.get(("Mobile OTP", role, 0))
+			self.assertIsNotNone(mobile_otp_permission, f"Missing {role} Mobile OTP permission")
+			self.assertEqual(mobile_otp_permission["read"], 1)
+			self.assertEqual(mobile_otp_permission["select"], 1)
+			for field in ("write", "create", "delete", "import", "share"):
+				self.assertEqual(mobile_otp_permission[field], 0)
+			self.assertEqual(mobile_otp_permission["export"], 1)
 
 	def test_user_role_fields_are_editable_for_owner_admin(self):
 		custom_docperms = self._custom_docperm_fixtures()
