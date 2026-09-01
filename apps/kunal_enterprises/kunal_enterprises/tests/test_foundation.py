@@ -25,7 +25,7 @@ from kunal_enterprises.api.otp import resend_otp, send_otp, start_customer_signu
 from kunal_enterprises.api.product_groups import allowed as allowed_product_groups
 from kunal_enterprises.api.product_groups import item_stock
 from kunal_enterprises.api.product_groups import items as allowed_items
-from kunal_enterprises.api.sales_employees import allowed_customers
+from kunal_enterprises.api.sales_employees import allowed_customers, get_allowed_customers
 from kunal_enterprises.api.token_verification import current_session, issue_token, revoke_token
 from kunal_enterprises.kunal_enterprises.doctype.customer.customer import (
 	search_tally_customer_ledgers,
@@ -1266,6 +1266,48 @@ class TestSalesEmployeeCustomerAccess(FrappeTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 
+	def test_allowed_customer_query_searches_and_limits_before_returning_rows(self):
+		sales_employee = frappe._dict({"assigned_customers": []})
+		customer_row = frappe._dict(
+			{
+				"name": "CUST-SEARCH-001",
+				"customer_name": "Alpha Customer",
+				"business_legal_name": "Alpha Business",
+				"client_code": "SEARCH-ALPHA",
+				"customer_app_access": 1,
+				"sales_employee_order_access": 0,
+				"admin_approved": 1,
+				"onboarding_source": "Manual",
+			}
+		)
+
+		with (
+			patch("kunal_enterprises.api.sales_employees.frappe.get_all", return_value=[customer_row]) as get_all,
+			patch(
+				"kunal_enterprises.api.sales_employees.get_active_tally_client_codes",
+				return_value={"SEARCH-ALPHA"},
+			),
+			patch(
+				"kunal_enterprises.api.sales_employees.configured_tally_customer_parent_groups",
+				return_value=[],
+			),
+		):
+			customers = get_allowed_customers(sales_employee, search="alpha", limit=60)
+
+		self.assertEqual(customers[0]["customer"], "CUST-SEARCH-001")
+		query_args = get_all.call_args.kwargs
+		self.assertEqual(query_args["limit_page_length"], 60)
+		self.assertEqual(query_args["limit_start"], 0)
+		self.assertEqual(
+			query_args["or_filters"],
+			[
+				["Customer", "name", "like", "%alpha%"],
+				["Customer", "customer_name", "like", "%alpha%"],
+				["Customer", "business_legal_name", "like", "%alpha%"],
+				["Customer", "client_code", "like", "%alpha%"],
+			],
+		)
+
 	def test_allowed_customer_search_respects_assignments_and_hides_client_code(self):
 		alpha = self._create_active_customer("9000000013", "SEARCH-ALPHA", "Alpha Customer", "Alpha Business")
 		beta = self._create_active_customer("9000000014", "SEARCH-BETA", "Beta Customer", "Beta Business")
@@ -1279,13 +1321,16 @@ class TestSalesEmployeeCustomerAccess(FrappeTestCase):
 		)
 
 		open_response = allowed_customers(open_employee.name, search="SEARCH-ALPHA")
-		assigned_response = allowed_customers(assigned_employee.name)
+		assigned_response = allowed_customers(assigned_employee.name, limit=1)
+		limited_search_response = allowed_customers(open_employee.name, search="SEARCH", limit=1)
 
 		self.assertTrue(open_response["success"])
 		self.assertEqual([row["customer"] for row in open_response["data"]["customers"]], [alpha.name])
 		self.assertNotIn("client_code", open_response["data"]["customers"][0])
 		self.assertTrue(assigned_response["success"])
 		self.assertEqual([row["customer"] for row in assigned_response["data"]["customers"]], [beta.name])
+		self.assertTrue(limited_search_response["success"])
+		self.assertEqual([row["customer"] for row in limited_search_response["data"]["customers"]], [alpha.name])
 
 	def test_allowed_customers_requires_matching_sales_employee_token_when_headers_are_supplied(self):
 		customer = self._create_active_customer("9000000026", "SEARCH-TOKEN", "Token Customer", "Token Business")

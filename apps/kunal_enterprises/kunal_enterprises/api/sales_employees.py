@@ -8,8 +8,11 @@ from kunal_enterprises.kunal_enterprises.doctype.customer.customer import (
 )
 
 
+CUSTOMER_SEARCH_RESULT_LIMIT = 60
+
+
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def allowed_customers(sales_employee, search=None, headers=None):
+def allowed_customers(sales_employee, search=None, headers=None, limit=CUSTOMER_SEARCH_RESULT_LIMIT):
 	try:
 		token_error = _validate_sales_employee_token(sales_employee, headers)
 		if token_error:
@@ -18,7 +21,7 @@ def allowed_customers(sales_employee, search=None, headers=None):
 		if sales_employee_doc.status != "Active":
 			frappe.throw("Sales Employee is disabled", title="Sales Employee Access Required")
 
-		customers = get_allowed_customers(sales_employee_doc, search)
+		customers = get_allowed_customers(sales_employee_doc, search, limit=limit)
 		return create_success_response(
 			"Allowed Customers",
 			{
@@ -30,7 +33,7 @@ def allowed_customers(sales_employee, search=None, headers=None):
 		return handle_error_response(error, "Unable to load allowed Customers")
 
 
-def get_allowed_customers(sales_employee, search=None):
+def get_allowed_customers(sales_employee, search=None, limit=CUSTOMER_SEARCH_RESULT_LIMIT):
 	assigned_customers = [row.customer for row in sales_employee.assigned_customers if row.customer]
 	filters = {
 		"status": "Active",
@@ -38,10 +41,10 @@ def get_allowed_customers(sales_employee, search=None):
 	if assigned_customers:
 		filters["name"] = ("in", assigned_customers)
 
-	customer_rows = frappe.get_all(
-		"Customer",
-		filters=filters,
-		fields=[
+	search_text = (search or "").strip()
+	query_args = {
+		"filters": filters,
+		"fields": [
 			"name",
 			"customer_name",
 			"business_legal_name",
@@ -51,8 +54,20 @@ def get_allowed_customers(sales_employee, search=None):
 			"admin_approved",
 			"onboarding_source",
 		],
-		order_by="customer_name asc",
-	)
+		"order_by": "customer_name asc",
+		"limit_start": 0,
+		"limit_page_length": _coerce_customer_limit(limit),
+	}
+	if search_text:
+		like_search = f"%{search_text}%"
+		query_args["or_filters"] = [
+			["Customer", "name", "like", like_search],
+			["Customer", "customer_name", "like", like_search],
+			["Customer", "business_legal_name", "like", like_search],
+			["Customer", "client_code", "like", like_search],
+		]
+
+	customer_rows = frappe.get_all("Customer", **query_args)
 	client_codes = {row.client_code for row in customer_rows if row.client_code}
 	active_client_codes = get_active_tally_client_codes(client_codes)
 	tally_customer_codes = {
@@ -63,7 +78,7 @@ def get_allowed_customers(sales_employee, search=None):
 		parent_groups=configured_tally_customer_parent_groups(),
 	)
 
-	search_text = (search or "").strip().lower()
+	search_text = search_text.lower()
 	customers = []
 	for customer in customer_rows:
 		active_code_set = (
@@ -86,6 +101,14 @@ def get_allowed_customers(sales_employee, search=None):
 		)
 
 	return customers
+
+
+def _coerce_customer_limit(limit):
+	try:
+		value = int(limit)
+	except (TypeError, ValueError):
+		value = CUSTOMER_SEARCH_RESULT_LIMIT
+	return max(1, min(value, 100))
 
 
 def _customer_matches_search(customer, search_text):
