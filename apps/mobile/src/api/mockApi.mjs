@@ -1,4 +1,6 @@
 import {
+  MAX_CUSTOMER_SEARCH_RESULTS,
+  MIN_CUSTOMER_SEARCH_LENGTH,
   filterAllowedCustomers,
   sanitizeCustomerForSalesEmployee,
   salesEmployeeHistory,
@@ -291,8 +293,12 @@ export const mockApi = {
     return sortGodownStockForMobile(stock.filter((row) => row.item === item));
   },
 
-  async allowedCustomers(_salesEmployee, search = '') {
-    return filterAllowedCustomers(customers, search).map(sanitizeCustomerForSalesEmployee);
+  async allowedCustomers(_salesEmployee, search = '', limit = MAX_CUSTOMER_SEARCH_RESULTS) {
+    const query = (search || '').trim();
+    const matches = query.length < MIN_CUSTOMER_SEARCH_LENGTH ? customers : filterAllowedCustomers(customers, query);
+    return matches
+      .slice(0, limit)
+      .map(sanitizeCustomerForSalesEmployee);
   },
 
   async submitOrder(payload) {

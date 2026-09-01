@@ -1,6 +1,6 @@
 import { sortGodownStockForMobile } from '../domain/mobileFlow.mjs';
 import { orderDetailForMobile, orderSummaryForMobile } from '../domain/profileHistoryFlow.mjs';
-import { sanitizeCustomerForSalesEmployee } from '../domain/salesEmployeeFlow.mjs';
+import { MAX_CUSTOMER_SEARCH_RESULTS, sanitizeCustomerForSalesEmployee } from '../domain/salesEmployeeFlow.mjs';
 
 const METHODS = {
   startCustomerSignup: 'kunal_enterprises.api.otp.start_customer_signup',
@@ -85,14 +85,18 @@ export function createFrappeApiClient(call) {
       return unwrap(await call.get(METHODS.customerAccessStatus, { customer }));
     },
 
-    async allowedCustomers(salesEmployee, search = '') {
+    async allowedCustomers(salesEmployee, search = '', limit) {
+      const params = {
+        sales_employee: salesEmployee,
+        search,
+      };
+      if (limit !== undefined) {
+        params.limit = limit;
+      }
       const data = unwrap(
-        await call.get(METHODS.allowedCustomers, {
-          sales_employee: salesEmployee,
-          search,
-        }),
+        await call.get(METHODS.allowedCustomers, params),
       );
-      return data.customers.map(sanitizeCustomerForSalesEmployee);
+      return data.customers.slice(0, limit ?? MAX_CUSTOMER_SEARCH_RESULTS).map(sanitizeCustomerForSalesEmployee);
     },
 
     async allowedProductGroups(customer, salesEmployee = undefined) {

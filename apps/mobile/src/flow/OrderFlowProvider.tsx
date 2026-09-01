@@ -37,7 +37,12 @@ import {
   searchItemsForMobile,
   updateAllocationQuantity,
 } from '../domain/mobileFlow.mjs';
-import { buildSalesEmployeeOrderPayload, salesEmployeeOrderGuard } from '../domain/salesEmployeeFlow.mjs';
+import {
+  buildSalesEmployeeOrderPayload,
+  MAX_CUSTOMER_SEARCH_RESULTS,
+  customerSearchQuery,
+  salesEmployeeOrderGuard,
+} from '../domain/salesEmployeeFlow.mjs';
 import { loadProfileForMobile, saveCustomerProfileForMobile } from '../domain/profileHistoryFlow.mjs';
 import { classifyApiFailure, requestBanner } from '../domain/sharedStateFlow.mjs';
 import { PRIMARY_BASE_URL } from '../constants/config';
@@ -58,6 +63,7 @@ import type { DatePickerTarget, DraftCartSummary, Mode, Step } from './types';
 
 const MAX_VISIBLE_GROUPS = 40;
 const MAX_VISIBLE_ITEMS = 60;
+const CUSTOMER_SEARCH_DEBOUNCE_MS = 300;
 const HISTORY_PAGE_SIZE = 20;
 
 export type OrderFlowValue = ReturnType<typeof useOrderFlowState>;
@@ -104,6 +110,7 @@ function useOrderFlowState() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [stockRows, setStockRows] = useState<ItemStock[]>([]);
   const [customers, setCustomers] = useState<AllowedCustomer[]>([]);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<AllowedCustomer | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<ProductGroup | null>(null);
   const [selectedItem, setSelectedItem] = useState<TallyItem | null>(null);
@@ -205,31 +212,70 @@ function useOrderFlowState() {
     if (!hasActiveModeSession) {
       setGroups([]);
       setCustomers([]);
+      setCustomerSearchLoading(false);
       return;
     }
     if (!protectedCallReady) {
+      setCustomerSearchLoading(false);
       return;
     }
     const customer = activeCustomerIdentity();
     const salesEmployee = activeSalesEmployeeIdentity();
     if (mode === 'Customer') {
+      setCustomers([]);
+      setCustomerSearchLoading(false);
       const catalogKey = `${customer}:`;
       if (catalogLoadedKey !== catalogKey) {
         loadCatalogForCustomer(customer);
       }
       return;
     }
-    api.allowedCustomers(salesEmployee, customerSearch).then(setCustomers).catch(async (error) => {
-      const failure = classifyApiFailure(error);
-      setSystemState(failure);
-      if (failure.kind === 'expired_session') {
-        await logout();
-        setCustomers([]);
-        setSelectedCustomer(null);
-        setStep('auth');
-      }
-    });
-  }, [api, catalogLoadedKey, customerSearch, hasActiveModeSession, loadCatalogForCustomer, logout, mode, protectedCallReady, session]);
+    if (step !== 'customer') {
+      setCustomers([]);
+      setCustomerSearchLoading(false);
+      return;
+    }
+
+    const searchText = customerSearch.trim();
+    if (searchText.length === 1) {
+      setCustomers([]);
+      setCustomerSearchLoading(false);
+      return;
+    }
+
+    const query = customerSearchQuery(customerSearch) || '';
+    let cancelled = false;
+    setCustomerSearchLoading(true);
+    const searchTimer = setTimeout(() => {
+      api.allowedCustomers(salesEmployee, query, MAX_CUSTOMER_SEARCH_RESULTS)
+        .then((results) => {
+          if (!cancelled) {
+            setCustomers(results);
+          }
+        })
+        .catch(async (error) => {
+          if (cancelled) return;
+          const failure = classifyApiFailure(error);
+          setSystemState(failure);
+          setCustomers([]);
+          if (failure.kind === 'expired_session') {
+            await logout();
+            setSelectedCustomer(null);
+            setStep('auth');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setCustomerSearchLoading(false);
+          }
+        });
+    }, CUSTOMER_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [api, catalogLoadedKey, customerSearch, hasActiveModeSession, loadCatalogForCustomer, logout, mode, protectedCallReady, step, session]);
 
   const totals = useMemo(() => orderTotals(cart), [cart]);
   const notes = useMemo(() => buildConfirmationNotes(cart, stockRows), [cart, stockRows]);
@@ -952,6 +998,7 @@ function useOrderFlowState() {
     items,
     stockRows,
     customers,
+    customerSearchLoading,
     selectedCustomer,
     selectedGroup,
     selectedItem,

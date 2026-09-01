@@ -1,10 +1,11 @@
 import React from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
 import { DraftCartRow, FeedbackPressable, RowButton, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
+import { MAX_CUSTOMER_SEARCH_RESULTS, MIN_CUSTOMER_SEARCH_LENGTH } from '../../src/domain/salesEmployeeFlow.mjs';
 import { styles } from '../../src/styles/appStyles';
 
 export default function CustomerScreen() {
@@ -15,6 +16,7 @@ export default function CustomerScreen() {
     chooseDraftCart,
     clearDraftCart,
     customers,
+    customerSearchLoading,
     customerSearch, setCustomerSearch,
     chooseCustomer,
   } = useOrderFlow();
@@ -61,7 +63,16 @@ export default function CustomerScreen() {
           placeholderTextColor="#9a9a9a"
           style={styles.input}
         />
-        {customers.map((customer) => (
+        {customerSearchLoading && (
+          <View style={styles.loadingProducts}>
+            <ActivityIndicator color="#111111" />
+            <Text style={styles.helperText}>Searching customers</Text>
+          </View>
+        )}
+        {!customerSearchLoading && customerSearch.trim().length === 1 && (
+          <Text style={styles.helperText}>Enter at least 2 characters to search customers.</Text>
+        )}
+        {!customerSearchLoading && customers.map((customer) => (
           <RowButton
             key={customer.customer}
             title={customer.customer_name}
@@ -69,6 +80,12 @@ export default function CustomerScreen() {
             onPress={() => chooseCustomer(customer)}
           />
         ))}
+        {!customerSearchLoading && customerSearch.trim().length >= MIN_CUSTOMER_SEARCH_LENGTH && customers.length === 0 && (
+          <Text style={styles.helperText}>No customers match this search.</Text>
+        )}
+        {!customerSearchLoading && customers.length === MAX_CUSTOMER_SEARCH_RESULTS && (
+          <Text style={styles.helperText}>Showing the first {MAX_CUSTOMER_SEARCH_RESULTS} matches. Refine your search for more.</Text>
+        )}
       </Workspace>
     </AppShell>
   );

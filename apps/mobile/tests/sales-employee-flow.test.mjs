@@ -24,6 +24,11 @@ const customers = [
   },
 ];
 
+test('customer search returns no results until at least two non-space characters are entered', () => {
+  assert.deepEqual(filterAllowedCustomers(customers, ''), []);
+  assert.deepEqual(filterAllowedCustomers(customers, ' a '), []);
+});
+
 test('sales employee search can match client code but never displays it', () => {
   const results = filterAllowedCustomers(customers, 'ledger-001').map(sanitizeCustomerForSalesEmployee);
 

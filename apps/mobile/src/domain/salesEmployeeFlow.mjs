@@ -1,9 +1,17 @@
 import { orderAllocationForApi } from './mobileFlow.mjs';
 
+export const MIN_CUSTOMER_SEARCH_LENGTH = 2;
+export const MAX_CUSTOMER_SEARCH_RESULTS = 60;
+
+export function customerSearchQuery(value) {
+  const query = (value || '').trim();
+  return query.length >= MIN_CUSTOMER_SEARCH_LENGTH ? query : null;
+}
+
 export function filterAllowedCustomers(customers, search) {
   const query = (search || '').trim().toLowerCase();
-  if (!query) {
-    return customers;
+  if (query.length < MIN_CUSTOMER_SEARCH_LENGTH) {
+    return [];
   }
 
   return customers.filter((customer) =>

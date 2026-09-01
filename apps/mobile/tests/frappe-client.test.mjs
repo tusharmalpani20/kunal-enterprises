@@ -71,12 +71,34 @@ test('frappe client loads allowed customers without exposing client code', async
   });
   const client = createFrappeApiClient(fake.call);
 
-  const customers = await client.allowedCustomers('SE-001', 'asha');
+  const customers = await client.allowedCustomers('SE-001', 'asha', 60);
 
   assert.equal(customers.length, 1);
   assert.equal(Object.hasOwn(customers[0], 'client_code'), false);
   assert.equal(fake.calls[0].method, 'kunal_enterprises.api.sales_employees.allowed_customers');
-  assert.deepEqual(fake.calls[0].params, { sales_employee: 'SE-001', search: 'asha' });
+  assert.deepEqual(fake.calls[0].params, { sales_employee: 'SE-001', search: 'asha', limit: 60 });
+});
+
+test('frappe client caps allowed customer results for mobile rendering', async () => {
+  const fake = fakeCall({
+    'kunal_enterprises.api.sales_employees.allowed_customers': {
+      message: {
+        success: true,
+        data: {
+          customers: Array.from({ length: 61 }, (_, index) => ({
+            customer: `CUST-${index + 1}`,
+            customer_name: `Customer ${index + 1}`,
+            business_legal_name: `Business ${index + 1}`,
+          })),
+        },
+      },
+    },
+  });
+  const client = createFrappeApiClient(fake.call);
+
+  const customers = await client.allowedCustomers('SE-001', 'customer', 60);
+
+  assert.equal(customers.length, 60);
 });
 
 test('frappe client loads customer access status through backend checklist endpoint', async () => {
