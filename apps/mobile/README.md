@@ -75,6 +75,7 @@ Live Frappe mode:
 - Sends the custom mobile auth header as `Auth-Token: Bearer <accessToken>`.
 - Maps backend whitelisted methods through `src/api/frappeClient.mjs`.
 - Sanitizes Sales Employee allowed-customer responses so Client Code never reaches mobile screen state, even if a backend response includes it.
+- Loads at most 60 Sales Employee customer results at a time, with a short search debounce to keep large customer lists responsive.
 - Normalizes backend response envelopes and throws backend validation messages for UI banner classification.
 
 Backend method coverage:

@@ -332,11 +332,11 @@ Response:
 ### Allowed Customers
 
 ```http
-GET /api/method/kunal_enterprises.api.sales_employees.allowed_customers?sales_employee=SE-0001&search=asha
+GET /api/method/kunal_enterprises.api.sales_employees.allowed_customers?sales_employee=SE-0001&search=asha&limit=60
 Auth-Token: Bearer <access_token>
 ```
 
-Search matches Client Code, customer name, and business/legal name, but Client Code is not returned.
+Search matches Client Code, customer name, and business/legal name, but Client Code is not returned. Results are limited to 60 customers per request; an empty search returns the first 60 customers ordered by customer name.
 The token must be a Sales Employee token matching `sales_employee`.
 
 Response:
