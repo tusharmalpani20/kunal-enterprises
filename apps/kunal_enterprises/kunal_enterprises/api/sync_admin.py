@@ -2,7 +2,12 @@ import frappe
 
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
 from kunal_enterprises.cron.reconciliation import run_reconciliation
-from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_masters, sync_tally_vouchers
+from kunal_enterprises.cron.tally_sync import (
+	get_tally_customer_onboarding_preview,
+	sync_stock_snapshots,
+	sync_tally_masters,
+	sync_tally_vouchers,
+)
 from kunal_enterprises.integrations.tally_stock_excel import import_tally_stock_excel_file
 
 
@@ -17,6 +22,18 @@ def sync_masters_now(role=None, records=None):
 		return create_success_response("Master sync completed", _serialize_run(run))
 	except Exception as error:
 		return handle_error_response(error, "Unable to sync masters")
+
+
+@frappe.whitelist(methods=["GET"])
+def preview_tally_customer_onboarding():
+	try:
+		_require_owner_admin()
+		return create_success_response(
+			"Tally Customer onboarding preview",
+			get_tally_customer_onboarding_preview(),
+		)
+	except Exception as error:
+		return handle_error_response(error, "Unable to preview Tally Customer onboarding")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -74,4 +91,10 @@ def _serialize_run(run):
 		"records_seen": run.records_seen,
 		"records_processed": run.records_processed,
 		"errors_count": run.errors_count,
+		"customer_onboarding_enabled": bool(run.customer_onboarding_enabled),
+		"customer_records_created": run.customer_records_created,
+		"customer_records_updated": run.customer_records_updated,
+		"customer_order_access_disabled": run.customer_order_access_disabled,
+		"customer_unclassified_ledgers": run.customer_unclassified_ledgers,
+		"customer_onboarding_errors": run.customer_onboarding_errors,
 	}

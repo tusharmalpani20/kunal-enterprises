@@ -3,14 +3,23 @@ frappe.ui.form.on("Customer", {
 		set_customer_read_only_fields(frm);
 		set_active_product_group_query(frm);
 
-		if (!frm.is_new() && frm.doc.mobile_verified) {
+		if (!frm.is_new() && (frm.doc.mobile_verified || frm.doc.onboarding_source === "Tally")) {
 			add_customer_access_buttons(frm);
 		}
 	},
 });
 
 function set_customer_read_only_fields(frm) {
-	["status", "mobile_verified", "admin_approved", "client_code", "customer_app_access"].forEach((fieldname) => {
+	[
+		"status",
+		"mobile_verified",
+		"admin_approved",
+		"client_code",
+		"customer_app_access",
+		"sales_employee_order_access",
+		"onboarding_source",
+		"tally_guid",
+	].forEach((fieldname) => {
 		frm.set_df_property(fieldname, "read_only", 1);
 	});
 }

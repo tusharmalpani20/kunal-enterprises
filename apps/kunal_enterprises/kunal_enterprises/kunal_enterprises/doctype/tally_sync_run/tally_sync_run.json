@@ -14,6 +14,12 @@
   "records_seen",
   "records_processed",
   "errors_count",
+  "customer_onboarding_enabled",
+  "customer_records_created",
+  "customer_records_updated",
+  "customer_order_access_disabled",
+  "customer_unclassified_ledgers",
+  "customer_onboarding_errors",
   "negative_records",
   "zero_records",
   "records_zeroed",
@@ -70,6 +76,48 @@
    "fieldname": "errors_count",
    "fieldtype": "Int",
    "label": "Errors Count"
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_onboarding_enabled",
+   "fieldtype": "Check",
+   "label": "Customer Auto Onboarding Enabled",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_records_created",
+   "fieldtype": "Int",
+   "label": "Customers Created",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_records_updated",
+   "fieldtype": "Int",
+   "label": "Customers Updated",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_order_access_disabled",
+   "fieldtype": "Int",
+   "label": "Customer Order Access Disabled",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_unclassified_ledgers",
+   "fieldtype": "Int",
+   "label": "Unclassified Tally Ledgers",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "customer_onboarding_errors",
+   "fieldtype": "Int",
+   "label": "Customer Onboarding Errors",
+   "read_only": 1
   },
   {
    "default": "0",

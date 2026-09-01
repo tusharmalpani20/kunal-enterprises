@@ -9,6 +9,8 @@
  "field_order": [
   "client_code",
   "ledger_name",
+  "tally_parent",
+  "tally_parent_path",
   "tally_guid",
   "is_active",
   "last_synced_at"
@@ -28,6 +30,19 @@
    "in_list_view": 1,
    "label": "Ledger Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "tally_parent",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tally Parent Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tally_parent_path",
+   "fieldtype": "Small Text",
+   "label": "Tally Parent Group Path",
+   "read_only": 1
   },
   {
    "fieldname": "tally_guid",

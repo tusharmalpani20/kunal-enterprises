@@ -2,7 +2,10 @@ import frappe
 
 from kunal_enterprises.api.token_verification import verify_token
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
-from kunal_enterprises.kunal_enterprises.doctype.customer.customer import get_customer_access_checklist
+from kunal_enterprises.kunal_enterprises.doctype.customer.customer import (
+	configured_tally_customer_parent_groups,
+	get_active_tally_client_codes,
+)
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
@@ -35,18 +38,42 @@ def get_allowed_customers(sales_employee, search=None):
 	if assigned_customers:
 		filters["name"] = ("in", assigned_customers)
 
-	customer_names = frappe.get_all(
+	customer_rows = frappe.get_all(
 		"Customer",
 		filters=filters,
-		pluck="name",
+		fields=[
+			"name",
+			"customer_name",
+			"business_legal_name",
+			"client_code",
+			"customer_app_access",
+			"sales_employee_order_access",
+			"admin_approved",
+			"onboarding_source",
+		],
 		order_by="customer_name asc",
+	)
+	client_codes = {row.client_code for row in customer_rows if row.client_code}
+	active_client_codes = get_active_tally_client_codes(client_codes)
+	tally_customer_codes = {
+		row.client_code for row in customer_rows if row.client_code and row.onboarding_source == "Tally"
+	}
+	active_tally_customer_codes = get_active_tally_client_codes(
+		tally_customer_codes,
+		parent_groups=configured_tally_customer_parent_groups(),
 	)
 
 	search_text = (search or "").strip().lower()
 	customers = []
-	for customer_name in customer_names:
-		customer = frappe.get_doc("Customer", customer_name)
-		if not all(get_customer_access_checklist(customer).values()):
+	for customer in customer_rows:
+		active_code_set = (
+			active_tally_customer_codes if customer.onboarding_source == "Tally" else active_client_codes
+		)
+		if not (
+			(customer.sales_employee_order_access or customer.customer_app_access)
+			and customer.admin_approved
+			and customer.client_code in active_code_set
+		):
 			continue
 		if search_text and not _customer_matches_search(customer, search_text):
 			continue

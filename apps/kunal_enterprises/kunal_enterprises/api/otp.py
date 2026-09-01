@@ -426,6 +426,7 @@ def _create_customer_from_pending_otp(otp, verified_at):
 			"email_id": pending_payload.get("email_id"),
 			"date_of_birth": pending_payload.get("date_of_birth"),
 			"date_of_anniversary": pending_payload.get("date_of_anniversary"),
+			"onboarding_source": "Mobile Signup",
 			"status": "Pending Admin Review",
 			"mobile_verified": 1,
 			"mobile_verified_at": verified_at,

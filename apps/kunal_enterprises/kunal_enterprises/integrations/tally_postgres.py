@@ -13,6 +13,7 @@ from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_m
 
 
 DEFAULT_SCHEMA = "public"
+LEDGER_GROUP_TABLE = "mst_group"
 STOCK_SNAPSHOT_TABLE = "stock_godown_summary"
 STOCK_SNAPSHOT_STATE_TABLE = "stock_godown_summary_state"
 SCHEDULED_IMPORT_JOB_ID = "kunal_enterprises:tally_postgres_import_all"
@@ -75,13 +76,15 @@ def _release_import_lock():
 def import_masters():
 	with _connect() as connection:
 		connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
+		ledger_group_paths, ledger_group_errors = _fetch_ledger_group_paths(connection)
 		records = {
 			"units": _fetch_units(connection),
 			"godowns": _fetch_godowns(connection),
 			"stock_categories": _fetch_stock_categories(connection),
 			"stock_groups": _fetch_stock_groups(connection),
 			"items": _fetch_items(connection),
-			"customer_ledgers": _fetch_customer_ledgers(connection),
+			"customer_ledgers": _fetch_customer_ledgers(connection, ledger_group_paths, ledger_group_errors),
+			"customer_ledgers_complete": True,
 		}
 	run = sync_tally_masters(records)
 	return _serialize_run(run)
@@ -526,12 +529,87 @@ def _stock_group_roots(connection):
 	return {name: (_stock_group_path(name, by_name) or [name])[0] for name in by_name}
 
 
-def _fetch_customer_ledgers(connection):
+def _fetch_ledger_group_paths(connection):
+	if not _table_exists(connection, LEDGER_GROUP_TABLE):
+		return {}, {
+			"__source__": f"Tally ledger group table is missing: {LEDGER_GROUP_TABLE}",
+		}
 	rows = _fetch_all(
 		connection,
 		sql.SQL(
 			"""
-			select guid, name, alias
+			select guid, name, parent
+			from {}
+			where coalesce(name, '') != ''
+			order by name
+			"""
+		).format(_table(LEDGER_GROUP_TABLE)),
+	)
+	return _build_ledger_group_paths(rows)
+
+
+def _build_ledger_group_paths(rows):
+	by_key = {}
+	duplicate_keys = set()
+	for row in rows:
+		key = _normalize_group_name(row.get("name"))
+		if not key:
+			continue
+		if key in by_key:
+			duplicate_keys.add(key)
+			continue
+		by_key[key] = row
+
+	paths = {}
+	errors = {}
+
+	def path_for(name, trail=None):
+		key = _normalize_group_name(name)
+		if not key:
+			raise ValueError("Tally ledger group has a blank name")
+		if key in paths:
+			return paths[key]
+		if key in duplicate_keys:
+			error = f"Tally ledger group name is duplicated: {name}"
+			errors[key] = error
+			raise ValueError(error)
+		trail = trail or []
+		if key in trail:
+			cycle = trail[trail.index(key) :] + [key]
+			raise ValueError(f"Tally ledger group hierarchy cycle: {' > '.join(cycle)}")
+		row = by_key.get(key)
+		if not row:
+			raise ValueError(f"Tally ledger group is missing from source: {name}")
+		parent = _normalize_group_name(row.get("parent"))
+		try:
+			path = (path_for(parent, trail + [key]) if parent else []) + [row["name"]]
+		except ValueError as error:
+			errors[key] = str(error)
+			raise
+		paths[key] = path
+		return path
+
+	for key, row in by_key.items():
+		try:
+			path_for(row["name"])
+		except ValueError:
+			continue
+
+	return paths, errors
+
+
+def _normalize_group_name(value):
+	return str(value or "").strip().casefold()
+
+
+def _fetch_customer_ledgers(connection, ledger_group_paths=None, ledger_group_errors=None):
+	ledger_group_paths = ledger_group_paths or {}
+	ledger_group_errors = ledger_group_errors or {}
+	rows = _fetch_all(
+		connection,
+		sql.SQL(
+			"""
+			select guid, name, parent, alias
 			from {}
 			where coalesce(alias, '') != ''
 			order by alias
@@ -542,6 +620,19 @@ def _fetch_customer_ledgers(connection):
 		{
 			"client_code": row["alias"],
 			"ledger_name": row["name"],
+			"tally_parent": row.get("parent"),
+			"tally_parent_path": " > ".join(ledger_group_paths.get(_normalize_group_name(row.get("parent")), []))
+			or None,
+			"source_tally_parent_path_error": (
+				ledger_group_errors.get(_normalize_group_name(row.get("parent")))
+				or ledger_group_errors.get("__source__")
+				or (
+					f"Tally ledger parent group is missing from source: {row.get('parent')}"
+					if _normalize_group_name(row.get("parent"))
+					and _normalize_group_name(row.get("parent")) not in ledger_group_paths
+					else None
+				)
+			),
 			"tally_guid": row.get("guid"),
 			"is_active": 1,
 			"last_synced_at": now_datetime(),

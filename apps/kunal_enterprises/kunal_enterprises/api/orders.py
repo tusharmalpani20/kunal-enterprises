@@ -10,6 +10,7 @@ from frappe.utils import get_datetime, now_datetime
 from kunal_enterprises.api.product_groups import item_is_allowed, resolve_product_access
 from kunal_enterprises.api.token_verification import verify_token
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
+from kunal_enterprises.kunal_enterprises.doctype.customer.customer import has_sales_employee_order_access
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -188,7 +189,7 @@ def _resolve_headers(headers=None):
 def _validate_order_history_access(customer, sales_employee=None):
 	if not customer and not sales_employee:
 		frappe.throw("Customer or Sales Employee is required", title="Order Access Required")
-	if customer:
+	if customer and not sales_employee:
 		customer_doc = frappe.get_doc("Customer", customer)
 		if not customer_doc.customer_app_access:
 			frappe.throw("Customer App Access is not active", title="Customer App Access Required")
@@ -196,6 +197,13 @@ def _validate_order_history_access(customer, sales_employee=None):
 		sales_employee_doc = frappe.get_doc("Sales Employee", sales_employee)
 		if sales_employee_doc.status != "Active":
 			frappe.throw("Sales Employee is disabled", title="Sales Employee Access Required")
+		if customer:
+			customer_doc = frappe.get_doc("Customer", customer)
+			if not has_sales_employee_order_access(customer_doc):
+				frappe.throw(
+					"Sales Employee Order Access is not active",
+					title="Sales Employee Order Access Required",
+				)
 
 
 def _validate_order_detail_access(order, customer=None, sales_employee=None):
@@ -327,7 +335,27 @@ def _create_order_confirmation_records(order):
 	file_doc = _attach_order_pdf_file(pdf, order, summary_text)
 	pdf.file_url = file_doc.file_url
 	pdf.save(ignore_permissions=True)
-	customer_mobile = frappe.db.get_value("Customer", order.customer, "mobile_number")
+	customer_mobile = (frappe.db.get_value("Customer", order.customer, "mobile_number") or "").strip() or None
+	with_mobile = bool(customer_mobile)
+	notification_status = "Queued" if with_mobile else "Skipped"
+	notification_payload = {
+		"event": "Order Placed",
+		"order": order.name,
+		"portal_reference_number": order.portal_reference_number,
+		"recipient": order.customer,
+		"mobile_number": customer_mobile,
+		"order_pdf": pdf.name,
+	}
+	provider_response = {
+		"provider": "frappe_whatsapp",
+		"status": notification_status,
+		"retry_count": 0,
+		"message": (
+			"Queued for WhatsApp provider dispatch"
+			if with_mobile
+			else "Skipped because the Customer has no mobile number"
+		),
+	}
 	frappe.get_doc(
 		{
 			"doctype": "Order WhatsApp Notification",
@@ -336,27 +364,10 @@ def _create_order_confirmation_records(order):
 			"recipient_customer": order.customer,
 			"mobile_number": customer_mobile,
 			"order_pdf": pdf.name,
-			"status": "Queued",
-			"request_payload": json.dumps(
-				{
-					"event": "Order Placed",
-					"order": order.name,
-					"portal_reference_number": order.portal_reference_number,
-					"recipient": order.customer,
-					"mobile_number": customer_mobile,
-					"order_pdf": pdf.name,
-				},
-				sort_keys=True,
-			),
-			"provider_response": json.dumps(
-				{
-					"provider": "frappe_whatsapp",
-					"status": "Queued",
-					"retry_count": 0,
-					"message": "Queued for WhatsApp provider dispatch",
-				},
-				sort_keys=True,
-			),
+			"status": notification_status,
+			"skip_reason": None if with_mobile else "Customer has no mobile number",
+			"request_payload": json.dumps(notification_payload, sort_keys=True),
+			"provider_response": json.dumps(provider_response, sort_keys=True),
 			"created_at": now_datetime(),
 		}
 	).insert(ignore_permissions=True)

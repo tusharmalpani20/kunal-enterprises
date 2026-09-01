@@ -17,6 +17,14 @@ def get_mapped_customer(client_code):
 	return frappe.db.get_value(
 		"Customer",
 		{"client_code": client_code},
-		["name", "customer_name", "business_legal_name", "status", "customer_app_access"],
+		[
+			"name",
+			"customer_name",
+			"business_legal_name",
+			"status",
+			"onboarding_source",
+			"customer_app_access",
+			"sales_employee_order_access",
+		],
 		as_dict=True,
 	)

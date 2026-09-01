@@ -1,12 +1,81 @@
+import re
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, now_datetime
 
 
+CLOSED_TALLY_LEDGER_RE = re.compile(
+	r"(^|[^\w])closed($|[^\w])",
+	re.IGNORECASE,
+)
+TALLY_CUSTOMER_PARENT_GROUPS_CONFIG = "tally_customer_parent_groups"
+
+
+def configured_tally_customer_parent_groups():
+	value = frappe.conf.get(TALLY_CUSTOMER_PARENT_GROUPS_CONFIG)
+	if isinstance(value, str):
+		raw_value = value
+		try:
+			parsed = frappe.parse_json(value)
+			if isinstance(parsed, list):
+				value = parsed
+			elif isinstance(parsed, str):
+				value = [parsed]
+			else:
+				value = raw_value.split(",")
+		except (TypeError, ValueError):
+			value = raw_value.split(",")
+	if not isinstance(value, (list, tuple, set)):
+		return []
+	return sorted({_normalize_tally_group_name(item) for item in value if str(item).strip()})
+
+
+def _normalize_tally_group_name(value):
+	return str(value or "").strip().casefold()
+
+
+def get_active_tally_client_codes(client_codes=None, parent_groups=None):
+	filters = {"is_active": 1}
+	if client_codes is not None:
+		client_codes = [str(code).strip() for code in client_codes if str(code).strip()]
+		if not client_codes:
+			return set()
+		filters["client_code"] = ("in", client_codes)
+	configured_groups = None
+	if parent_groups is not None:
+		configured_groups = {_normalize_tally_group_name(group) for group in parent_groups if str(group).strip()}
+		if not configured_groups:
+			return set()
+
+	rows = frappe.get_all(
+		"Tally Customer Ledger",
+		filters=filters,
+		fields=["client_code", "ledger_name", "tally_parent_path"],
+	)
+	return {
+		row.client_code
+		for row in rows
+		if row.client_code
+		and not CLOSED_TALLY_LEDGER_RE.search(row.ledger_name or "")
+		and (
+			configured_groups is None
+			or configured_groups.intersection(
+				{
+					_normalize_tally_group_name(part)
+					for part in str(row.tally_parent_path or "").split(">")
+					if part.strip()
+				}
+			)
+		)
+	}
+
+
 class Customer(Document):
 	def validate(self):
 		self._normalize_identity_fields()
+		self._validate_mobile_number_requirement()
 		self._validate_mobile_number_is_global_identity()
 		self._validate_rejected_customer_mobile_reuse()
 		self._validate_unique_optional_identity_fields()
@@ -15,14 +84,20 @@ class Customer(Document):
 		self._apply_customer_app_access()
 
 	def _normalize_identity_fields(self):
-		if self.mobile_number:
-			self.mobile_number = self.mobile_number.strip()
+		self.mobile_number = (self.mobile_number or "").strip() or None
 		if self.client_code:
 			self.client_code = self.client_code.strip()
 		if self.email_id:
 			self.email_id = self.email_id.strip().lower()
 		if self.gstin:
 			self.gstin = self.gstin.strip().upper()
+
+	def _validate_mobile_number_requirement(self):
+		if not self.mobile_number and self.onboarding_source != "Tally":
+			frappe.throw(
+				_("Mobile Number is required for non-Tally Customers"),
+				title=_("Mobile Number Required"),
+			)
 
 	def _validate_mobile_number_is_global_identity(self):
 		if not self.mobile_number:
@@ -94,13 +169,7 @@ class Customer(Document):
 				title=_("Duplicate Client Code"),
 			)
 
-		if not frappe.db.exists(
-			"Tally Customer Ledger",
-			{
-				"client_code": self.client_code,
-				"is_active": 1,
-			},
-		):
+		if self.client_code not in get_active_tally_client_codes([self.client_code]):
 			frappe.throw(
 				_("Client Code {0} was not found in imported Tally Customer Ledgers").format(self.client_code),
 				title=_("Invalid Client Code"),
@@ -111,6 +180,7 @@ class Customer(Document):
 			self.mobile_verified
 			and self.admin_approved
 			and self.client_code
+			and self.client_code in get_active_tally_client_codes([self.client_code])
 			and self.status == "Active"
 		)
 		self.customer_app_access = 1 if has_access else 0
@@ -147,7 +217,10 @@ def get_access_status(customer_name):
 	return {
 		"customer": customer.name,
 		"status": customer.status,
+		"onboarding_source": customer.onboarding_source,
+		"tally_guid": customer.tally_guid,
 		"customer_app_access": bool(customer.customer_app_access),
+		"sales_employee_order_access": has_sales_employee_order_access(customer),
 		"checklist": checklist,
 		"missing_requirements": [
 			label for label, passed in checklist.items() if not passed
@@ -156,17 +229,7 @@ def get_access_status(customer_name):
 
 
 def get_customer_access_checklist(customer):
-	client_code_found = False
-	if customer.client_code:
-		client_code_found = bool(
-			frappe.db.exists(
-				"Tally Customer Ledger",
-				{
-					"client_code": customer.client_code,
-					"is_active": 1,
-				},
-			)
-		)
+	client_code_found = customer.client_code in get_active_tally_client_codes([customer.client_code])
 
 	return {
 		"mobile_verified": bool(customer.mobile_verified),
@@ -178,13 +241,40 @@ def get_customer_access_checklist(customer):
 	}
 
 
+def has_sales_employee_order_access(customer):
+	"""Return whether a Sales Employee may order for this customer.
+
+	Customer mobile-app access and Sales Employee ordering are deliberately
+	separate. A Tally-sourced customer may be orderable without a mobile number,
+	while a customer token still requires the complete mobile access checklist.
+	"""
+	if customer.status != "Active":
+		return False
+
+	checklist = get_customer_access_checklist(customer)
+	client_code_found = checklist["client_code_found_in_tally"]
+	if getattr(customer, "onboarding_source", None) == "Tally":
+		client_code_found = customer.client_code in get_active_tally_client_codes(
+			[customer.client_code],
+			parent_groups=configured_tally_customer_parent_groups(),
+		)
+	return bool(
+		(customer.sales_employee_order_access or customer.customer_app_access)
+		and checklist["admin_approved"]
+		and checklist["client_code_present"]
+		and client_code_found
+	)
+
+
 @frappe.whitelist()
 def approve_customer(customer_name):
 	customer = frappe.get_doc("Customer", customer_name)
-	if not customer.mobile_verified:
+	if not customer.mobile_verified and customer.onboarding_source != "Tally":
 		frappe.throw(_("Customer mobile number must be verified before approval"))
 	customer.admin_approved = 1
 	customer.status = "Active"
+	if customer.onboarding_source == "Tally":
+		customer.sales_employee_order_access = 1
 	customer.save()
 	return get_access_status(customer.name)
 
@@ -192,10 +282,11 @@ def approve_customer(customer_name):
 @frappe.whitelist()
 def reject_customer(customer_name):
 	customer = frappe.get_doc("Customer", customer_name)
-	if not customer.mobile_verified:
+	if not customer.mobile_verified and customer.onboarding_source != "Tally":
 		frappe.throw(_("Customer mobile number must be verified before rejection"))
 	customer.admin_approved = 0
 	customer.status = "Rejected"
+	customer.sales_employee_order_access = 0
 	customer.save()
 	return get_access_status(customer.name)
 
@@ -203,9 +294,10 @@ def reject_customer(customer_name):
 @frappe.whitelist()
 def disable_customer(customer_name):
 	customer = frappe.get_doc("Customer", customer_name)
-	if not customer.mobile_verified:
+	if not customer.mobile_verified and customer.onboarding_source != "Tally":
 		frappe.throw(_("Customer mobile number must be verified before disabling"))
 	customer.status = "Disabled"
+	customer.sales_employee_order_access = 0
 	customer.save()
 	return get_access_status(customer.name)
 

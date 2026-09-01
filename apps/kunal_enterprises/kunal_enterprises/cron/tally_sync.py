@@ -1,15 +1,22 @@
 import hashlib
 import json
 import math
+import re
 
 import frappe
 from frappe.model.rename_doc import rename_doc
 from frappe.utils import now_datetime
 
+from kunal_enterprises.kunal_enterprises.doctype.customer.customer import (
+	configured_tally_customer_parent_groups as _configured_tally_customer_parent_groups,
+)
+
 
 STOCK_SNAPSHOT_SOURCE_TABLE = "stock_godown_summary"
 MASTER_SOURCE_TABLE = "tally_master_import"
 VOUCHER_SOURCE_TABLE = "trn_voucher"
+TALLY_CUSTOMER_AUTO_ONBOARDING_CONFIG = "enable_tally_customer_auto_onboarding"
+TALLY_CUSTOMER_PARENT_GROUPS_CONFIG = "tally_customer_parent_groups"
 
 MASTER_NAME_FIELDS = {
 	"Tally Unit": "unit_name",
@@ -25,17 +32,17 @@ class IgnoredStockRowError(Exception):
 	"""A source stock row that cannot be linked safely to Frappe masters."""
 
 
-def sync_tally_masters(records=None):
+def sync_tally_masters(records=None, auto_onboard_customers=None):
 	lock_name = "kunal_enterprises:tally_master_sync"
 	if not _acquire_sync_lock(lock_name):
 		frappe.throw("Tally master sync is already running")
 	try:
-		return _sync_tally_masters(records)
+		return _sync_tally_masters(records, auto_onboard_customers)
 	finally:
 		_release_sync_lock(lock_name)
 
 
-def _sync_tally_masters(records=None):
+def _sync_tally_masters(records=None, auto_onboard_customers=None):
 	started_at = now_datetime()
 	run = frappe.get_doc(
 		{
@@ -53,6 +60,15 @@ def _sync_tally_masters(records=None):
 	master_rows = _flatten_master_records(records)
 	processed = 0
 	errors = 0
+	customer_summary = {
+		"created": 0,
+		"updated": 0,
+		"order_access_disabled": 0,
+		"unclassified": 0,
+		"errors": 0,
+	}
+	if auto_onboard_customers is None:
+		auto_onboard_customers = tally_customer_auto_onboarding_enabled()
 
 	for doctype, source_key in (
 		("Tally Unit", "units"),
@@ -82,14 +98,413 @@ def _sync_tally_masters(records=None):
 		batch_processed, batch_errors = _sync_master_batch(doctype, records.get(source_key, []), run.name)
 		processed += batch_processed
 		errors += batch_errors
+		if doctype == "Tally Customer Ledger" and not batch_errors:
+			if records.get("customer_ledgers_complete"):
+				_reconcile_missing_tally_customer_ledgers(records.get("customer_ledgers", []))
+			if auto_onboard_customers:
+				customer_summary = _sync_tally_customer_records(
+					records.get("customer_ledgers", []),
+					run.name,
+					reconcile_missing=bool(records.get("customer_ledgers_complete")),
+				)
+				errors += customer_summary["errors"]
 
 	run.records_seen = len(master_rows)
 	run.records_processed = processed
 	run.errors_count = errors
+	run.customer_onboarding_enabled = int(bool(auto_onboard_customers))
+	run.customer_records_created = customer_summary["created"]
+	run.customer_records_updated = customer_summary["updated"]
+	run.customer_order_access_disabled = customer_summary["order_access_disabled"]
+	run.customer_unclassified_ledgers = customer_summary["unclassified"]
+	run.customer_onboarding_errors = customer_summary["errors"]
 	run.status = "Completed" if errors == 0 else "Completed With Errors"
 	run.finished_at = now_datetime()
 	run.save(ignore_permissions=True)
 	return run
+
+
+def tally_customer_auto_onboarding_enabled():
+	"""Return the site-configured Tally Customer auto-onboarding flag.
+
+	The default is intentionally disabled. This prevents a normal scheduler run
+	from creating Customers on a live site until the operator explicitly enables
+	``enable_tally_customer_auto_onboarding`` in that site's site_config.json.
+	"""
+	value = frappe.conf.get(TALLY_CUSTOMER_AUTO_ONBOARDING_CONFIG)
+	return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def configured_tally_customer_parent_groups():
+	"""Return the exact Tally parent groups allowed to create Customers.
+
+	Tally's mirror does not expose a dependable customer/ledger type or active flag
+	for this installation. An explicit parent-group allowlist is therefore required
+	for safe auto-onboarding; an empty setting matches nothing.
+	"""
+	return _configured_tally_customer_parent_groups()
+
+
+def _is_tally_customer_ledger(record, parent_groups=None):
+	parent_groups = parent_groups if parent_groups is not None else configured_tally_customer_parent_groups()
+	configured_groups = {_normalize_tally_group_name(group) for group in parent_groups}
+	if "tally_parent_path" in record:
+		parent_path = record.get("tally_parent_path") or ""
+		parents = {_normalize_tally_group_name(part) for part in str(parent_path).split(">") if part.strip()}
+	else:
+		parent = record.get("tally_parent") or record.get("parent") or ""
+		parents = {_normalize_tally_group_name(parent)} if str(parent).strip() else set()
+	return bool(parents & configured_groups)
+
+
+def _normalize_tally_group_name(value):
+	return str(value or "").strip().casefold()
+
+
+def _is_active_tally_customer_ledger(record):
+	"""Treat explicit inactive rows and clearly closed ledger names as inactive."""
+	try:
+		is_active = int(record.get("is_active", 1))
+	except (TypeError, ValueError):
+		return False
+	if not is_active:
+		return False
+	return not re.search(r"(^|[^\w])closed($|[^\w])", record.get("ledger_name") or "", re.IGNORECASE)
+
+
+def get_tally_customer_onboarding_preview(records=None):
+	"""Return a non-mutating preview of Tally Customer onboarding."""
+	if records is None:
+		records = {
+			"customer_ledgers": frappe.get_all(
+				"Tally Customer Ledger",
+				fields=["client_code", "ledger_name", "tally_parent", "tally_parent_path", "tally_guid", "is_active"],
+			)
+		}
+	else:
+		records = records or {}
+
+	counts = {
+		"ledgers_seen": 0,
+		"new_customers": 0,
+		"existing_tally_customers": 0,
+		"existing_customers_to_link": 0,
+		"inactive_ledgers": 0,
+		"invalid_rows": 0,
+		"conflicts": 0,
+		"unclassified_ledgers": 0,
+	}
+	samples = {
+		"new_customers": [],
+		"existing_customers_to_link": [],
+		"inactive_ledgers": [],
+		"invalid_rows": [],
+		"conflicts": [],
+		"unclassified_ledgers": [],
+	}
+	seen_codes = set()
+	seen_guids = set()
+	customer_index = _load_tally_customer_index()
+	parent_groups = configured_tally_customer_parent_groups()
+	unclassified_parent_group_counts = {}
+
+	for record in records.get("customer_ledgers", []):
+		counts["ledgers_seen"] += 1
+		client_code = (record.get("client_code") or "").strip()
+		ledger_name = (record.get("ledger_name") or "").strip()
+		tally_guid = (record.get("tally_guid") or "").strip()
+		if not client_code or not ledger_name or not tally_guid:
+			counts["invalid_rows"] += 1
+			_append_preview_sample(samples["invalid_rows"], record)
+			continue
+		if client_code in seen_codes or tally_guid in seen_guids:
+			counts["conflicts"] += 1
+			_append_preview_sample(samples["conflicts"], record)
+			continue
+		seen_codes.add(client_code)
+		seen_guids.add(tally_guid)
+		if not _is_tally_customer_ledger(record, parent_groups):
+			counts["unclassified_ledgers"] += 1
+			_append_preview_sample(samples["unclassified_ledgers"], record)
+			parent = (record.get("tally_parent") or record.get("parent") or "").strip() or "<blank>"
+			unclassified_parent_group_counts[parent] = unclassified_parent_group_counts.get(parent, 0) + 1
+			continue
+
+		customer = _find_customer_for_tally_record(client_code, tally_guid, customer_index)
+		if customer and customer.get("conflict"):
+			counts["conflicts"] += 1
+			_append_preview_sample(samples["conflicts"], {**record, "reason": customer["conflict"]})
+			continue
+		if not _is_active_tally_customer_ledger(record):
+			counts["inactive_ledgers"] += 1
+			_append_preview_sample(samples["inactive_ledgers"], record)
+		elif not customer:
+			counts["new_customers"] += 1
+			_append_preview_sample(samples["new_customers"], record)
+		elif customer.get("onboarding_source") == "Tally":
+			counts["existing_tally_customers"] += 1
+		else:
+			counts["existing_customers_to_link"] += 1
+			_append_preview_sample(samples["existing_customers_to_link"], record)
+
+	return {
+		"auto_onboarding_enabled": tally_customer_auto_onboarding_enabled(),
+		"customer_parent_groups_configured": parent_groups,
+		"configuration_missing": not bool(parent_groups),
+		"unclassified_parent_group_counts": dict(sorted(unclassified_parent_group_counts.items())),
+		"counts": counts,
+		"samples": samples,
+	}
+
+
+def _append_preview_sample(samples, record, limit=20):
+	if len(samples) < limit:
+		samples.append(record)
+
+
+def _sync_tally_customer_records(records, sync_run, reconcile_missing=False):
+	summary = {
+		"created": 0,
+		"updated": 0,
+		"order_access_disabled": 0,
+		"unclassified": 0,
+		"errors": 0,
+	}
+	valid_records = []
+	seen_codes = set()
+	seen_guids = set()
+	active_codes = set()
+	active_guids = set()
+	customer_index = _load_tally_customer_index()
+	parent_groups = configured_tally_customer_parent_groups()
+	if not parent_groups:
+		summary["errors"] += 1
+		_log_sync_error(
+			sync_run,
+			{"configuration": TALLY_CUSTOMER_PARENT_GROUPS_CONFIG},
+			"Tally Customer auto-onboarding requires a non-empty tally_customer_parent_groups site setting",
+			MASTER_SOURCE_TABLE,
+		)
+		return summary
+
+	for record in records or []:
+		if record.get("source_tally_parent_path_error"):
+			summary["errors"] += 1
+			_log_sync_error(
+				sync_run,
+				record,
+				record["source_tally_parent_path_error"],
+				MASTER_SOURCE_TABLE,
+			)
+			continue
+		if not _is_tally_customer_ledger(record, parent_groups):
+			summary["unclassified"] += 1
+			continue
+		client_code = (record.get("client_code") or "").strip()
+		ledger_name = (record.get("ledger_name") or "").strip()
+		tally_guid = (record.get("tally_guid") or "").strip()
+		if not client_code or not ledger_name or not tally_guid:
+			summary["errors"] += 1
+			_log_sync_error(
+				sync_run,
+				record,
+				"Tally Customer Ledger is missing client_code, ledger_name, or tally_guid",
+				MASTER_SOURCE_TABLE,
+			)
+			continue
+		if client_code in seen_codes or tally_guid in seen_guids:
+			summary["errors"] += 1
+			_log_sync_error(sync_run, record, "Duplicate Tally Customer Ledger client_code or tally_guid", MASTER_SOURCE_TABLE)
+			continue
+		seen_codes.add(client_code)
+		seen_guids.add(tally_guid)
+		valid_records.append(record)
+		if _is_active_tally_customer_ledger(record):
+			active_codes.add(client_code)
+			active_guids.add(tally_guid)
+
+	resolved_records = []
+	for record in valid_records:
+		client_code = record["client_code"].strip()
+		tally_guid = record["tally_guid"].strip()
+		customer = _find_customer_for_tally_record(client_code, tally_guid, customer_index)
+		if customer and customer.get("conflict"):
+			summary["errors"] += 1
+			_log_sync_error(sync_run, record, customer["conflict"], MASTER_SOURCE_TABLE)
+			continue
+		resolved_records.append((record, customer))
+
+	if summary["errors"]:
+		return summary
+
+	savepoint = "tally_customer_onboarding"
+	frappe.db.savepoint(savepoint)
+	write_error = None
+	failed_record = None
+	for record, customer in resolved_records:
+		client_code = record["client_code"].strip()
+		tally_guid = record["tally_guid"].strip()
+
+		try:
+			if not _is_active_tally_customer_ledger(record):
+				if customer and customer.get("onboarding_source") == "Tally":
+					if frappe.db.get_value("Customer", customer["name"], "sales_employee_order_access"):
+						frappe.db.set_value(
+							"Customer",
+							customer["name"],
+							"sales_employee_order_access",
+							0,
+							update_modified=False,
+						)
+						summary["order_access_disabled"] += 1
+				continue
+
+			if not customer:
+				created_customer = frappe.get_doc(
+					{
+						"doctype": "Customer",
+						"customer_name": record["ledger_name"].strip(),
+						"business_legal_name": record["ledger_name"].strip(),
+						"onboarding_source": "Tally",
+						"tally_guid": tally_guid,
+						"status": "Active",
+						"admin_approved": 1,
+						"mobile_verified": 0,
+						"client_code": client_code,
+						"sales_employee_order_access": 1,
+					}
+				).insert(ignore_permissions=True)
+				customer_index["by_guid"][tally_guid] = {
+					"name": created_customer.name,
+					"client_code": client_code,
+					"tally_guid": tally_guid,
+					"onboarding_source": "Tally",
+				}
+				customer_index["by_code"][client_code] = customer_index["by_guid"][tally_guid]
+				summary["created"] += 1
+				continue
+
+			customer_doc = frappe.get_doc("Customer", customer["name"])
+			if customer_doc.tally_guid and customer_doc.tally_guid != tally_guid:
+				frappe.throw(
+					f"Customer {customer_doc.name} is already linked to Tally GUID {customer_doc.tally_guid}"
+				)
+			changed = False
+			if not customer_doc.tally_guid:
+				customer_doc.tally_guid = tally_guid
+				changed = True
+			if customer_doc.client_code != client_code:
+				customer_doc.client_code = client_code
+				changed = True
+			if customer_doc.onboarding_source == "Tally":
+				for fieldname in ("customer_name", "business_legal_name"):
+					if customer_doc.get(fieldname) != record["ledger_name"].strip():
+						customer_doc.set(fieldname, record["ledger_name"].strip())
+						changed = True
+			if customer_doc.onboarding_source == "Tally" and customer_doc.status == "Active":
+				if not customer_doc.admin_approved:
+					customer_doc.admin_approved = 1
+					changed = True
+				if not customer_doc.sales_employee_order_access:
+					customer_doc.sales_employee_order_access = 1
+					changed = True
+			if changed:
+				customer_doc.save(ignore_permissions=True)
+				summary["updated"] += 1
+		except Exception as error:
+			write_error = error
+			failed_record = record
+			break
+
+	if write_error:
+		frappe.db.rollback(save_point=savepoint)
+		summary["created"] = 0
+		summary["updated"] = 0
+		summary["order_access_disabled"] = 0
+		summary["errors"] += 1
+		_log_sync_error(sync_run, failed_record, write_error, MASTER_SOURCE_TABLE)
+	else:
+		frappe.db.release_savepoint(savepoint)
+
+	if write_error:
+		return summary
+
+	if reconcile_missing and summary["errors"] == 0:
+		for customer in frappe.get_all(
+			"Customer",
+			filters={"onboarding_source": "Tally"},
+			fields=["name", "client_code", "tally_guid", "sales_employee_order_access"],
+		):
+			still_active = bool(
+				(customer.tally_guid and customer.tally_guid in active_guids)
+				or (customer.client_code and customer.client_code in active_codes)
+			)
+			if not still_active and customer.sales_employee_order_access:
+				frappe.db.set_value(
+					"Customer",
+					customer.name,
+					"sales_employee_order_access",
+					0,
+					update_modified=False,
+				)
+				summary["order_access_disabled"] += 1
+
+	return summary
+
+
+def _reconcile_missing_tally_customer_ledgers(records):
+	"""Deactivate imported ledgers absent from an explicitly complete snapshot."""
+	seen_codes = set()
+	seen_guids = set()
+	for record in records or []:
+		client_code = (record.get("client_code") or "").strip()
+		tally_guid = (record.get("tally_guid") or "").strip()
+		if client_code:
+			seen_codes.add(client_code)
+		if tally_guid:
+			seen_guids.add(tally_guid)
+
+	for ledger in frappe.get_all(
+		"Tally Customer Ledger",
+		fields=["name", "client_code", "tally_guid", "is_active"],
+	):
+		still_present = bool(
+			(ledger.tally_guid and ledger.tally_guid in seen_guids)
+			or (ledger.client_code and ledger.client_code in seen_codes)
+		)
+		if ledger.is_active and not still_present:
+			frappe.db.set_value(
+				"Tally Customer Ledger",
+				ledger.name,
+				"is_active",
+				0,
+				update_modified=False,
+			)
+
+
+def _load_tally_customer_index():
+	rows = frappe.get_all(
+		"Customer",
+		fields=["name", "client_code", "tally_guid", "onboarding_source"],
+	)
+	return {
+		"by_guid": {row.tally_guid: row for row in rows if row.tally_guid},
+		"by_code": {row.client_code: row for row in rows if row.client_code},
+	}
+
+
+def _find_customer_for_tally_record(client_code, tally_guid, customer_index=None):
+	customer_index = customer_index or _load_tally_customer_index()
+	by_guid = customer_index["by_guid"].get(tally_guid)
+	by_code = customer_index["by_code"].get(client_code)
+	if by_guid and by_code and by_guid.get("name") != by_code.get("name"):
+		return {
+			"conflict": (
+				f"Tally Customer Ledger {client_code} maps to Customer {by_code.get('name')}, "
+				f"but Tally GUID {tally_guid} maps to Customer {by_guid.get('name')}"
+			)
+		}
+	return by_guid or by_code
 
 
 def sync_stock_snapshots(
@@ -639,6 +1054,11 @@ def _sync_master_batch(doctype, records, sync_run):
 def _master_values(doctype, record):
 	values = {key: value for key, value in record.items() if not key.startswith("source_")}
 	values["is_active"] = int(record.get("is_active", 1))
+	if doctype == "Tally Customer Ledger":
+		if "tally_parent_path" not in record:
+			values["tally_parent_path"] = record.get("tally_parent") or record.get("parent") or None
+		if record.get("source_tally_parent_path_error"):
+			values["is_active"] = 0
 	if doctype == "Tally Stock Group":
 		for fieldname in ("parent_stock_group", "root_stock_group", "is_root", "depth", "full_path"):
 			values.pop(fieldname, None)

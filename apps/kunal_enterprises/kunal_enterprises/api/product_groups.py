@@ -2,6 +2,7 @@ import frappe
 
 from kunal_enterprises.api.token_verification import verify_token
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
+from kunal_enterprises.kunal_enterprises.doctype.customer.customer import has_sales_employee_order_access
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
@@ -102,11 +103,7 @@ def item_stock(customer, item, sales_employee=None, headers=None):
 
 def get_allowed_product_groups(customer_name, sales_employee_name=None):
 	customer = frappe.get_doc("Customer", customer_name)
-	_validate_customer_can_order(customer)
-
-	if sales_employee_name:
-		sales_employee = frappe.get_doc("Sales Employee", sales_employee_name)
-		_validate_sales_employee_can_order_for_customer(sales_employee, customer.name)
+	_validate_customer_can_order(customer, sales_employee_name)
 
 	access = resolve_product_access(customer_name, sales_employee_name)
 	allowed_names = access["visible_root_names"]
@@ -128,7 +125,7 @@ def get_allowed_product_groups(customer_name, sales_employee_name=None):
 def resolve_product_access(customer_name, sales_employee_name=None):
 	"""Return the effective hierarchy scope for a Customer/mobile ordering context."""
 	customer = frappe.get_doc("Customer", customer_name)
-	_validate_customer_can_order(customer)
+	_validate_customer_can_order(customer, sales_employee_name)
 	groups = _load_product_group_hierarchy()
 	customer_grants = _group_grants(customer.product_group_access)
 	customer_scope, customer_diagnostics = _expand_group_scope(
@@ -361,7 +358,17 @@ def _resolve_headers(headers=None):
 	return None
 
 
-def _validate_customer_can_order(customer):
+def _validate_customer_can_order(customer, sales_employee_name=None):
+	if sales_employee_name:
+		sales_employee = frappe.get_doc("Sales Employee", sales_employee_name)
+		_validate_sales_employee_can_order_for_customer(sales_employee, customer.name)
+		if not has_sales_employee_order_access(customer):
+			frappe.throw(
+				"Sales Employee Order Access is not active",
+				title="Sales Employee Order Access Required",
+			)
+		return
+
 	if not customer.customer_app_access:
 		frappe.throw("Customer App Access is not active", title="Customer App Access Required")
 
