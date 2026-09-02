@@ -131,6 +131,17 @@ test('catalogue selection loads groups separately and item pages are bounded', (
   assert.match(source, /limit: MAX_VISIBLE_ITEMS/);
 });
 
+test('catalogue group strip renders every allowed group and keeps the expanded browser', () => {
+  const providerSource = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
+  const orderSource = readFileSync(join(projectRoot, 'app/(app)/order.tsx'), 'utf8');
+  const shellSource = readFileSync(join(projectRoot, 'src/components/AppShell.tsx'), 'utf8');
+
+  assert.doesNotMatch(providerSource, /visibleGroups\.slice\(0,\s*MAX_VISIBLE_GROUPS\)/);
+  assert.match(orderSource, /<ScrollView horizontal/);
+  assert.match(orderSource, /setGroupSheetOpen\(true\)/);
+  assert.match(shellSource, /groups\.filter\(\(group\) =>/);
+});
+
 test('catalogue request invalidation clears loading state when the session changes', () => {
   const source = readFileSync(join(projectRoot, 'src/flow/OrderFlowProvider.tsx'), 'utf8');
   const inactiveSessionBranch = source.match(/if \(!hasActiveModeSession\) \{([\s\S]*?)\n    \}/)?.[1] || '';

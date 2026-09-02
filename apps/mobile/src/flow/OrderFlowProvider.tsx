@@ -61,7 +61,6 @@ import { dateFromIsoDate, isoDateFromDate, showToast, searchProductGroups } from
 import type { AllowedCustomer, CartAllocation, ItemStock, OrderDetail, OrderSummary, ProductGroup, TallyItem } from '../types';
 import type { DatePickerTarget, DraftCartSummary, Mode, Step } from './types';
 
-const MAX_VISIBLE_GROUPS = 40;
 const MAX_VISIBLE_ITEMS = 60;
 const CUSTOMER_SEARCH_DEBOUNCE_MS = 300;
 const ITEM_SEARCH_DEBOUNCE_MS = 300;
@@ -412,7 +411,7 @@ function useOrderFlowState() {
   const totals = useMemo(() => orderTotals(cart), [cart]);
   const notes = useMemo(() => buildConfirmationNotes(cart, stockRows), [cart, stockRows]);
   const visibleGroups = useMemo(() => searchProductGroups(groups, itemSearch), [groups, itemSearch]);
-  const renderedGroups = useMemo(() => visibleGroups.slice(0, MAX_VISIBLE_GROUPS), [visibleGroups]);
+  const renderedGroups = visibleGroups;
   const visibleItems = useMemo(
     () => {
       const pool = selectedGroup
