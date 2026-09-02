@@ -1,21 +1,27 @@
 {
  "actions": [],
- "allow_rename": 0,
  "autoname": "field:portal_reference_number",
- "creation": "2026-05-19 00:00:00.000000",
+ "creation": "2026-05-19 00:00:00",
  "doctype": "DocType",
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
   "portal_reference_number",
   "order_source",
-  "customer",
-  "sales_employee",
   "status",
   "confirmation_datetime",
   "total_item_count",
   "total_quantity",
   "sales_employee_note",
+  "customer_detail_section",
+  "customer",
+  "column_break_xihh",
+  "customer_name",
+  "customer_code",
+  "sales_employee_detail_section",
+  "sales_employee",
+  "column_break_lnwn",
+  "sales_employee_name",
   "items_section",
   "items",
   "godown_allocations"
@@ -104,11 +110,49 @@
    "fieldtype": "Table",
    "label": "Godown Allocations",
    "options": "Order Godown Allocation"
+  },
+  {
+   "fieldname": "customer_detail_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Detail"
+  },
+  {
+   "fieldname": "column_break_xihh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "customer.client_code",
+   "fieldname": "customer_code",
+   "fieldtype": "Data",
+   "label": "Customer Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_employee_detail_section",
+   "fieldtype": "Section Break",
+   "label": "Sales Employee Detail"
+  },
+  {
+   "fieldname": "column_break_lnwn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "sales_employee.sales_employee_name",
+   "fieldname": "sales_employee_name",
+   "fieldtype": "Data",
+   "label": "Sales Employee Name",
+   "read_only": 1
   }
  ],
- "idx": 0,
  "links": [],
- "modified": "2026-05-19 00:00:00.000000",
+ "modified": "2026-09-02 17:52:30.476701",
  "modified_by": "Administrator",
  "module": "Kunal Enterprises",
  "name": "Order",
@@ -144,7 +188,11 @@
    "role": "Branch Employee"
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "confirmation_datetime",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "track_changes": 1,
+ "track_seen": 1,
+ "track_views": 1
 }
