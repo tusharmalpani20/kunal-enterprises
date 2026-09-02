@@ -8,11 +8,11 @@
  "field_order": [
   "portal_reference_number",
   "order_source",
-  "status",
-  "confirmation_datetime",
   "total_item_count",
   "total_quantity",
-  "sales_employee_note",
+  "column_break_gpco",
+  "status",
+  "confirmation_datetime",
   "customer_detail_section",
   "customer",
   "column_break_xihh",
@@ -22,6 +22,7 @@
   "sales_employee",
   "column_break_lnwn",
   "sales_employee_name",
+  "sales_employee_note",
   "items_section",
   "items",
   "godown_allocations"
@@ -149,10 +150,14 @@
    "fieldtype": "Data",
    "label": "Sales Employee Name",
    "read_only": 1
+  },
+  {
+   "fieldname": "column_break_gpco",
+   "fieldtype": "Column Break"
   }
  ],
  "links": [],
- "modified": "2026-09-02 17:52:30.476701",
+ "modified": "2026-09-02 17:57:37.102713",
  "modified_by": "Administrator",
  "module": "Kunal Enterprises",
  "name": "Order",
