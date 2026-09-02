@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppVersionFooter } from './AppVersionFooter';
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { styles } from '../styles/appStyles';
 
@@ -37,6 +38,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
           {children}
         </View>
+        <AppVersionFooter />
       </ScrollView>
     </SafeAreaView>
   );

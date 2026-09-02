@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { UserRound } from 'lucide-react-native';
 
+import { AppVersionFooter } from '../../src/components/AppVersionFooter';
 import { AppShell } from '../../src/components/AppShell';
 import { DatePickerButton, FeedbackPressable, ProfileReadOnlyField, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
@@ -63,6 +64,7 @@ export default function ProfileScreen() {
           </View>
         )}
       </Workspace>
+      <AppVersionFooter />
     </AppShell>
   );
 }

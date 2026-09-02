@@ -98,6 +98,13 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     lineHeight: 22,
   },
+  versionFooter: {
+    color: '#777777',
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    textAlign: 'center',
+    paddingVertical: 8,
+  },
   appHeader: {
     paddingTop: 16,
     flexDirection: 'row',
