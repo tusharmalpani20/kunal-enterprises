@@ -36,9 +36,25 @@ def resolve_manual_review(order, role, resolution_note):
 			frappe.throw("Only Manual Review orders can be resolved", title="Invalid Order Status")
 		if not (resolution_note or "").strip():
 			frappe.throw("Resolution note is required", title="Resolution Note Required")
-		_transition_order(order_doc, "Processing", effective_role, resolution_note)
+		from kunal_enterprises.cron.reconciliation import run_reconciliation
+
+		run_reconciliation()
+		order_doc.reload()
+		frappe.get_doc(
+			{
+				"doctype": "Order Status Log",
+				"order": order_doc.name,
+				"from_status": "Manual Review",
+				"to_status": order_doc.status,
+				"role": effective_role,
+				"note": resolution_note,
+				"created_at": now_datetime(),
+			}
+		).insert(ignore_permissions=True)
 		return create_success_response(
-			"Manual Review resolved",
+			"Tally corrections rechecked"
+			if order_doc.status == "Manual Review"
+			else "Manual Review resolved",
 			{"order": order_doc.name, "status": order_doc.status},
 		)
 	except Exception as error:

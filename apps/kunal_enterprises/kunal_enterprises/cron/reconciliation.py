@@ -1,232 +1,310 @@
+import json
+from collections import defaultdict
+
 import frappe
 from frappe.utils import now_datetime
 
+from kunal_enterprises.cron.fulfillment import evaluate_order
 
-def run_reconciliation():
-	run = frappe.get_doc(
-		{
-			"doctype": "Tally Sync Run",
-			"sync_type": "Reconciliation",
-			"status": "Running",
-			"started_at": now_datetime(),
-			"source_table": "trn_voucher",
-		}
-	).insert(ignore_permissions=True)
-	frappe.db.commit()
 
-	vouchers = frappe.get_all(
-		"Tally Voucher",
-		filters={"reconciliation_state": "Pending"},
-		fields=["name"],
-		order_by="voucher_date asc, creation asc",
-	)
-	processed = 0
-	errors = 0
-
-	for voucher_ref in vouchers:
+def run_reconciliation(commit=True):
+	"""Rebuild managed order totals, including previously completed/reviewed orders."""
+	with frappe.cache().lock(
+		frappe.cache().make_key("kunal:portal-voucher-import"), timeout=1800, blocking_timeout=0
+	):
+		assert_current_history()
+		frappe.db.savepoint("order_reconciliation")
 		try:
-			voucher = frappe.get_doc("Tally Voucher", voucher_ref.name)
-			state, reason = _reconcile_voucher(voucher)
-			voucher.reconciliation_state = state
-			voucher.reconciliation_reason = reason
-			voucher.reconciliation_last_attempt = now_datetime()
-			voucher.reconciled = int(state in {"Matched", "Manual Review"})
-			voucher.save(ignore_permissions=True)
-			processed += 1
-		except Exception as error:
+			run = _run_reconciliation()
+			if commit:
+				frappe.db.commit()
+			return run
+		except Exception:
+			frappe.db.rollback(save_point="order_reconciliation")
+			raise
+
+
+def assert_current_history():
+	"""Reject an old caller snapshot without committing or discarding its pending writes.
+
+	The Redis lock serializes workers, but MariaDB repeatable reads can still retain
+	a view created before the lock was acquired. A separate connection sees committed
+	history without invalidating the caller snapshot. Call only while holding the lock.
+	"""
+	filters = {
+		"source_table": "trn_voucher",
+		"sync_type": ("in", ["Vouchers", "Reconciliation"]),
+		"status": ("in", ["Completed", "Completed With Errors"]),
+	}
+	run = frappe.qb.DocType("Tally Sync Run")
+	query = (
+		frappe.qb.from_(run)
+		.select(run.name)
+		.where(
+			(run.source_table == "trn_voucher")
+			& run.sync_type.isin(["Vouchers", "Reconciliation"])
+			& run.status.isin(["Completed", "Completed With Errors"])
+		)
+		.orderby(run.creation, order=frappe.qb.desc)
+		.orderby(run.name, order=frappe.qb.desc)
+		.limit(1)
+	)
+	# A FOR UPDATE read can abort a stale MariaDB snapshot and discard pending work.
+	# The existing Redis lock prevents another reconciliation from committing here.
+	connection = frappe.db.get_connection()
+	try:
+		with connection.cursor() as cursor:
+			cursor.execute(query.get_sql())
+			row = cursor.fetchone()
+			current = row[0] if row else None
+	finally:
+		connection.close()
+	visible = frappe.db.get_value("Tally Sync Run", filters, "name", order_by="creation desc, name desc")
+	if visible != current:
+		frappe.throw("Voucher history changed; retry reconciliation or import in a fresh transaction")
+
+
+def _run_reconciliation():
+	run = frappe.get_doc(
+		dict(
+			doctype="Tally Sync Run",
+			sync_type="Reconciliation",
+			status="Running",
+			started_at=now_datetime(),
+			source_table="trn_voucher",
+		)
+	).insert(ignore_permissions=True)
+	company = frappe.conf.get("tally_source_company")
+	if not company:
+		frappe.throw("Configure tally_source_company before reconciliation")
+	companies = set(
+		frappe.get_all("Tally Voucher", filters={"source_company": ("!=", "")}, pluck="source_company")
+	)
+	if companies and companies != {company}:
+		frappe.throw("Configured Tally company differs from existing voucher history")
+	voucher_refs = frappe.get_all("Tally Voucher", filters={"source_company": company}, pluck="name")
+	vouchers = [frappe.get_doc("Tally Voucher", name) for name in voucher_refs]
+	by_reference = defaultdict(list)
+	for voucher in vouchers:
+		if voucher.tally_guid:
+			references = {voucher.reference_number}
+			references.update(json.loads(voucher.source_pending_references or "[]"))
+			for reference in references:
+				by_reference[reference].append(voucher)
+
+	order_names = set(frappe.get_all("Order", filters={"tally_reconciliation_managed": 1}, pluck="name"))
+	for reference in by_reference:
+		if reference:
+			name = frappe.db.get_value("Order", {"portal_reference_number": reference}, "name")
+			if name:
+				order_names.add(name)
+	# A reference transfer is indivisible: freeze both ends if either retains uncertain totals.
+	legacy_by_reference = defaultdict(list)
+	for legacy in frappe.get_all(
+		"Tally Voucher", fields=["name", "tally_guid", "reconciled", "reference_number"]
+	):
+		if not legacy.tally_guid and legacy.reconciled:
+			legacy_by_reference[legacy.reference_number].append(legacy)
+	blocked = set(legacy_by_reference)
+	for reference, linked in by_reference.items():
+		if any(v.source_status == "Unverified" for v in linked):
+			blocked.add(reference)
+	changed = True
+	while changed:
+		changed = False
+		for voucher in vouchers:
+			references = {voucher.reference_number} | set(
+				json.loads(voucher.source_pending_references or "[]")
+			)
+			references.discard(None)
+			references.discard("")
+			if references & blocked and not references <= blocked:
+				blocked.update(references)
+				changed = True
+	processed_vouchers = set()
+	errors = 0
+	for name in sorted(order_names):
+		order = frappe.get_doc("Order", name)
+		linked = by_reference.get(order.portal_reference_number, [])
+		customer = frappe.get_doc("Customer", order.customer)
+		customer_guid = customer.get("tally_guid") or frappe.db.get_value(
+			"Tally Customer Ledger", {"client_code": customer.client_code}, "tally_guid"
+		)
+		payloads = [_evaluation_voucher(v) for v in linked]
+		result = evaluate_order(
+			dict(
+				reference=order.portal_reference_number,
+				customer_guid=customer_guid,
+				status=order.status,
+				items={row.item: row.requested_quantity for row in order.items},
+			),
+			payloads,
+		)
+
+		previous_status = order.status
+		if order.portal_reference_number in blocked:
+			if order.status not in {"Cancelled", "Partially Closed"}:
+				order.status = "Manual Review"
+			for voucher in linked:
+				_record_result(
+					voucher,
+					"Manual Review",
+					"SOURCE_UNVERIFIED",
+					"Related order quantities preserved until source data and legacy identity are resolved",
+					order.name,
+				)
+				processed_vouchers.add(voucher.name)
+			for voucher in legacy_by_reference.get(order.portal_reference_number, []):
+				_log_if_changed(
+					order.name,
+					voucher.name,
+					"Manual Review",
+					"LEGACY_IDENTITY_REQUIRED",
+					"Legacy fulfilled voucher needs a verified Tally GUID before totals can be rebuilt",
+				)
 			errors += 1
+		else:
+			order.status = result["status"]
+			for row in order.items:
+				row.fulfilled_quantity = result["fulfilled"][row.item]
+				row.pending_quantity = max(float(row.requested_quantity) - row.fulfilled_quantity, 0)
+				row.status = (
+					"Completed"
+					if row.pending_quantity == 0
+					else "Partially Processed"
+					if row.fulfilled_quantity
+					else "Placed"
+				)
+			for voucher in linked:
+				if voucher.reference_number != order.portal_reference_number:
+					continue
+				reason = result["reasons"].get(voucher.tally_guid)
+				state, code, message = _voucher_result(voucher, reason)
+				_record_result(voucher, state, code, message, order.name)
+				processed_vouchers.add(voucher.name)
+				errors += int(bool(reason))
+		order.tally_reconciliation_managed = 1
+		order.save(ignore_permissions=True)
+		if previous_status != order.status:
 			frappe.get_doc(
-				{
-					"doctype": "Tally Sync Error",
-					"sync_run": run.name,
-					"source_table": "trn_voucher",
-					"source_key": voucher_ref.name,
-					"error_message": str(error),
-					"detected_at": now_datetime(),
-				}
+				dict(
+					doctype="Order Status Log",
+					order=order.name,
+					from_status=previous_status,
+					to_status=order.status,
+					role="Tally Sync",
+					note="Recalculated from the accepted PostgreSQL voucher data",
+					created_at=now_datetime(),
+				)
 			).insert(ignore_permissions=True)
 
+	for voucher in vouchers:
+		if voucher.name not in processed_vouchers:
+			if voucher.source_status == "Unverified":
+				_record_result(voucher, "Manual Review", "SOURCE_UNVERIFIED", voucher.source_error)
+				errors += 1
+			elif voucher.source_status == "Removed":
+				_record_result(
+					voucher, "Removed", "SOURCE_REMOVED", "Voucher is removed, cancelled or optional in Tally"
+				)
+			elif not voucher.fulfillment_eligible:
+				_record_result(
+					voucher,
+					"Ignored",
+					"NOT_FULFILLMENT_TYPE",
+					"Voucher type is not approved for dispatch fulfillment",
+				)
+			elif voucher.reference_number and frappe.db.exists(
+				"Order", {"portal_reference_number": voucher.reference_number}
+			):
+				_record_result(
+					voucher,
+					"Manual Review",
+					"LEGACY_IDENTITY_REQUIRED",
+					"Resolve legacy source identity before applying fulfillment",
+				)
+			else:
+				_record_result(
+					voucher,
+					"Unmatched",
+					"NO_MATCHING_ORDER",
+					"Portal reference is missing or does not identify an order",
+				)
+	# Release transfer history only after every affected order has been rebuilt atomically.
+	for voucher in vouchers:
+		references = set(json.loads(voucher.source_pending_references or "[]"))
+		if references and not references & blocked:
+			frappe.db.set_value(
+				"Tally Voucher", voucher.name, "source_pending_references", "[]", update_modified=False
+			)
 	run.records_seen = len(vouchers)
-	run.records_processed = processed
+	run.records_processed = len(vouchers)
 	run.errors_count = errors
-	run.status = "Completed" if errors == 0 else "Completed With Errors"
+	run.status = "Completed With Errors" if errors else "Completed"
 	run.finished_at = now_datetime()
 	run.save(ignore_permissions=True)
 	return run
 
 
-def _reconcile_voucher(voucher):
-	if not voucher.reference_number:
-		_log_reconciliation(None, voucher.name, "Skipped", "MISSING_REFERENCE_NUMBER", "Voucher has no portal reference")
-		return "Unmatched", "MISSING_REFERENCE_NUMBER"
-
-	order_name = frappe.db.exists("Order", {"portal_reference_number": voucher.reference_number})
-	if not order_name:
-		_log_reconciliation(None, voucher.name, "Skipped", "NO_MATCHING_ORDER", "No matching Order")
-		return "Unmatched", "NO_MATCHING_ORDER"
-
-	if _delivery_challan_is_superseded_by_sales_invoice(voucher):
-		_log_reconciliation(
-			order_name,
-			voucher.name,
-			"Skipped",
-			"SUPERSEDED_DELIVERY_CHALLAN",
-			"Delivery Challan superseded by Sales Invoice for same tracking movement",
-		)
-		return "Matched", "SUPERSEDED_DELIVERY_CHALLAN"
-
-	order = frappe.get_doc("Order", order_name)
-	if _has_ambiguous_duplicate_movement(voucher):
-		order.status = "Manual Review"
-		order.save(ignore_permissions=True)
-		_log_reconciliation(
-			order.name,
-			voucher.name,
-			"Manual Review",
-			"AMBIGUOUS_DUPLICATE_MOVEMENT",
-			"Ambiguous duplicate movement for same tracking number and item quantities",
-		)
-		return "Manual Review", "AMBIGUOUS_DUPLICATE_MOVEMENT"
-
-	customer_client_code = frappe.db.get_value("Customer", order.customer, "client_code")
-	if customer_client_code != voucher.party_client_code:
-		order.status = "Manual Review"
-		order.save(ignore_permissions=True)
-		_log_reconciliation(
-			order.name,
-			voucher.name,
-			"Manual Review",
-			"CUSTOMER_CLIENT_CODE_MISMATCH",
-			f"Customer Client Code mismatch: portal customer {customer_client_code}, Tally party {voucher.party_client_code}",
-		)
-		return "Manual Review", "CUSTOMER_CLIENT_CODE_MISMATCH"
-
-	fulfilled_by_item = {}
-	for line in voucher.lines:
-		fulfilled_by_item[line.item] = fulfilled_by_item.get(line.item, 0) + float(line.quantity or 0)
-
-	ordered_items = {row.item for row in order.items}
-	extra_items = sorted(set(fulfilled_by_item) - ordered_items)
-	if extra_items:
-		order.status = "Manual Review"
-		order.save(ignore_permissions=True)
-		_log_reconciliation(
-			order.name,
-			voucher.name,
-			"Manual Review",
-			"EXTRA_VOUCHER_ITEM",
-			f"Extra unmatched item lines in voucher: {', '.join(extra_items)}",
-		)
-		return "Manual Review", "EXTRA_VOUCHER_ITEM"
-
-	for item_row in order.items:
-		new_fulfilled_quantity = fulfilled_by_item.get(item_row.item, 0)
-		total_fulfilled_quantity = float(item_row.fulfilled_quantity or 0) + new_fulfilled_quantity
-		if total_fulfilled_quantity > float(item_row.requested_quantity):
-			order.status = "Manual Review"
-			order.save(ignore_permissions=True)
-			_log_reconciliation(
-				order.name,
-				voucher.name,
-				"Manual Review",
-				"OVER_FULFILLMENT",
-				f"Over fulfillment for item {item_row.item}: fulfilled {total_fulfilled_quantity:g}, requested {item_row.requested_quantity:g}",
-			)
-			return "Manual Review", "OVER_FULFILLMENT"
-
-	for item_row in order.items:
-		new_fulfilled_quantity = fulfilled_by_item.get(item_row.item, 0)
-		if not new_fulfilled_quantity:
-			continue
-		item_row.fulfilled_quantity = min(
-			float(item_row.requested_quantity),
-			float(item_row.fulfilled_quantity or 0) + new_fulfilled_quantity,
-		)
-		item_row.pending_quantity = max(float(item_row.requested_quantity) - item_row.fulfilled_quantity, 0)
-		item_row.status = "Completed" if item_row.pending_quantity == 0 else "Partially Processed"
-
-	_apply_order_status_from_items(order)
-	order.save(ignore_permissions=True)
-	_log_reconciliation(order.name, voucher.name, "Matched", "VOUCHER_QUANTITIES_APPLIED", "Voucher quantities applied")
-	return "Matched", "VOUCHER_QUANTITIES_APPLIED"
-
-
-def _apply_order_status_from_items(order):
-	item_statuses = {row.status for row in order.items}
-	if item_statuses == {"Completed"}:
-		order.status = "Completed"
-	elif "Partially Processed" in item_statuses or "Completed" in item_statuses:
-		order.status = "Partially Processed"
-
-
-def _delivery_challan_is_superseded_by_sales_invoice(voucher):
-	if voucher.voucher_type != "Delivery Challan" or not voucher.tracking_number:
-		return False
-
-	candidates = frappe.get_all(
-		"Tally Voucher",
-		filters={
-			"voucher_type": "Sales Invoice",
-			"reference_number": voucher.reference_number,
-			"party_client_code": voucher.party_client_code,
-			"tracking_number": voucher.tracking_number,
-		},
-		fields=["name"],
-	)
-	voucher_signature = _voucher_movement_signature(voucher)
-	for candidate in candidates:
-		sales_invoice = frappe.get_doc("Tally Voucher", candidate.name)
-		if _voucher_movement_signature(sales_invoice) == voucher_signature:
-			return True
-	return False
-
-
-def _has_ambiguous_duplicate_movement(voucher):
-	if not voucher.tracking_number:
-		return False
-
-	candidates = frappe.get_all(
-		"Tally Voucher",
-		filters={
-			"reference_number": voucher.reference_number,
-			"party_client_code": voucher.party_client_code,
-			"tracking_number": voucher.tracking_number,
-			"reconciled": 1,
-			"name": ("!=", voucher.name),
-		},
-		fields=["name", "voucher_type"],
-	)
-	voucher_signature = _voucher_movement_signature(voucher)
-	for candidate in candidates:
-		if voucher.voucher_type == "Sales Invoice" and candidate.voucher_type == "Delivery Challan":
-			continue
-		duplicate = frappe.get_doc("Tally Voucher", candidate.name)
-		if _voucher_movement_signature(duplicate) == voucher_signature:
-			return True
-	return False
-
-
-def _voucher_movement_signature(voucher):
-	return sorted(
-		(
-			line.item,
-			line.godown,
-			line.tracking_number or voucher.tracking_number,
-			float(line.quantity or 0),
-		)
-		for line in voucher.lines
+def _evaluation_voucher(voucher):
+	return dict(
+		guid=voucher.tally_guid,
+		reference=voucher.reference_number,
+		party_guid=voucher.tally_party_guid,
+		eligible=bool(voucher.fulfillment_eligible),
+		source_status=voucher.source_status,
+		source_error=voucher.source_error,
+		lines=[
+			dict(item=r.item, quantity=r.quantity, tracking_number=r.tracking_number) for r in voucher.lines
+		],
 	)
 
 
-def _log_reconciliation(order, voucher, status, reason_code, message):
+def _voucher_result(voucher, reason):
+	if voucher.source_status == "Removed":
+		return "Removed", "SOURCE_REMOVED", "Voucher is removed, cancelled or optional in Tally"
+	if not voucher.fulfillment_eligible:
+		return "Ignored", "NOT_FULFILLMENT_TYPE", "Voucher type is not approved for dispatch fulfillment"
+	if reason:
+		return "Manual Review", "FULFILLMENT_VALIDATION", reason
+	return "Matched", "CURRENT_QUANTITIES_APPLIED", "Current dispatch quantities included in order totals"
+
+
+def _record_result(voucher, state, code, message, order=None):
+	unchanged = voucher.reconciliation_state == state and voucher.reconciliation_reason == code
+	voucher.reconciliation_state = state
+	voucher.reconciliation_reason = code
+	voucher.reconciliation_last_attempt = now_datetime()
+	voucher.reconciled = int(state == "Matched")
+	if not unchanged:
+		voucher.save(ignore_permissions=True)
+	_log_if_changed(
+		order,
+		voucher.name,
+		"Manual Review" if state == "Manual Review" else "Matched" if state == "Matched" else "Skipped",
+		code,
+		message,
+	)
+
+
+def _log_if_changed(order, voucher, status, code, message):
+	previous = frappe.db.get_value(
+		"Order Reconciliation Log",
+		{"order": order, "voucher": voucher},
+		["status", "reason_code", "message"],
+		order_by="created_at desc, creation desc",
+		as_dict=True,
+	)
+	if previous and (previous.status, previous.reason_code, previous.message) == (status, code, message):
+		return
 	frappe.get_doc(
-		{
-			"doctype": "Order Reconciliation Log",
-			"order": order,
-			"voucher": voucher,
-			"status": status,
-			"reason_code": reason_code,
-			"message": message,
-			"created_at": now_datetime(),
-		}
+		dict(
+			doctype="Order Reconciliation Log",
+			order=order,
+			voucher=voucher,
+			status=status,
+			reason_code=code,
+			message=message,
+			created_at=now_datetime(),
+		)
 	).insert(ignore_permissions=True)

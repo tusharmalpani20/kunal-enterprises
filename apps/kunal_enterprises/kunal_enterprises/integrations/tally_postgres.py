@@ -9,7 +9,7 @@ from psycopg2 import sql
 from frappe.utils import convert_utc_to_system_timezone, now_datetime, nowdate
 
 from kunal_enterprises.cron.reconciliation import run_reconciliation
-from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_masters, sync_tally_vouchers
+from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_masters
 
 
 DEFAULT_SCHEMA = "public"
@@ -59,7 +59,7 @@ def import_all(voucher_limit=None, run_reconciliation_after=True):
 			"vouchers": import_vouchers(limit=voucher_limit),
 		}
 		if run_reconciliation_after:
-			results["reconciliation"] = _serialize_run(run_reconciliation())
+			results["reconciliation"] = results["vouchers"].get("reconciliation") or _serialize_run(run_reconciliation())
 		return results
 	finally:
 		_release_import_lock()
@@ -267,9 +267,11 @@ def seed_dev_stock_snapshots(
 
 
 def import_vouchers(limit=None):
+	if limit:
+		frappe.throw("Partial voucher imports cannot check missing records; import the full PostgreSQL mirror")
+	from kunal_enterprises.integrations.voucher_snapshot import import_snapshot
 	with _connect() as connection:
-		run = sync_tally_vouchers(_fetch_vouchers(connection, limit=limit))
-	return _serialize_run(run)
+		return import_snapshot(connection)
 
 
 def diagnose():
@@ -308,14 +310,26 @@ def diagnose():
 
 
 def diagnose_vouchers(limit=5):
+	"""Read-only preview using the same mirror reader as the production import."""
+	from kunal_enterprises.integrations.voucher_mirror import read_mirror
+	from kunal_enterprises.integrations.voucher_snapshot import configured_types
+
+	company = frappe.conf.get("tally_source_company")
 	with _connect() as connection:
-		sample = _fetch_vouchers(connection, limit=limit)
-		return {
-			"raw_rows_matching_import_filter": _voucher_filter_count(connection),
-			"sample_grouped_vouchers": len(sample),
-			"sample_vouchers": sample[: int(limit)],
-			"imported_tally_vouchers": frappe.db.count("Tally Voucher"),
-		}
+		state, rows = read_mirror(connection, company)
+	allowed = configured_types()
+	eligible = [row for row in rows if row.get("type_guid") in allowed]
+	present = {row["guid"] for row in rows}
+	existing = set(frappe.get_all("Tally Voucher", filters={"source_company": company}, pluck="tally_guid"))
+	return {
+		"source": state,
+		"approved_type_guids": sorted(allowed),
+		"eligible_vouchers": len(eligible),
+		"eligible_without_inventory": sum(not row["lines"] for row in eligible),
+		"missing_imported_vouchers": len((existing - {None, ""}) - present),
+		"sample_vouchers": eligible[:max(0, min(int(limit), 100))],
+		"note": "Missing records require review; this read does not verify deletions in Tally.",
+	}
 
 
 @contextmanager
@@ -946,7 +960,7 @@ def _fetch_vouchers(connection, limit=None):
 				i.tracking_number
 			from {} v
 			join {} i on i.guid = v.guid
-			left join {} l on l.name = v.party_name
+			left join {} l on l.guid = v._party_name
 			where coalesce(v.voucher_number, '') != ''
 				and coalesce(i.item, '') != ''
 				and coalesce(i.godown, '') != ''

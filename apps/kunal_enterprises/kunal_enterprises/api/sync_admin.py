@@ -6,7 +6,6 @@ from kunal_enterprises.cron.tally_sync import (
 	get_tally_customer_onboarding_preview,
 	sync_stock_snapshots,
 	sync_tally_masters,
-	sync_tally_vouchers,
 )
 from kunal_enterprises.integrations.tally_stock_excel import import_tally_stock_excel_file
 
@@ -50,8 +49,10 @@ def sync_stock_now(role=None, records=None):
 def sync_vouchers_now(role=None, records=None):
 	try:
 		_require_owner_admin()
-		run = sync_tally_vouchers(records)
-		return create_success_response("Voucher sync completed", _serialize_run(run))
+		if records is not None:
+			frappe.throw("Raw voucher rows bypass mirror validation; use the PostgreSQL import")
+		from kunal_enterprises.integrations.tally_postgres import import_vouchers
+		return create_success_response("PostgreSQL voucher observations imported", import_vouchers())
 	except Exception as error:
 		return handle_error_response(error, "Unable to sync vouchers")
 

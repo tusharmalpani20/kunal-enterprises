@@ -3400,7 +3400,7 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertFalse(forged_owner_response["success"])
 		self.assertEqual(order.status, "Manual Review")
 
-	def test_owner_can_resolve_manual_review_with_note(self):
+	def test_owner_rechecks_manual_review_without_forcing_processing(self):
 		product_group = self._create_product_group("Owner Resolve PG")
 		item = self._create_item("Owner Resolve Item", product_group.name)
 		customer = self._create_active_customer("9000000218", "ORDER-OWNER-001")
@@ -3410,16 +3410,18 @@ class TestOrderSubmission(FrappeTestCase):
 		)
 		frappe.db.set_value("Order", order_response["data"]["order"], "status", "Manual Review")
 
-		response = resolve_manual_review(
-			order_response["data"]["order"],
-			role="Owner",
-			resolution_note="Verified in Tally and resumed processing",
-		)
+		with patch("kunal_enterprises.cron.reconciliation.run_reconciliation") as recheck:
+			response = resolve_manual_review(
+				order_response["data"]["order"],
+				role="Owner",
+				resolution_note="Verified in Tally and resumed processing",
+			)
+			recheck.assert_called_once_with()
 		order = frappe.get_doc("Order", order_response["data"]["order"])
-		status_log = frappe.get_doc("Order Status Log", {"order": order.name, "to_status": "Processing"})
+		status_log = frappe.get_doc("Order Status Log", {"order": order.name, "to_status": "Manual Review"})
 
 		self.assertTrue(response["success"])
-		self.assertEqual(order.status, "Processing")
+		self.assertEqual(order.status, "Manual Review")
 		self.assertEqual(status_log.from_status, "Manual Review")
 		self.assertEqual(status_log.role, "Owner")
 		self.assertEqual(status_log.note, "Verified in Tally and resumed processing")
@@ -3587,408 +3589,7 @@ class TestOrderSubmission(FrappeTestCase):
 		).insert()
 
 
-class TestOrderReconciliation(FrappeTestCase):
-	def setUp(self):
-		self._create_godown("Recon Godown")
-
-	def tearDown(self):
-		frappe.db.rollback()
-
-	def test_sales_invoice_partially_fulfills_order_item(self):
-		product_group = self._create_product_group("Recon PG")
-		item = self._create_item("Recon Item", product_group.name)
-		customer = self._create_active_customer("9000000301", "RECON-CUSTOMER-001")
-		order_response = submit_order(
-			customer.name,
-			[{"item": item.name, "godown": "Recon Godown", "quantity": 5}],
-		)
-		frappe.get_doc(
-			{
-				"doctype": "Tally Voucher",
-				"voucher_type": "Sales Invoice",
-				"voucher_number": "SI-RECON-001",
-				"reference_number": order_response["data"]["portal_reference_number"],
-				"party_client_code": "RECON-CUSTOMER-001",
-				"tracking_number": "TRACK-RECON-001",
-				"voucher_date": "2026-05-19",
-				"lines": [
-					{
-						"item": item.name,
-						"godown": "Recon Godown",
-						"quantity": 2,
-						"tracking_number": "TRACK-RECON-001",
-					}
-				],
-			}
-		).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Partially Processed")
-		self.assertEqual(order.items[0].fulfilled_quantity, 2)
-		self.assertEqual(order.items[0].pending_quantity, 3)
-		self.assertEqual(order.items[0].status, "Partially Processed")
-
-	def test_sales_invoice_completes_order_when_all_items_are_fulfilled(self):
-		product_group = self._create_product_group("Recon Complete PG")
-		item_a = self._create_item("Recon Complete Item A", product_group.name)
-		item_b = self._create_item("Recon Complete Item B", product_group.name)
-		customer = self._create_active_customer("9000000302", "RECON-CUSTOMER-002")
-		order_response = submit_order(
-			customer.name,
-			[
-				{"item": item_a.name, "godown": "Recon Godown", "quantity": 2},
-				{"item": item_b.name, "godown": "Recon Godown", "quantity": 3},
-			],
-		)
-		frappe.get_doc(
-			{
-				"doctype": "Tally Voucher",
-				"voucher_type": "Sales Invoice",
-				"voucher_number": "SI-RECON-002",
-				"reference_number": order_response["data"]["portal_reference_number"],
-				"party_client_code": "RECON-CUSTOMER-002",
-				"tracking_number": "TRACK-RECON-002",
-				"voucher_date": "2026-05-19",
-				"lines": [
-					{
-						"item": item_a.name,
-						"godown": "Recon Godown",
-						"quantity": 2,
-						"tracking_number": "TRACK-RECON-002",
-					},
-					{
-						"item": item_b.name,
-						"godown": "Recon Godown",
-						"quantity": 3,
-						"tracking_number": "TRACK-RECON-002",
-					},
-				],
-			}
-		).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Completed")
-		self.assertEqual({row.item: row.fulfilled_quantity for row in order.items}, {item_a.name: 2, item_b.name: 3})
-		self.assertEqual({row.item: row.pending_quantity for row in order.items}, {item_a.name: 0, item_b.name: 0})
-		self.assertEqual({row.status for row in order.items}, {"Completed"})
-
-	def test_multiple_sales_invoices_cumulatively_complete_order(self):
-		product_group = self._create_product_group("Recon Cumulative PG")
-		item = self._create_item("Recon Cumulative Item", product_group.name)
-		customer = self._create_active_customer("9000000306", "RECON-CUSTOMER-006")
-		order_response = submit_order(
-			customer.name,
-			[{"item": item.name, "godown": "Recon Godown", "quantity": 5}],
-		)
-		for voucher_number, quantity, tracking_number in (
-			("SI-RECON-006-A", 2, "TRACK-RECON-006-A"),
-			("SI-RECON-006-B", 3, "TRACK-RECON-006-B"),
-		):
-			frappe.get_doc(
-				{
-					"doctype": "Tally Voucher",
-					"voucher_type": "Sales Invoice",
-					"voucher_number": voucher_number,
-					"reference_number": order_response["data"]["portal_reference_number"],
-					"party_client_code": "RECON-CUSTOMER-006",
-					"tracking_number": tracking_number,
-					"voucher_date": "2026-05-19",
-					"lines": [
-						{
-							"item": item.name,
-							"godown": "Recon Godown",
-							"quantity": quantity,
-							"tracking_number": tracking_number,
-						}
-					],
-				}
-			).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Completed")
-		self.assertEqual(order.items[0].fulfilled_quantity, 5)
-		self.assertEqual(order.items[0].pending_quantity, 0)
-		self.assertEqual(order.items[0].status, "Completed")
-
-	def test_delivery_challan_is_not_double_counted_when_matching_sales_invoice_exists(self):
-		product_group = self._create_product_group("Recon Mirror PG")
-		item = self._create_item("Recon Mirror Item", product_group.name)
-		customer = self._create_active_customer("9000000307", "RECON-CUSTOMER-007")
-		order_response = submit_order(
-			customer.name,
-			[{"item": item.name, "godown": "Recon Godown", "quantity": 3}],
-		)
-		for voucher_type, voucher_number in (
-			("Delivery Challan", "DC-RECON-007"),
-			("Sales Invoice", "SI-RECON-007"),
-		):
-			frappe.get_doc(
-				{
-					"doctype": "Tally Voucher",
-					"voucher_type": voucher_type,
-					"voucher_number": voucher_number,
-					"reference_number": order_response["data"]["portal_reference_number"],
-					"party_client_code": "RECON-CUSTOMER-007",
-					"tracking_number": "TRACK-RECON-007",
-					"voucher_date": "2026-05-19",
-					"lines": [
-						{
-							"item": item.name,
-							"godown": "Recon Godown",
-							"quantity": 3,
-							"tracking_number": "TRACK-RECON-007",
-						}
-					],
-				}
-			).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-		logs = frappe.get_all(
-			"Order Reconciliation Log",
-			filters={"order": order.name},
-			fields=["status", "message"],
-			order_by="creation asc",
-		)
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Completed")
-		self.assertEqual(order.items[0].fulfilled_quantity, 3)
-		self.assertEqual(order.items[0].pending_quantity, 0)
-		self.assertNotIn("Manual Review", {log.status for log in logs})
-		self.assertTrue(any("Delivery Challan superseded by Sales Invoice" in log.message for log in logs))
-
-	def test_ambiguous_duplicate_sales_invoice_movement_moves_order_to_manual_review(self):
-		product_group = self._create_product_group("Recon Ambiguous PG")
-		item = self._create_item("Recon Ambiguous Item", product_group.name)
-		customer = self._create_active_customer("9000000308", "RECON-CUSTOMER-008")
-		order_response = submit_order(
-			customer.name,
-			[{"item": item.name, "godown": "Recon Godown", "quantity": 2}],
-		)
-		for voucher_number in ("SI-RECON-008-A", "SI-RECON-008-B"):
-			frappe.get_doc(
-				{
-					"doctype": "Tally Voucher",
-					"voucher_type": "Sales Invoice",
-					"voucher_number": voucher_number,
-					"reference_number": order_response["data"]["portal_reference_number"],
-					"party_client_code": "RECON-CUSTOMER-008",
-					"tracking_number": "TRACK-RECON-008",
-					"voucher_date": "2026-05-19",
-					"lines": [
-						{
-							"item": item.name,
-							"godown": "Recon Godown",
-							"quantity": 1,
-							"tracking_number": "TRACK-RECON-008",
-						}
-					],
-				}
-			).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-		logs = frappe.get_all(
-			"Order Reconciliation Log",
-			filters={"order": order.name},
-			fields=["status", "message"],
-			order_by="creation asc",
-		)
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Manual Review")
-		self.assertTrue(any(log.status == "Manual Review" for log in logs))
-		self.assertTrue(any("Ambiguous duplicate movement" in log.message for log in logs))
-
-	def test_over_fulfillment_moves_order_to_manual_review_with_reason(self):
-		product_group = self._create_product_group("Recon Over PG")
-		item = self._create_item("Recon Over Item", product_group.name)
-		customer = self._create_active_customer("9000000303", "RECON-CUSTOMER-003")
-		order_response = submit_order(
-			customer.name,
-			[{"item": item.name, "godown": "Recon Godown", "quantity": 4}],
-		)
-		frappe.get_doc(
-			{
-				"doctype": "Tally Voucher",
-				"voucher_type": "Sales Invoice",
-				"voucher_number": "SI-RECON-003",
-				"reference_number": order_response["data"]["portal_reference_number"],
-				"party_client_code": "RECON-CUSTOMER-003",
-				"tracking_number": "TRACK-RECON-003",
-				"voucher_date": "2026-05-19",
-				"lines": [
-					{
-						"item": item.name,
-						"godown": "Recon Godown",
-						"quantity": 5,
-						"tracking_number": "TRACK-RECON-003",
-					}
-				],
-			}
-		).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-		log = frappe.get_doc("Order Reconciliation Log", {"order": order.name})
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Manual Review")
-		self.assertEqual(log.status, "Manual Review")
-		self.assertEqual(log.reason_code, "OVER_FULFILLMENT")
-		self.assertIn("Over fulfillment", log.message)
-
-	def test_extra_voucher_item_moves_order_to_manual_review_with_reason(self):
-		product_group = self._create_product_group("Recon Extra PG")
-		ordered_item = self._create_item("Recon Ordered Item", product_group.name)
-		extra_item = self._create_item("Recon Extra Item", product_group.name)
-		customer = self._create_active_customer("9000000304", "RECON-CUSTOMER-004")
-		order_response = submit_order(
-			customer.name,
-			[{"item": ordered_item.name, "godown": "Recon Godown", "quantity": 4}],
-		)
-		frappe.get_doc(
-			{
-				"doctype": "Tally Voucher",
-				"voucher_type": "Sales Invoice",
-				"voucher_number": "SI-RECON-004",
-				"reference_number": order_response["data"]["portal_reference_number"],
-				"party_client_code": "RECON-CUSTOMER-004",
-				"tracking_number": "TRACK-RECON-004",
-				"voucher_date": "2026-05-19",
-				"lines": [
-					{
-						"item": ordered_item.name,
-						"godown": "Recon Godown",
-						"quantity": 4,
-						"tracking_number": "TRACK-RECON-004",
-					},
-					{
-						"item": extra_item.name,
-						"godown": "Recon Godown",
-						"quantity": 1,
-						"tracking_number": "TRACK-RECON-004",
-					},
-				],
-			}
-		).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-		log = frappe.get_doc("Order Reconciliation Log", {"order": order.name})
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Manual Review")
-		self.assertEqual(log.status, "Manual Review")
-		self.assertIn("Extra unmatched item", log.message)
-		self.assertIn(extra_item.name, log.message)
-
-	def test_customer_mismatch_moves_order_to_manual_review_with_reason_context(self):
-		product_group = self._create_product_group("Recon Customer Mismatch PG")
-		item = self._create_item("Recon Customer Mismatch Item", product_group.name)
-		customer = self._create_active_customer("9000000305", "RECON-CUSTOMER-005")
-		order_response = submit_order(
-			customer.name,
-			[{"item": item.name, "godown": "Recon Godown", "quantity": 2}],
-		)
-		frappe.get_doc(
-			{
-				"doctype": "Tally Voucher",
-				"voucher_type": "Sales Invoice",
-				"voucher_number": "SI-RECON-005",
-				"reference_number": order_response["data"]["portal_reference_number"],
-				"party_client_code": "DIFFERENT-CUSTOMER",
-				"tracking_number": "TRACK-RECON-005",
-				"voucher_date": "2026-05-19",
-				"lines": [
-					{
-						"item": item.name,
-						"godown": "Recon Godown",
-						"quantity": 2,
-						"tracking_number": "TRACK-RECON-005",
-					}
-				],
-			}
-		).insert(ignore_permissions=True)
-
-		run = run_reconciliation()
-		order = frappe.get_doc("Order", order_response["data"]["order"])
-		log = frappe.get_doc("Order Reconciliation Log", {"order": order.name})
-
-		self.assertEqual(run.status, "Completed")
-		self.assertEqual(order.status, "Manual Review")
-		self.assertEqual(log.status, "Manual Review")
-		self.assertIn("Customer Client Code mismatch", log.message)
-		self.assertIn("RECON-CUSTOMER-005", log.message)
-		self.assertIn("DIFFERENT-CUSTOMER", log.message)
-
-	def _create_product_group(self, group_name):
-		return frappe.get_doc(
-			{
-				"doctype": "Tally Stock Group",
-				"group_name": group_name,
-				"is_root": 1,
-				"depth": 0,
-				"full_path": group_name,
-				"is_active": 1,
-			}
-		).insert()
-
-	def _create_item(self, item_name, root_stock_group):
-		return frappe.get_doc(
-			{
-				"doctype": "Tally Item",
-				"item_name": item_name,
-				"root_stock_group": root_stock_group,
-				"uom": "PCS",
-				"total_closing_balance": 0,
-				"is_active": 1,
-			}
-		).insert()
-
-	def _create_godown(self, godown_name, is_active=1):
-		if frappe.db.exists("Tally Godown", godown_name):
-			frappe.db.set_value("Tally Godown", godown_name, "is_active", is_active)
-			return frappe.get_doc("Tally Godown", godown_name)
-		return frappe.get_doc(
-			{
-				"doctype": "Tally Godown",
-				"godown_name": godown_name,
-				"is_active": is_active,
-			}
-		).insert()
-
-	def _create_active_customer(self, mobile_number, client_code):
-		frappe.get_doc(
-			{
-				"doctype": "Tally Customer Ledger",
-				"client_code": client_code,
-				"ledger_name": f"Ledger {client_code}",
-				"is_active": 1,
-			}
-		).insert()
-		return frappe.get_doc(
-			{
-				"doctype": "Customer",
-				"customer_name": f"Customer {client_code}",
-				"business_legal_name": f"Business {client_code}",
-				"mobile_number": mobile_number,
-				"mobile_verified": 1,
-				"admin_approved": 1,
-				"status": "Active",
-				"client_code": client_code,
-			}
-		).insert()
+# Current-source reconciliation scenarios live in test_voucher_corrections.py.
 
 class TestTallyStockSync(FrappeTestCase):
 	def setUp(self):
@@ -4302,24 +3903,9 @@ class TestTallyStockSync(FrappeTestCase):
 			)
 
 			frappe.set_user(admin_user.name)
-			voucher_response = sync_vouchers_now(
-				records=[
-					{
-						"voucher_type": "Delivery Challan",
-						"voucher_number": "DC-SESSION-ADMIN",
-						"reference_number": "KE-26-05-9994",
-						"party_client_code": "SESSION-CUSTOMER",
-						"tracking_number": "TRACK-SESSION-ADMIN",
-						"lines": [
-							{
-								"item": item.name,
-								"godown": "Session Manual Sync Godown",
-								"quantity": 1,
-							}
-						],
-					}
-				],
-			)
+			with patch("kunal_enterprises.integrations.tally_postgres.import_vouchers", return_value={"status": "Completed"}) as import_job:
+				voucher_response = sync_vouchers_now()
+				import_job.assert_called_once_with()
 			reconciliation_response = run_reconciliation_now()
 		finally:
 			frappe.set_user("Administrator")
@@ -4329,7 +3915,7 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertTrue(voucher_response["success"])
 		self.assertTrue(reconciliation_response["success"])
 		self.assertTrue(frappe.db.exists("Tally Unit", "SESSION-OWNER-PCS"))
-		self.assertTrue(frappe.db.exists("Tally Voucher", "DC-SESSION-ADMIN"))
+		self.assertEqual(voucher_response["data"]["status"], "Completed")
 
 	def test_branch_and_guest_users_cannot_forge_role_for_any_manual_admin_api(self):
 		product_group = self._create_product_group("Forbidden Manual Sync PG")
@@ -4564,34 +4150,10 @@ class TestTallyStockSync(FrappeTestCase):
 		self.assertEqual(voucher.lines[0].item, item.name)
 		self.assertEqual(voucher.lines[0].godown, godown.name)
 
-	def test_owner_manual_voucher_sync_action_wraps_voucher_job(self):
-		product_group = self._create_product_group("Manual Voucher Sync PG")
-		item = self._create_item("Manual Voucher Sync Item", product_group.name)
-		self._create_godown("Manual Voucher Godown")
-
-		response = sync_vouchers_now(
-			role="Owner",
-			records=[
-				{
-					"voucher_type": "Delivery Challan",
-					"voucher_number": "DC-SYNC-001",
-					"reference_number": "KE-26-05-9998",
-					"party_client_code": "SYNC-CUSTOMER-002",
-					"tracking_number": "TRACK-SYNC-002",
-					"lines": [
-						{
-							"item": item.name,
-							"godown": "Manual Voucher Godown",
-							"quantity": 1,
-						}
-					],
-				}
-			],
-		)
-
-		self.assertTrue(response["success"])
-		self.assertEqual(response["data"]["sync_type"], "Vouchers")
-		self.assertTrue(frappe.db.exists("Tally Voucher", "DC-SYNC-001"))
+	def test_owner_manual_voucher_sync_rejects_unverified_rows(self):
+		response = sync_vouchers_now(role="Owner", records=[])
+		self.assertFalse(response["success"])
+		self.assertIn("PostgreSQL import", response["error"]["message"])
 
 	def test_voucher_sync_logs_unknown_item_and_godown_lines_without_dropping_good_vouchers(self):
 		product_group = self._create_product_group("Voucher Line Validation PG")
