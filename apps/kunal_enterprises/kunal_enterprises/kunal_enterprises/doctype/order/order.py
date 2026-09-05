@@ -36,14 +36,14 @@ class Order(Document):
 			if row.requested_quantity <= 0:
 				frappe.throw(_("Order Quantity must be positive"))
 			row.fulfilled_quantity = row.fulfilled_quantity or 0
-			row.pending_quantity = row.requested_quantity - row.fulfilled_quantity
+			row.pending_quantity = max(row.requested_quantity - row.fulfilled_quantity, 0)
 			if not row.status:
 				row.status = self.status or "Placed"
 		for row in self.godown_allocations:
 			if row.requested_quantity <= 0:
 				frappe.throw(_("Order Quantity must be positive"))
 			row.fulfilled_quantity = row.fulfilled_quantity or 0
-			row.pending_quantity = row.requested_quantity - row.fulfilled_quantity
+			row.pending_quantity = max(row.requested_quantity - row.fulfilled_quantity, 0)
 
 	def _set_totals(self):
 		self.total_item_count = len({row.item for row in self.items if row.item})

@@ -27,7 +27,8 @@
   "source_as_on_date",
   "source_snapshot_id",
   "snapshot_complete",
-  "source_table"
+  "source_table",
+  "source_metadata"
  ],
  "fields": [
   {
@@ -166,6 +167,12 @@
    "fieldname": "source_table",
    "fieldtype": "Data",
    "label": "Source Table"
+  },
+  {
+   "fieldname": "source_metadata",
+   "fieldtype": "Long Text",
+   "label": "Source Observation Metadata",
+   "read_only": 1
   }
  ],
  "idx": 0,

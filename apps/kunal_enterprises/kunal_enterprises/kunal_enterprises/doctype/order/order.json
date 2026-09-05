@@ -25,7 +25,8 @@
   "sales_employee_note",
   "items_section",
   "items",
-  "godown_allocations"
+  "godown_allocations",
+  "tally_reconciliation_managed"
  ],
  "fields": [
   {
@@ -154,6 +155,13 @@
   {
    "fieldname": "column_break_gpco",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tally_reconciliation_managed",
+   "fieldtype": "Check",
+   "label": "Tally Reconciliation Managed",
+   "read_only": 1,
+   "default": "0"
   }
  ],
  "links": [],

@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 0,
- "autoname": "field:voucher_number",
+ "autoname": "hash",
  "creation": "2026-05-19 00:00:00.000000",
  "doctype": "DocType",
  "document_type": "Document",
@@ -14,7 +14,23 @@
   "tracking_number",
   "voucher_date",
   "reconciled",
-  "lines"
+  "reconciliation_state",
+  "reconciliation_last_attempt",
+  "reconciliation_reason",
+  "lines",
+  "tally_guid",
+  "source_company",
+  "source_alterid",
+  "tally_voucher_type_guid",
+  "tally_party_guid",
+  "fulfillment_eligible",
+  "source_status",
+  "source_error",
+  "source_snapshot_id",
+  "source_refreshed_at",
+  "raw_source_payload",
+  "source_observation",
+  "source_pending_references"
  ],
  "fields": [
   {
@@ -22,16 +38,14 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Voucher Type",
-   "options": "Sales Invoice\nDelivery Challan",
+   "options": "Sales Invoice\nDelivery Challan\nOther",
    "reqd": 1
   },
   {
    "fieldname": "voucher_number",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Voucher Number",
-   "reqd": 1,
-   "unique": 1
+   "label": "Voucher Number"
   },
   {
    "fieldname": "reference_number",
@@ -42,8 +56,7 @@
   {
    "fieldname": "party_client_code",
    "fieldtype": "Data",
-   "label": "Party Client Code",
-   "reqd": 1
+   "label": "Party Client Code"
   },
   {
    "fieldname": "tracking_number",
@@ -67,7 +80,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Reconciliation State",
-   "options": "Pending\nMatched\nUnmatched\nManual Review"
+   "options": "Pending\nMatched\nUnmatched\nManual Review\nRemoved\nIgnored"
   },
   {
    "fieldname": "reconciliation_last_attempt",
@@ -85,8 +98,86 @@
    "fieldname": "lines",
    "fieldtype": "Table",
    "label": "Lines",
-   "options": "Tally Voucher Line",
-   "reqd": 1
+   "options": "Tally Voucher Line"
+  },
+  {
+   "fieldname": "tally_guid",
+   "fieldtype": "Data",
+   "label": "Tally GUID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_company",
+   "fieldtype": "Data",
+   "label": "Source Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_alterid",
+   "fieldtype": "Int",
+   "label": "Source AlterID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tally_voucher_type_guid",
+   "fieldtype": "Data",
+   "label": "Tally Voucher Type GUID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tally_party_guid",
+   "fieldtype": "Data",
+   "label": "Tally Party GUID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fulfillment_eligible",
+   "fieldtype": "Check",
+   "label": "Fulfillment Eligible",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_status",
+   "fieldtype": "Select",
+   "label": "Source Status",
+   "read_only": 1,
+   "options": "Active\nUnverified\nRemoved"
+  },
+  {
+   "fieldname": "source_error",
+   "fieldtype": "Small Text",
+   "label": "Source Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_snapshot_id",
+   "fieldtype": "Data",
+   "label": "Source Snapshot ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_refreshed_at",
+   "fieldtype": "Datetime",
+   "label": "Source Refreshed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "raw_source_payload",
+   "fieldtype": "Long Text",
+   "label": "Raw Source Payload",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_observation",
+   "fieldtype": "Long Text",
+   "label": "Latest PostgreSQL Observation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_pending_references",
+   "fieldtype": "Long Text",
+   "label": "References Awaiting Source Recovery",
+   "read_only": 1
   }
  ],
  "idx": 0,
@@ -121,5 +212,6 @@
  ],
  "sort_field": "voucher_date",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "track_changes": 1
 }
