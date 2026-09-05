@@ -1,0 +1,103 @@
+# Backend-only Tally reconciliation
+
+## Scope and limits
+
+Only the Frappe backend changes. The Tally loader repository, TDL, mobile application and PostgreSQL schema remain unchanged. The backend makes no requests to Tally and uses read-only PostgreSQL connections.
+
+Corrections can be automated only after the existing loader reflects them in PostgreSQL. Missing rows do not establish deletion in Tally. Old inventory left in PostgreSQL cannot be detected as stale merely by reading it again. No number of repeated missing observations becomes automatic deletion evidence.
+
+## Existing source tables
+
+| Table | Use |
+| --- | --- |
+| `trn_voucher` | GUID, AlterID, voucher number, reference, date, party GUID and type GUID |
+| `trn_inventory` | Item/godown GUIDs, signed quantity and tracking number |
+| `mst_ledger` | GUID join and customer alias information |
+| `config` | Company, export period, header and inventory progress markers |
+| `sync_run_ping` | Successful imports, failures and no-change pings |
+
+No `portal_voucher_snapshot`, `portal_voucher_sync_state` or inventory coverage table is required. The module name `voucher_snapshot.py` refers to Frappe's local application of a database observation, not a loader-published snapshot.
+
+The reader uses one repeatable-read transaction so its queries see the same PostgreSQL database view. It rejects wrong-company metadata, invalid periods, missing checkpoints, inventory behind headers, headers above the checkpoint and a failure without a later completed import. A no-change success ping does not clear an earlier failed import. Completed imports are identified by the existing loader's `Import completed successfully.` message.
+
+These are practical checks, not proof of an atomic Tally export. The existing loader can commit its stages separately, diagnostic runs are not unambiguously identified in the available metadata, and inventory rows do not retain per-voucher revision/completeness information. The latest successful loader run and export period are retained in `Tally Sync Run.source_metadata`; stale source data must not be confused with a fresh Tally sync. Period changes are recorded in the import result and metadata. Missing records are always held, including records omitted by an export-period change.
+
+## Acceptance and uncertain data
+
+Company plus GUID identifies the Frappe voucher. Voucher number is a mutable display value and is no longer unique. Customer identity uses its ledger GUID. Only configured delivery-challan type GUIDs contribute fulfillment; invoices and sales orders do not count.
+
+`raw_source_payload` and voucher lines retain the last accepted source observation. `source_observation` holds the latest PostgreSQL observation, including an incomplete one (`null` when the header is missing). `source_pending_references` retains every reference affected by a correction until all related orders can be recalculated. If any related order has uncertain source data or an unmapped legacy contribution, the entire connected group preserves its quantities. This prevents a reference transfer from crediting a new order while the old order still retains that quantity. Multi-step reference corrections retain the whole chain until recovery.
+
+An eligible voucher is held as `Unverified` when its header disappears, its inventory is missing, its type GUID disappears, or its inventory cannot resolve to imported item/godown masters. Existing accepted data is retained. Affected orders preserve all current quantities and move to Manual Review; explicit Cancelled and Partially Closed states remain unchanged. New unverified vouchers contribute nothing. Other orders continue reconciling.
+
+When usable data returns, the hold clears automatically, both the accepted and pending references are reconsidered, and affected orders are recalculated. Missing data never generates `Removed`; that value remains only for compatibility with historical records.
+
+## Scenario behavior
+
+| Change reflected in PostgreSQL | Result |
+| --- | --- |
+| Customer display name changes, same GUID | Customer identity remains the same |
+| Wrong customer GUID | Validation review; correction automatically retries |
+| Missing/wrong reference | Unmatched, or validated against the identified order; correction recalculates former/current orders |
+| Quantity increases or decreases | Current contribution replaces the prior quantity; no accumulation on repeat imports |
+| Additional challan with a new GUID | Counts once alongside other accepted challans |
+| Same number on different GUIDs | Separate voucher records |
+| Known but unrequested item, inward quantity or over-delivery | Validation review; later correction automatically retries |
+| Missing header, empty inventory or unresolved master GUID | Quantities held, source unverified, automatic retry on future imports |
+| Completed order receives accepted lower quantities | Reopens according to remaining quantity |
+| Completed order's voucher disappears | Preserves quantities and moves to Manual Review |
+| Explicitly Cancelled / Partially Closed order | Status preserved; accepted corrections can update quantities; uncertain data preserves quantities |
+
+A wrong reference that happens to identify another compatible order for the same customer may be indistinguishable from a correct reference. The backend does not guess references from names, dates or amounts.
+
+Manual review's recheck action cannot force an incorrect order into Processing. It recalculates current accepted Frappe data; the scheduled/manual PostgreSQL import is what obtains newer source corrections. Source updates and order recalculation commit together under a site-specific lock. A history check using a separate read connection also rejects an older Frappe transaction view before applying changes; retry such an import or reconciliation in a fresh transaction. The check does not commit or discard the caller's pending writes. Repeated unchanged source observations avoid rewriting voucher lines and duplicate version history, but updated local master mappings are still applied. Read observations are ordered by their start time so a slow earlier read cannot overwrite a later observation. Order reconciliation still considers all managed orders to catch customer/master changes and pending reviews.
+
+## Legacy migration
+
+Run the normal Frappe migration. It retains document names, removes voucher-number uniqueness, adds company/GUID uniqueness and adds observation fields. Legacy vouchers are adopted only when number, reference, challan classification and customer GUID agree unambiguously on both the source and legacy sides. An incomplete but unambiguous adoption establishes identity while preserving legacy lines and quantities. Previously reconciled legacy vouchers with no verified identity preserve their order quantities and report `LEGACY_IDENTITY_REQUIRED`.
+
+## Configuration and read-only preview
+
+Retain the existing `tally_postgres_*` connection settings. Add the exact source company and reviewed challan type GUIDs to Frappe site configuration:
+
+```json
+{
+  "tally_source_company": "EXACT TALLY COMPANY NAME",
+  "tally_fulfillment_voucher_type_guids": ["REVIEWED-CHALLAN-TYPE-GUID"]
+}
+```
+
+Find candidate types using a read-only PostgreSQL query; review before configuring:
+
+```sql
+SELECT voucher_type, _voucher_type, count(*)
+FROM trn_voucher
+GROUP BY voucher_type, _voucher_type
+ORDER BY voucher_type;
+```
+
+After deploying the backend and migrating the site, run the non-mutating preview:
+
+```sh
+bench --site <site> execute kunal_enterprises.integrations.tally_postgres.diagnose_vouchers
+```
+
+It reports source metadata, approved-type counts, eligible vouchers without inventory, missing imported GUIDs and a bounded sample. It does not change orders or validate deletions in Tally.
+
+## Rollout
+
+1. Back up the Frappe site and pause its import schedule during migration.
+2. Deploy only this backend, configure the company/type GUIDs, run `bench --site <site> migrate` and restart workers.
+3. Run the read-only preview. Review source age, missing inventory and ambiguous legacy identities.
+4. Run a controlled `kunal_enterprises.integrations.tally_postgres.import_all` import and inspect quantities, Manual Review reasons and sync logs.
+5. Resume the existing Frappe schedule. No loader rebuild, TDL installation, additional Tally scan or PostgreSQL write is needed.
+
+## Verification
+
+Tests cover pure quantity calculations, sync metadata checks, corrections and holds against Frappe, and the reader against disposable PostgreSQL schemas containing only the original loader tables. PostgreSQL tests require `KUNAL_TEST_PG_DSN` pointing to a disposable database. Frappe tests must use a disposable site because the actual import commits transactions.
+
+A read-only check on 5 September 2026 successfully read the current database: 12,917 headers, 11,170 challans, and 4,679 challans without inventory. The latest reported completed loader import was run 650 on 3 September 2026 at 16:35:59 IST. The missing inventory is an existing source limitation, not evidence of deleted Tally vouchers.
+
+Production migration and activation have not been performed by this implementation.
+
+Audit validation: 19 unit tests, 24 Frappe correction/hold tests and 7 PostgreSQL reader/integration tests passed. Added regressions cover incomplete legacy adoption, ambiguous legacy candidates, frozen reference transfers (including multi-step transfers and legacy holds), corrected master mappings, equivalent decimal tracking quantities, read ordering, and a two-connection stale-transaction regression. The earlier broader foundation suite passed 152 of 155 tests; the remaining three failures are the previously confirmed Mobile OTP permission expectation and two master-unit name assertions. Python lint and compilation passed. Migration was tested only on disposable Frappe sites.

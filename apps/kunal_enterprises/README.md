@@ -77,3 +77,7 @@ See `../../docs/10-backend-api.md` for the whitelisted API contract and `../../d
 Tally and WhatsApp live proof gates are documented in `../../docs/12-operational-readiness-checklist.md` and `../../docs/15-tally-pilot-evidence-template.md`.
 
 The remaining non-deferred production pilot sign-off template is `../../docs/16-production-pilot-signoff.md`.
+
+## Voucher corrections and reconciliation
+
+See [VOUCHER_RECONCILIATION.md](VOUCHER_RECONCILIATION.md) for the existing PostgreSQL mirror integration, correction and missing-data behavior, legacy migration and deployment order.
