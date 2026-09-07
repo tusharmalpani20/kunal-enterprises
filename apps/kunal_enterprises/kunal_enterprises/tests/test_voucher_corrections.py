@@ -72,7 +72,8 @@ class TestVoucherCorrections(unittest.TestCase):
 			type_guid="dispatch-type",
 			voucher_type="Delivery Challan",
 			voucher_number="DC-" + self.prefix,
-			reference_number=self.order.portal_reference_number,
+			order_number=self.order.portal_reference_number,
+			order_details=[dict(order_number=self.order.portal_reference_number, order_date=None)],
 			party_guid=ledger.tally_guid,
 			voucher_date="20260905",
 			lines=[
@@ -85,6 +86,42 @@ class TestVoucherCorrections(unittest.TestCase):
 			],
 		)
 		frappe.db.commit()
+
+	def set_source_order(self, number):
+		self.payload["order_number"] = number
+		self.payload["order_details"] = [dict(order_number=number, order_date=None)] if number else []
+
+	def test_unknown_order_extraction_preserves_accepted_quantity(self):
+		self.publish()
+		self.payload.update(order_number=None, order_details=None)
+		self.payload["lines"][0]["quantity"] = -8
+		self.publish()
+		self.assertEqual(self.order.status, "Manual Review")
+		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
+
+	def test_reference_number_is_not_a_fallback(self):
+		self.set_source_order(None)
+		self.payload["reference_number"] = self.order.portal_reference_number
+		self.publish()
+		self.assertEqual(self.order.items[0].fulfilled_quantity, 0)
+
+	def test_multiple_orders_hold_every_candidate(self):
+		self.publish()
+		other = frappe.copy_doc(self.order)
+		other.portal_reference_number = "MULTI-" + self.prefix
+		other.items[0].fulfilled_quantity = 0
+		other.status = "Placed"
+		other.insert(ignore_permissions=True)
+		self.payload.update(order_number=None, order_details=[
+			dict(order_number=self.order.portal_reference_number, order_date=None),
+			dict(order_number=other.portal_reference_number, order_date=None),
+		])
+		self.publish()
+		other.reload()
+		self.assertEqual(self.order.status, "Manual Review")
+		self.assertEqual(other.status, "Manual Review")
+		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
+		self.assertEqual(other.items[0].fulfilled_quantity, 0)
 
 	def publish(self, rows=None):
 		# Include other tests' source rows so each observation includes the other test vouchers.
@@ -166,7 +203,7 @@ class TestVoucherCorrections(unittest.TestCase):
 		other.items[0].fulfilled_quantity = 0
 		other.status = "Placed"
 		other.insert(ignore_permissions=True)
-		self.payload["reference_number"] = other.portal_reference_number
+		self.set_source_order(other.portal_reference_number)
 		self.payload["alterid"] = 2
 		self.publish()
 		other.reload()
@@ -237,10 +274,10 @@ class TestVoucherCorrections(unittest.TestCase):
 		)
 
 	def test_missing_reference_recovers_and_missing_voucher_can_return(self):
-		self.payload["reference_number"] = ""
+		self.set_source_order(None)
 		voucher = self.publish()
 		self.assertEqual(voucher.reconciliation_state, "Unmatched")
-		self.payload["reference_number"] = self.order.portal_reference_number
+		self.set_source_order(self.order.portal_reference_number)
 		self.payload["alterid"] = 2
 		self.publish()
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
@@ -298,7 +335,7 @@ class TestVoucherCorrections(unittest.TestCase):
 		other.insert(ignore_permissions=True)
 		lines = self.payload["lines"]
 		self.payload["lines"] = []
-		self.payload["reference_number"] = other.portal_reference_number
+		self.set_source_order(other.portal_reference_number)
 		self.publish()
 		other.reload()
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
@@ -355,7 +392,7 @@ class TestVoucherCorrections(unittest.TestCase):
 		self.order.save(ignore_permissions=True)
 		return legacy
 
-	def test_legacy_adoption_with_missing_inventory_preserves_fulfillment(self):
+	def test_legacy_is_not_adopted_and_preserves_fulfillment(self):
 		legacy = self._audit_legacy()
 		original_lines = self.payload["lines"]
 		self.payload["lines"] = []
@@ -364,7 +401,10 @@ class TestVoucherCorrections(unittest.TestCase):
 		self.assertEqual(self.order.status, "Manual Review")
 		self.payload["lines"] = original_lines
 		voucher = self.publish()
-		self.assertEqual(voucher.name, legacy.name)
+		self.assertNotEqual(voucher.name, legacy.name)
+		legacy.reload()
+		self.assertFalse(legacy.tally_guid)
+		self.assertEqual(self.order.status, "Manual Review")
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
 
 	def test_ambiguous_source_guids_do_not_adopt_one_legacy_voucher(self):
@@ -394,7 +434,7 @@ class TestVoucherCorrections(unittest.TestCase):
 		other.insert(ignore_permissions=True)
 		second_lines = second["lines"]
 		second["lines"] = []
-		self.payload["reference_number"] = other.portal_reference_number
+		self.set_source_order(other.portal_reference_number)
 		for _ in range(2):
 			self.publish([self.payload, second])
 			other.reload()
@@ -441,7 +481,7 @@ class TestVoucherCorrections(unittest.TestCase):
 		accepted = second["lines"]
 		second["lines"] = []
 		for other in others:
-			self.payload["reference_number"] = other.portal_reference_number
+			self.set_source_order(other.portal_reference_number)
 			self.publish([self.payload, second])
 			for pending in others:
 				pending.reload()
@@ -467,7 +507,7 @@ class TestVoucherCorrections(unittest.TestCase):
 		other.items[0].fulfilled_quantity = 0
 		other.status = "Placed"
 		other.insert(ignore_permissions=True)
-		self.payload["reference_number"] = other.portal_reference_number
+		self.set_source_order(other.portal_reference_number)
 		self.publish()
 		other.reload()
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)

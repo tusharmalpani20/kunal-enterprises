@@ -2,13 +2,13 @@
 
 import hashlib
 import json
-from collections import Counter
 from decimal import Decimal
 
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
 from kunal_enterprises.integrations.voucher_contract import validate_snapshot
+from kunal_enterprises.integrations.order_details import order_candidates
 
 
 def configured_types():
@@ -122,7 +122,6 @@ def _apply_snapshot(state, payloads, company, allowed):
 		"Tally Voucher", filters={"source_company": company}, fields=["name", "tally_guid"]
 	)
 	by_guid = {row.tally_guid: row.name for row in existing if row.tally_guid}
-	source_candidates = Counter(_legacy_key(payload) for payload in payloads)
 	seen = set()
 	processed = 0
 	for payload in payloads:
@@ -132,27 +131,15 @@ def _apply_snapshot(state, payloads, company, allowed):
 		if not eligible and guid not in by_guid:
 			continue
 		name = by_guid.get(guid)
-		if not name and source_candidates[_legacy_key(payload)] == 1:
-			name = _legacy_match(payload)
 		voucher = frappe.get_doc("Tally Voucher", name) if name else frappe.new_doc("Tally Voucher")
 		if not name:
 			voucher.name = "TV-" + hashlib.sha256(f"{company}:{guid}".encode()).hexdigest()[:32]
-		old_references = _held_references(voucher) | {voucher.reference_number}
+		old_references = _held_references(voucher) | {voucher.order_number}
 		values, lines = _voucher_values(payload, state, eligible, masters)
 		if not payload.get("type_guid") or (eligible and values["source_error"]):
 			if not name:
 				voucher.update(values)
 				voucher.raw_source_payload = None
-			elif not voucher.tally_guid:
-				# Adopt identity without replacing accepted legacy quantities or references.
-				for field in (
-					"tally_guid",
-					"source_company",
-					"tally_party_guid",
-					"tally_voucher_type_guid",
-					"fulfillment_eligible",
-				):
-					voucher.set(field, values[field])
 			_hold(
 				voucher,
 				state,
@@ -167,6 +154,7 @@ def _apply_snapshot(state, payloads, company, allowed):
 				or bool(voucher.fulfillment_eligible) != eligible
 				or voucher.source_error != values["source_error"]
 				or voucher.party_client_code != values["party_client_code"]
+				or voucher.order_number != values["order_number"]
 				or _mapped_lines(voucher.lines) != _mapped_lines(lines)
 			)
 			if not source_changed:
@@ -175,13 +163,13 @@ def _apply_snapshot(state, payloads, company, allowed):
 			voucher.update(values)
 			voucher.source_observation = values["raw_source_payload"]
 			voucher.source_pending_references = json.dumps(
-				sorted(r for r in old_references | {voucher.reference_number} if r)
+				sorted(r for r in old_references | {voucher.order_number} if r)
 			)
 			voucher.set("lines", [])
 			for line in lines:
 				voucher.append("lines", line)
 			voucher.save(ignore_permissions=True, ignore_version=not source_changed)
-		for reference in old_references | {voucher.reference_number, payload.get("reference_number")}:
+		for reference in old_references | {voucher.order_number, payload.get("order_number")}:
 			_mark_order(reference)
 		processed += 1
 
@@ -194,7 +182,7 @@ def _apply_snapshot(state, payloads, company, allowed):
 				None,
 				"Voucher is missing from PostgreSQL; deletion in Tally is unverified and previous quantities are preserved",
 			)
-			_mark_order(voucher.reference_number)
+			_mark_order(voucher.order_number)
 
 	run = frappe.get_doc(
 		dict(
@@ -241,31 +229,6 @@ def _mapped_lines(lines):
 	]
 
 
-def _legacy_key(payload):
-	return (payload.get("voucher_number"), payload.get("reference_number"), payload.get("party_guid"))
-
-
-def _legacy_match(payload):
-	# Adopt legacy names only when number, reference and verified customer mapping agree.
-	if not payload.get("reference_number") or not payload.get("party_guid"):
-		return None
-	rows = frappe.get_all(
-		"Tally Voucher",
-		filters={"voucher_number": payload["voucher_number"]},
-		fields=["name", "tally_guid", "reference_number", "party_client_code", "voucher_type"],
-	)
-	matches = [
-		row
-		for row in rows
-		if not row.tally_guid
-		and row.reference_number == payload["reference_number"]
-		and row.voucher_type == "Delivery Challan"
-		and frappe.db.get_value("Tally Customer Ledger", {"client_code": row.party_client_code}, "tally_guid")
-		== payload["party_guid"]
-	]
-	return matches[0].name if len(matches) == 1 else None
-
-
 def _voucher_values(payload, state, eligible, masters):
 	lines = []
 	errors = []
@@ -289,6 +252,9 @@ def _voucher_values(payload, state, eligible, masters):
 	ledger = masters["Tally Customer Ledger"].get(payload.get("party_guid"))
 	if eligible and not lines:
 		errors.append("Voucher has no usable inventory lines")
+	_, order_error = order_candidates(payload["order_details"], payload["order_number"])
+	if eligible and order_error:
+		errors.append(order_error)
 	return dict(
 		tally_guid=payload["guid"],
 		source_company=state["source_company"],
@@ -297,7 +263,7 @@ def _voucher_values(payload, state, eligible, masters):
 		voucher_type="Delivery Challan" if eligible else "Other",
 		tally_voucher_type_guid=payload.get("type_guid"),
 		tally_party_guid=payload.get("party_guid"),
-		reference_number=payload.get("reference_number"),
+		order_number=payload.get("order_number"),
 		party_client_code=ledger,
 		voucher_date=_voucher_date(payload.get("voucher_date")),
 		fulfillment_eligible=int(eligible),
@@ -329,9 +295,10 @@ def _hold(voucher, state, payload, reason):
 		or voucher.source_observation != observation
 		or voucher.source_error != reason
 	)
-	references = _held_references(voucher) | {voucher.reference_number}
+	references = _held_references(voucher) | {voucher.order_number}
 	if payload:
-		references.add(payload.get("reference_number"))
+		candidates, _ = order_candidates(payload["order_details"], payload["order_number"])
+		references.update(candidates)
 	voucher.source_pending_references = json.dumps(sorted(r for r in references if r))
 	voucher.source_observation = observation
 	voucher.source_status = "Unverified"

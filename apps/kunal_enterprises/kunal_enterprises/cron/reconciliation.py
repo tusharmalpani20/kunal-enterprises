@@ -87,7 +87,7 @@ def _run_reconciliation():
 	by_reference = defaultdict(list)
 	for voucher in vouchers:
 		if voucher.tally_guid:
-			references = {voucher.reference_number}
+			references = {voucher.order_number}
 			references.update(json.loads(voucher.source_pending_references or "[]"))
 			for reference in references:
 				by_reference[reference].append(voucher)
@@ -113,7 +113,7 @@ def _run_reconciliation():
 	while changed:
 		changed = False
 		for voucher in vouchers:
-			references = {voucher.reference_number} | set(
+			references = {voucher.order_number} | set(
 				json.loads(voucher.source_pending_references or "[]")
 			)
 			references.discard(None)
@@ -176,7 +176,7 @@ def _run_reconciliation():
 					else "Placed"
 				)
 			for voucher in linked:
-				if voucher.reference_number != order.portal_reference_number:
+				if voucher.order_number != order.portal_reference_number:
 					continue
 				reason = result["reasons"].get(voucher.tally_guid)
 				state, code, message = _voucher_result(voucher, reason)
@@ -214,8 +214,8 @@ def _run_reconciliation():
 					"NOT_FULFILLMENT_TYPE",
 					"Voucher type is not approved for dispatch fulfillment",
 				)
-			elif voucher.reference_number and frappe.db.exists(
-				"Order", {"portal_reference_number": voucher.reference_number}
+			elif voucher.order_number and frappe.db.exists(
+				"Order", {"portal_reference_number": voucher.order_number}
 			):
 				_record_result(
 					voucher,
@@ -228,7 +228,7 @@ def _run_reconciliation():
 					voucher,
 					"Unmatched",
 					"NO_MATCHING_ORDER",
-					"Portal reference is missing or does not identify an order",
+					"Tally Order Number is missing or does not identify a portal order",
 				)
 	# Release transfer history only after every affected order has been rebuilt atomically.
 	for voucher in vouchers:
@@ -249,7 +249,7 @@ def _run_reconciliation():
 def _evaluation_voucher(voucher):
 	return dict(
 		guid=voucher.tally_guid,
-		reference=voucher.reference_number,
+		reference=voucher.order_number,
 		party_guid=voucher.tally_party_guid,
 		eligible=bool(voucher.fulfillment_eligible),
 		source_status=voucher.source_status,

@@ -22,7 +22,7 @@ class ContractTests(unittest.TestCase):
 			completed_at="2026-09-05",
 			voucher_count=1,
 		)
-		self.row = dict(guid="g", alterid=1, source_company="Company", lines=[])
+		self.row = dict(guid="g", alterid=1, source_company="Company", lines=[], order_details=[], order_number=None)
 
 	def test_existing_success_and_markers_are_sufficient_for_read(self):
 		self.assertEqual(validate_sync_metadata(self.config, self.latest, self.completed, 9, "Company"), 20)

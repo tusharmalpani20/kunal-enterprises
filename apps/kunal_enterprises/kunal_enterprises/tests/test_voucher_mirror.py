@@ -43,13 +43,13 @@ class TestVoucherMirror(unittest.TestCase):
 		 create table sync_run_ping(id integer,operation text,status text,finished_at timestamptz,message text);
 		 create table mst_ledger(guid text,alias text);
 		 create table trn_voucher(guid text,alterid integer,_voucher_type text,voucher_type text,voucher_number text,
-		 reference_number text,_party_name text,party_name text,date date);
+		 reference_number text,_party_name text,party_name text,date date,order_details jsonb,order_number text);
 		 create table trn_inventory(guid text,_item text,_godown text,quantity numeric,tracking_number text);
 		 insert into config values ('Company Name','Test Company'),('Period From','2024-04-01'),('Period To','2027-03-31'),
 		 ('Last AlterID Transaction','10'),('Last Voucher Inventory AlterID','10');
 		 insert into sync_run_ping values(1,'sync','success',now(),'Import completed successfully. trn_inventory=1.');
 		 insert into mst_ledger values('party','ALIAS');
-		 insert into trn_voucher values('voucher',10,'dispatch-type','Delivery Challan','DC1','KE-X','party','Old name','2026-09-05');
+		 insert into trn_voucher values('voucher',10,'dispatch-type','Delivery Challan','DC1','NOT-THE-ORDER','party','Old name','2026-09-05','[{"order_number":"KE-X","order_date":null}]','KE-X');
 		 insert into trn_inventory values('voucher','item','godown',-4,'track');""")
 
 	def execute(self, query, args=None):
@@ -71,15 +71,23 @@ class TestVoucherMirror(unittest.TestCase):
 		self.assertTrue(state["read_complete"])
 		self.assertEqual(rows[0]["party_client_code"], "ALIAS")
 		self.assertEqual(rows[0]["party_guid"], "party")
+		self.assertEqual(rows[0]["order_number"], "KE-X")
+		self.assertNotIn("reference_number", rows[0])
 		self.assertEqual(rows[0]["lines"][0]["quantity"], -4)
 		self.assertEqual(self.reader.readonly, True)
 
-	def test_header_survives_missing_inventory_and_reference(self):
-		self.execute("delete from trn_inventory; update trn_voucher set reference_number='' ")
+	def test_header_survives_missing_inventory_and_order(self):
+		self.execute("delete from trn_inventory; update trn_voucher set order_number=null,order_details='[]' ")
 		state, rows = self.read()
 		self.assertEqual(state["voucher_count"], 1)
 		self.assertEqual(rows[0]["lines"], [])
-		self.assertEqual(rows[0]["reference_number"], "")
+		self.assertIsNone(rows[0]["order_number"])
+		self.assertEqual(rows[0]["order_details"], [])
+
+	def test_missing_order_migration_fails_closed(self):
+		self.execute("alter table trn_voucher drop column order_details")
+		with self.assertRaises(ValueError):
+			self.read()
 
 	def test_no_change_after_failed_sync_is_rejected_and_failure_logged(self):
 		self.execute(
@@ -114,7 +122,8 @@ class TestVoucherMirror(unittest.TestCase):
 
 		def fetch(connection, query, params=None):
 			rows = _fetch_all(connection, query, params)
-			if "from" in query.as_string(connection) and "trn_voucher" in query.as_string(connection):
+			statement = query if isinstance(query, str) else query.as_string(connection)
+			if "from" in statement and "trn_voucher" in statement:
 				self.execute("update trn_inventory set quantity=-8")
 			return rows
 

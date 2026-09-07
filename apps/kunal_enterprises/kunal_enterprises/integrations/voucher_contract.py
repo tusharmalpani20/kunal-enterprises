@@ -1,6 +1,7 @@
 """Validate a read of the existing mirror without claiming Tally completeness."""
 
 from datetime import date
+from kunal_enterprises.integrations.order_details import order_candidates
 
 
 def validate_sync_metadata(config, latest, completed, failure_id, company):
@@ -43,6 +44,9 @@ def validate_snapshot(state, rows, company, allowed_types):
 		raise ValueError("Mirror observation row count does not match")
 	seen = set()
 	for row in rows:
+		if "order_details" not in row or "order_number" not in row:
+			raise ValueError("Voucher order-detail columns are required; migrate and backfill the loader mirror")
+		order_candidates(row["order_details"], row["order_number"])
 		guid = row.get("guid")
 		if not guid or guid in seen or row.get("source_company") != company:
 			raise ValueError("Mirror contains missing, duplicate, or wrong-company identities")

@@ -326,6 +326,8 @@ def diagnose_vouchers(limit=5):
 		"approved_type_guids": sorted(allowed),
 		"eligible_vouchers": len(eligible),
 		"eligible_without_inventory": sum(not row["lines"] for row in eligible),
+		"eligible_order_details_unavailable": sum(row.get("order_details") is None for row in eligible),
+		"eligible_without_order_number": sum(not row.get("order_number") for row in eligible),
 		"missing_imported_vouchers": len((existing - {None, ""}) - present),
 		"sample_vouchers": eligible[:max(0, min(int(limit), 100))],
 		"note": "Missing records require review; this read does not verify deletions in Tally.",

@@ -5,7 +5,7 @@ def get_data():
 	return {
 		"fieldname": "order",
 		"non_standard_fieldnames": {
-			"Tally Voucher": "reference_number",
+			"Tally Voucher": "order_number",
 		},
 		"transactions": [
 			{"label": _("Confirmation"), "items": ["Order PDF", "Order WhatsApp Notification"]},

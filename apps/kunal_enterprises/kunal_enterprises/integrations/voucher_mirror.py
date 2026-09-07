@@ -15,6 +15,9 @@ def read_mirror(connection, company):
 	# Order observations by read start, so a slow older read cannot overwrite a newer one.
 	observed_at = now_datetime()
 	connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
+	from kunal_enterprises.integrations.tally_postgres import _table_columns
+	if not {"order_details", "order_number"} <= _table_columns(connection, "trn_voucher"):
+		raise ValueError("Apply the loader PostgreSQL voucher order-details migration before importing")
 	config = {
 		r["name"]: r["value"]
 		for r in _fetch_all(connection, sql.SQL("select name,value from {}").format(_table("config")))
@@ -44,11 +47,11 @@ def read_mirror(connection, company):
 		failures[0]["id"] if failures else None,
 		company,
 	)
-	# Keep every header, including those with no inventory or no reference.
+	# Keep every header, including those with no inventory or no order number.
 	headers = _fetch_all(
 		connection,
 		sql.SQL("""select v.guid,v.alterid,v._voucher_type as type_guid,
-		v.voucher_type,v.voucher_number,v.reference_number,v._party_name as party_guid,
+		v.voucher_type,v.voucher_number,v.order_number,v.order_details,v._party_name as party_guid,
 		v.party_name,v.date as voucher_date,l.alias as party_client_code
 		from {} v left join {} l on l.guid=v._party_name order by v.guid""").format(
 			_table("trn_voucher"), _table("mst_ledger")
