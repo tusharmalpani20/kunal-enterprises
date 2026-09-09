@@ -113,18 +113,35 @@ order or inventory data trustworthy; the importer retains those conditions as
 source errors and they require loader publication/backfill or evidence-based
 review.
 
-The first scheduled run after activation began at 23:30:38 IST. Its Masters
-phase processed 17,727 records in about 54 seconds with no errors, then entered
-the Stock phase. A full run is not a small incremental lookup inside Frappe:
+The first scheduled run after activation began at 23:30:38 IST and completed
+successfully at 23:54:42 IST, taking about 24 minutes. Masters processed 17,727
+records in about 54 seconds with no errors. Stock processed 9,331 of 9,362 rows
+in about 43 seconds and recorded 31 mapping errors. Voucher publication accepted
+11,170 eligible vouchers, and the agreed Kukatpally voucher was matched to
+`KE-SO-00018-26-27`; that Order became Completed.
+
+A full run is not a small incremental lookup inside Frappe:
 `import_all` sequentially reads and applies all configured masters, the complete
 published stock snapshot, all 12,917 voucher headers and their lines, and then
 reconciles managed orders. Frappe validation, DocType saves, child-row mapping
 and reconciliation can therefore take materially longer than the PostgreSQL
 read itself. Scheduler enqueue success only means the long-worker job was
 accepted; completion must be established from the final job result and
-`Tally Sync Run` records. At the time this note was recorded, that first run was
-still active and the target voucher had not yet committed to Frappe, so this is
-activation evidence rather than an end-to-end success claim.
+`Tally Sync Run` records.
+
+The measured bottleneck was reconciliation: it ran from 23:34:11 to 23:54:19,
+about 20 minutes, and finished `Completed With Errors` for 11,169 of 11,170
+eligible vouchers because their order details had not been extracted. The
+current implementation loads all Tally Voucher documents individually, then
+per voucher looks up the latest reconciliation log and may save the voucher and
+insert a new log. This N+1 document/query pattern, amplified by the initial
+11,169 changed error outcomes, explains the high worker CPU and most of the
+wall-clock time. It was active work rather than a stuck worker or a slow
+PostgreSQL mirror read. Subsequent runs still scan all vouchers and perform the
+per-voucher log lookup even when unchanged, though they avoid some saves and log
+inserts. Optimize reconciliation batching and avoid reconsidering unchanged,
+unmatchable vouchers before shortening the scheduler interval or treating this
+duration as a worker failure.
 
 ## Rollout
 
