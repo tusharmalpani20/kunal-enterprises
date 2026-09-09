@@ -84,6 +84,48 @@ bench --site <site> execute kunal_enterprises.integrations.tally_postgres.diagno
 
 It reports source metadata, approved-type counts, eligible vouchers without inventory, missing imported GUIDs and a bounded sample. It does not change orders or validate deletions in Tally.
 
+### Live fulfillment allowlist recorded 9 September 2026
+
+The `ke-dev.hopnet.co.in` site was configured with the three reviewed branch
+Delivery Challan voucher-type GUIDs below. These values come from
+`trn_voucher._voucher_type`; they are voucher-type identities shared by all
+vouchers of that type. They are not voucher GUIDs, stock-item GUIDs or
+inventory-line identities.
+
+| Tally voucher type | Approved type GUID |
+| --- | --- |
+| Delivery Challan Goshamahal | `aac3341a-ee89-4145-9f7a-3edec7de877b-00000028` |
+| Delivery Challan Kukatpally | `aac3341a-ee89-4145-9f7a-3edec7de877b-0000f4f7` |
+| Delivery Challan Seetarambagh | `aac3341a-ee89-4145-9f7a-3edec7de877b-000165f2` |
+
+The allowlist applies to every normal Frappe voucher import and reconciliation,
+not only to manually backfilled vouchers. Its purpose is to fail closed: Sales
+Invoices, Sales Orders, inward vouchers, stock transfers and other inventory
+voucher types must not contribute fulfillment merely because they contain
+inventory lines.
+
+The read-only preview immediately after activation observed 12,917 voucher
+headers and classified 11,170 Delivery Challans as eligible. Of those, 4,679
+had no mirrored inventory and 11,169 still had `order_details` unavailable and
+no resolved `order_number`. Only the agreed Kukatpally target voucher had the
+new order fields populated at that point. Enabling a type does not make missing
+order or inventory data trustworthy; the importer retains those conditions as
+source errors and they require loader publication/backfill or evidence-based
+review.
+
+The first scheduled run after activation began at 23:30:38 IST. Its Masters
+phase processed 17,727 records in about 54 seconds with no errors, then entered
+the Stock phase. A full run is not a small incremental lookup inside Frappe:
+`import_all` sequentially reads and applies all configured masters, the complete
+published stock snapshot, all 12,917 voucher headers and their lines, and then
+reconciles managed orders. Frappe validation, DocType saves, child-row mapping
+and reconciliation can therefore take materially longer than the PostgreSQL
+read itself. Scheduler enqueue success only means the long-worker job was
+accepted; completion must be established from the final job result and
+`Tally Sync Run` records. At the time this note was recorded, that first run was
+still active and the target voucher had not yet committed to Frappe, so this is
+activation evidence rather than an end-to-end success claim.
+
 ## Rollout
 
 1. Back up the Frappe site and pause its import schedule during migration.
