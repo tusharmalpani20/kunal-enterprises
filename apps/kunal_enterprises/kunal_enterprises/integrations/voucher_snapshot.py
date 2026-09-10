@@ -2,13 +2,19 @@
 
 import hashlib
 import json
+from collections import defaultdict
 from decimal import Decimal
+from time import perf_counter
 
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
 from kunal_enterprises.integrations.voucher_contract import validate_snapshot
 from kunal_enterprises.integrations.order_details import order_candidates
+from kunal_enterprises.integrations.reconciliation_settings import RECONCILIATION_LOCK_SECONDS
+
+
+HELD_REFRESH_BATCH_SIZE = 500
 
 
 def configured_types():
@@ -60,7 +66,9 @@ def apply_snapshot(state, payloads):
 	allowed = configured_types()
 	validate_snapshot(state, payloads, company, allowed)
 	with frappe.cache().lock(
-		frappe.cache().make_key("kunal:portal-voucher-import"), timeout=1800, blocking_timeout=0
+		frappe.cache().make_key("kunal:portal-voucher-import"),
+		timeout=RECONCILIATION_LOCK_SECONDS,
+		blocking_timeout=0,
 	):
 		from kunal_enterprises.cron.reconciliation import assert_current_history
 
@@ -93,12 +101,18 @@ def apply_snapshot(state, payloads):
 		)
 		frappe.db.savepoint("portal_voucher_import")
 		try:
-			result = _apply_snapshot(state, payloads, company, allowed)
+			previous_import_flag = getattr(frappe.flags, "in_tally_voucher_import", False)
+			frappe.flags.in_tally_voucher_import = True
+			try:
+				result = _apply_snapshot(state, payloads, company, allowed)
+			finally:
+				frappe.flags.in_tally_voucher_import = previous_import_flag
 			# Publish changes and recalculated orders together while still holding the import lock.
 			from kunal_enterprises.cron.reconciliation import _run_reconciliation
 			from kunal_enterprises.integrations.tally_postgres import _serialize_run
 
-			result["reconciliation"] = _serialize_run(_run_reconciliation())
+			change_set = result.pop("_change_set")
+			result["reconciliation"] = _serialize_run(_run_reconciliation(change_set=change_set))
 			frappe.db.commit()
 			return result
 		except Exception:
@@ -107,6 +121,11 @@ def apply_snapshot(state, payloads):
 
 
 def _apply_snapshot(state, payloads, company, allowed):
+	started = perf_counter()
+	metrics = defaultdict(int)
+	held_refresh_names = set()
+	change_set = {"voucher_names": set(), "references": set(), "order_names": set()}
+	mark = perf_counter()
 	masters = {}
 	for doctype, value_field in (
 		("Tally Item", "name"),
@@ -118,9 +137,12 @@ def _apply_snapshot(state, payloads, company, allowed):
 			for row in frappe.get_all(doctype, fields=["tally_guid", value_field])
 			if row.tally_guid
 		}
+	metrics["master_mapping_load_ms"] = _elapsed_ms(mark)
+	mark = perf_counter()
 	existing = frappe.get_all(
 		"Tally Voucher", filters={"source_company": company}, fields=["name", "tally_guid"]
 	)
+	metrics["voucher_identity_load_ms"] = _elapsed_ms(mark)
 	by_guid = {row.tally_guid: row.name for row in existing if row.tally_guid}
 	seen = set()
 	processed = 0
@@ -140,13 +162,17 @@ def _apply_snapshot(state, payloads, company, allowed):
 			if not name:
 				voucher.update(values)
 				voucher.raw_source_payload = None
-			_hold(
+			changed = _hold(
 				voucher,
 				state,
 				payload,
 				values["source_error"]
 				or "Voucher type is missing from PostgreSQL; previous quantities are preserved",
+				refresh_unchanged=False,
 			)
+			metrics["held_vouchers_changed" if changed else "held_vouchers_refreshed"] += 1
+			if not changed:
+				held_refresh_names.add(voucher.name)
 		else:
 			source_changed = (
 				voucher.raw_source_payload != values["raw_source_payload"]
@@ -158,6 +184,7 @@ def _apply_snapshot(state, payloads, company, allowed):
 				or _mapped_lines(voucher.lines) != _mapped_lines(lines)
 			)
 			if not source_changed:
+				metrics["active_vouchers_unchanged"] += 1
 				processed += 1
 				continue
 			voucher.update(values)
@@ -169,21 +196,53 @@ def _apply_snapshot(state, payloads, company, allowed):
 			for line in lines:
 				voucher.append("lines", line)
 			voucher.save(ignore_permissions=True, ignore_version=not source_changed)
-		for reference in old_references | {voucher.order_number, payload.get("order_number")}:
-			_mark_order(reference)
+			changed = True
+			metrics["active_vouchers_changed"] += 1
+		if changed:
+			change_set["voucher_names"].add(voucher.name)
+			change_set["references"].update(
+				reference
+				for reference in old_references
+				| _held_references(voucher)
+				| {voucher.order_number, payload.get("order_number")}
+				if reference
+			)
+			for reference in old_references | {voucher.order_number, payload.get("order_number")}:
+				order_name = _mark_order(reference)
+				if order_name:
+					change_set["order_names"].add(order_name)
 		processed += 1
 
 	for row in existing:
 		if row.tally_guid not in seen:
 			voucher = frappe.get_doc("Tally Voucher", row.name)
-			_hold(
+			changed = _hold(
 				voucher,
 				state,
 				None,
 				"Voucher is missing from PostgreSQL; deletion in Tally is unverified and previous quantities are preserved",
+				refresh_unchanged=False,
 			)
-			_mark_order(voucher.order_number)
+			metrics["held_vouchers_changed" if changed else "held_vouchers_refreshed"] += 1
+			if not changed:
+				held_refresh_names.add(voucher.name)
+			if changed:
+				change_set["voucher_names"].add(voucher.name)
+				change_set["references"].update(_held_references(voucher) | {voucher.order_number})
+				for reference in _held_references(voucher) | {voucher.order_number}:
+					order_name = _mark_order(reference)
+					if order_name:
+						change_set["order_names"].add(order_name)
 
+	mark = perf_counter()
+	_bulk_refresh_held_vouchers(held_refresh_names, state)
+	metrics["held_freshness_write_ms"] = _elapsed_ms(mark)
+	metrics["held_freshness_batches"] = (
+		len(held_refresh_names) + HELD_REFRESH_BATCH_SIZE - 1
+	) // HELD_REFRESH_BATCH_SIZE
+	metrics["apply_total_ms"] = _elapsed_ms(started)
+	metadata = dict(state)
+	metadata["apply_metrics"] = dict(metrics)
 	run = frappe.get_doc(
 		dict(
 			doctype="Tally Sync Run",
@@ -198,7 +257,7 @@ def _apply_snapshot(state, payloads, company, allowed):
 			source_snapshot_id=state["snapshot_id"],
 			source_refreshed_at=state["completed_at"],
 			snapshot_complete=0,
-			source_metadata=json.dumps(state, default=str, sort_keys=True),
+			source_metadata=json.dumps(metadata, default=str, sort_keys=True),
 		)
 	).insert(ignore_permissions=True)
 	return {
@@ -207,6 +266,7 @@ def _apply_snapshot(state, payloads, company, allowed):
 		"records_processed": processed,
 		"source_snapshot_id": state["snapshot_id"],
 		"source_period_changed": state.get("period_changed", False),
+		"_change_set": change_set,
 	}
 
 
@@ -215,6 +275,8 @@ def _mark_order(reference):
 		name = frappe.db.get_value("Order", {"portal_reference_number": reference}, "name")
 		if name:
 			frappe.db.set_value("Order", name, "tally_reconciliation_managed", 1, update_modified=False)
+			return name
+	return None
 
 
 def _mapped_lines(lines):
@@ -284,22 +346,36 @@ def _voucher_date(value):
 	return get_datetime(value).date() if value else None
 
 
+def _elapsed_ms(mark):
+	return round((perf_counter() - mark) * 1000, 2)
+
+
 def _held_references(voucher):
-	return set(json.loads(voucher.source_pending_references or "[]"))
+	try:
+		values = json.loads(voucher.source_pending_references or "[]")
+	except (TypeError, ValueError):
+		frappe.throw(f"Tally Voucher {voucher.name} has invalid source_pending_references JSON")
+	if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+		frappe.throw(f"Tally Voucher {voucher.name} has invalid source_pending_references")
+	return {value for value in values if value}
 
 
-def _hold(voucher, state, payload, reason):
+def _hold(voucher, state, payload, reason, refresh_unchanged=True):
 	observation = json.dumps(payload, default=str, sort_keys=True) if payload is not None else "null"
 	changed = (
 		voucher.source_status != "Unverified"
 		or voucher.source_observation != observation
 		or voucher.source_error != reason
+		or voucher.reconciliation_state != "Manual Review"
+		or bool(voucher.reconciled)
 	)
 	references = _held_references(voucher) | {voucher.order_number}
 	if payload:
 		candidates, _ = order_candidates(payload["order_details"], payload["order_number"])
 		references.update(candidates)
-	voucher.source_pending_references = json.dumps(sorted(r for r in references if r))
+	pending_references = json.dumps(sorted(r for r in references if r))
+	changed = changed or voucher.source_pending_references != pending_references
+	voucher.source_pending_references = pending_references
 	voucher.source_observation = observation
 	voucher.source_status = "Unverified"
 	voucher.source_error = reason
@@ -307,6 +383,34 @@ def _hold(voucher, state, payload, reason):
 	voucher.source_refreshed_at = state["completed_at"]
 	voucher.reconciliation_state = "Manual Review"
 	voucher.reconciled = 0
-	voucher.save(ignore_permissions=True, ignore_version=not changed)
-	for reference in references:
-		_mark_order(reference)
+	if changed or voucher.is_new():
+		voucher.save(ignore_permissions=True, ignore_version=not changed)
+	elif refresh_unchanged:
+		frappe.db.set_value(
+			"Tally Voucher",
+			voucher.name,
+			{
+				"source_snapshot_id": state["snapshot_id"],
+				"source_refreshed_at": state["completed_at"],
+			},
+			update_modified=False,
+		)
+	return changed
+
+
+def _bulk_refresh_held_vouchers(voucher_names, state):
+	for chunk in _chunks(sorted(voucher_names), HELD_REFRESH_BATCH_SIZE):
+		frappe.db.set_value(
+			"Tally Voucher",
+			{"name": ("in", chunk)},
+			{
+				"source_snapshot_id": state["snapshot_id"],
+				"source_refreshed_at": state["completed_at"],
+			},
+			update_modified=False,
+		)
+
+
+def _chunks(values, size):
+	for index in range(0, len(values), size):
+		yield values[index : index + size]

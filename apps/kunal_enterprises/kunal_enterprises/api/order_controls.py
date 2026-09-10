@@ -36,9 +36,9 @@ def resolve_manual_review(order, role, resolution_note):
 			frappe.throw("Only Manual Review orders can be resolved", title="Invalid Order Status")
 		if not (resolution_note or "").strip():
 			frappe.throw("Resolution note is required", title="Resolution Note Required")
-		from kunal_enterprises.cron.reconciliation import run_reconciliation
+		from kunal_enterprises.cron.reconciliation import run_reconciliation_for_order
 
-		run_reconciliation()
+		run_reconciliation_for_order(order_doc.name)
 		order_doc.reload()
 		frappe.get_doc(
 			{

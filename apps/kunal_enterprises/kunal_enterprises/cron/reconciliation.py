@@ -5,12 +5,33 @@ import frappe
 from frappe.utils import now_datetime
 
 from kunal_enterprises.cron.fulfillment import evaluate_order
+from kunal_enterprises.integrations.reconciliation_settings import RECONCILIATION_LOCK_SECONDS
 
 
-def run_reconciliation(commit=True):
+def run_reconciliation(
+	commit=True,
+	mode="full",
+	references=None,
+	voucher_names=None,
+	order_names=None,
+	trigger=None,
+):
 	"""Rebuild managed order totals, including previously completed/reviewed orders."""
+	if _incremental_engine_enabled():
+		from kunal_enterprises.cron.reconciliation_engine import run_reconciliation as run_bulk
+
+		return run_bulk(
+			commit=commit,
+			mode=mode,
+			references=references,
+			voucher_names=voucher_names,
+			order_names=order_names,
+			trigger=trigger,
+		)
 	with frappe.cache().lock(
-		frappe.cache().make_key("kunal:portal-voucher-import"), timeout=1800, blocking_timeout=0
+		frappe.cache().make_key("kunal:portal-voucher-import"),
+		timeout=RECONCILIATION_LOCK_SECONDS,
+		blocking_timeout=0,
 	):
 		assert_current_history()
 		frappe.db.savepoint("order_reconciliation")
@@ -64,7 +85,11 @@ def assert_current_history():
 		frappe.throw("Voucher history changed; retry reconciliation or import in a fresh transaction")
 
 
-def _run_reconciliation():
+def _run_reconciliation(change_set=None):
+	if change_set is not None and _incremental_engine_enabled():
+		from kunal_enterprises.cron.reconciliation_engine import _run_reconciliation as run_incremental
+
+		return run_incremental(change_set=change_set)
 	run = frappe.get_doc(
 		dict(
 			doctype="Tally Sync Run",
@@ -308,3 +333,20 @@ def _log_if_changed(order, voucher, status, code, message):
 			created_at=now_datetime(),
 		)
 	).insert(ignore_permissions=True)
+
+
+def run_reconciliation_for_order(order_name, commit=True):
+	if _incremental_engine_enabled():
+		order = frappe.get_doc("Order", order_name)
+		return run_reconciliation(
+			commit=commit,
+			mode="incremental",
+			references=[order.portal_reference_number],
+			order_names=[order.name],
+		)
+	return run_reconciliation(commit=commit)
+
+
+def _incremental_engine_enabled():
+	value = frappe.conf.get("tally_incremental_reconciliation_enabled")
+	return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
