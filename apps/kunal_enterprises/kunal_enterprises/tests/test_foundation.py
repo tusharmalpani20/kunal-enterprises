@@ -42,6 +42,7 @@ from kunal_enterprises.integrations.tally_postgres import (
 	_frappe_datetime,
 	_fetch_stock_snapshots,
 	_validate_stock_snapshot_contract,
+	enqueue_full_reconciliation,
 	enqueue_import_all,
 	import_all,
 	seed_dev_stock_snapshots,
@@ -3410,13 +3411,13 @@ class TestOrderSubmission(FrappeTestCase):
 		)
 		frappe.db.set_value("Order", order_response["data"]["order"], "status", "Manual Review")
 
-		with patch("kunal_enterprises.cron.reconciliation.run_reconciliation") as recheck:
+		with patch("kunal_enterprises.cron.reconciliation.run_reconciliation_for_order") as recheck:
 			response = resolve_manual_review(
 				order_response["data"]["order"],
 				role="Owner",
 				resolution_note="Verified in Tally and resumed processing",
 			)
-			recheck.assert_called_once_with()
+			recheck.assert_called_once_with(order_response["data"]["order"])
 		order = frappe.get_doc("Order", order_response["data"]["order"])
 		status_log = frappe.get_doc("Order Status Log", {"order": order.name, "to_status": "Manual Review"})
 
@@ -4008,6 +4009,14 @@ class TestTallyStockSync(FrappeTestCase):
 		five_minute_jobs = hooks.scheduler_events["cron"]["*/5 * * * *"]
 
 		self.assertEqual(five_minute_jobs, ["kunal_enterprises.integrations.tally_postgres.enqueue_import_all"])
+		self.assertEqual(
+			hooks.scheduler_events["cron"]["17 2 * * *"],
+			["kunal_enterprises.integrations.tally_postgres.enqueue_full_reconciliation"],
+		)
+		self.assertEqual(
+			hooks.scheduler_events["cron"]["47 2 * * *"],
+			["kunal_enterprises.integrations.tally_postgres.enqueue_full_reconciliation"],
+		)
 
 	def test_scheduled_postgres_import_uses_deduplicated_long_queue(self):
 		with patch("kunal_enterprises.integrations.tally_postgres.frappe.enqueue") as enqueue:
@@ -4017,11 +4026,48 @@ class TestTallyStockSync(FrappeTestCase):
 		enqueue.assert_called_once_with(
 			"kunal_enterprises.integrations.tally_postgres.import_all",
 			queue="long",
-			timeout=1500,
+			timeout=3600,
 			job_id="kunal_enterprises:tally_postgres_import_all",
 			deduplicate=True,
 		)
 		self.assertEqual(result, {"status": "Queued", "job_id": "test-tally-import-job"})
+
+	def test_nightly_full_reconciliation_is_disabled_until_incremental_rollout(self):
+		previous = frappe.conf.get("tally_incremental_reconciliation_enabled")
+		try:
+			frappe.conf.tally_incremental_reconciliation_enabled = False
+			with patch("kunal_enterprises.integrations.tally_postgres.frappe.enqueue") as enqueue:
+				result = enqueue_full_reconciliation()
+		finally:
+			frappe.conf.tally_incremental_reconciliation_enabled = previous
+
+		enqueue.assert_not_called()
+		self.assertEqual(result["status"], "Skipped")
+
+	def test_nightly_full_reconciliation_uses_distinct_deduplicated_job(self):
+		previous = frappe.conf.get("tally_incremental_reconciliation_enabled")
+		try:
+			frappe.conf.tally_incremental_reconciliation_enabled = True
+			with (
+				patch("kunal_enterprises.integrations.tally_postgres.frappe.enqueue") as enqueue,
+				patch(
+					"kunal_enterprises.integrations.tally_postgres._full_reconciliation_completed_today",
+					return_value=False,
+				),
+			):
+				enqueue.return_value.id = "test-tally-full-job"
+				result = enqueue_full_reconciliation()
+		finally:
+			frappe.conf.tally_incremental_reconciliation_enabled = previous
+
+		enqueue.assert_called_once_with(
+			"kunal_enterprises.integrations.tally_postgres.run_scheduled_full_reconciliation",
+			queue="long",
+			timeout=3600,
+			job_id="kunal_enterprises:tally_full_reconciliation",
+			deduplicate=True,
+		)
+		self.assertEqual(result, {"status": "Queued", "job_id": "test-tally-full-job"})
 
 	def test_postgres_import_all_runs_masters_before_stock_and_reconciliation(self):
 		calls = []

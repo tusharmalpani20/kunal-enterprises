@@ -8,6 +8,11 @@ import frappe
 from frappe.utils import now_datetime
 
 from kunal_enterprises.cron.reconciliation import run_reconciliation
+from kunal_enterprises.integrations.reconciliation_queue import (
+	acknowledge_work,
+	claim_work,
+	enqueue_reference,
+)
 from kunal_enterprises.integrations.voucher_snapshot import apply_snapshot
 
 
@@ -281,6 +286,33 @@ class TestVoucherCorrections(unittest.TestCase):
 		self.payload["alterid"] = 2
 		self.publish()
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
+
+	def test_repeated_null_order_outcome_does_not_duplicate_audit_log(self):
+		self.set_source_order(None)
+		voucher = self.publish()
+		before = len(
+			[
+				row
+				for row in frappe.get_all(
+					"Order Reconciliation Log", filters={"voucher": voucher.name}, fields=["order"]
+				)
+				if not row.order
+			]
+		)
+		self.assertEqual(before, 1)
+
+		self.publish()
+
+		after = len(
+			[
+				row
+				for row in frappe.get_all(
+					"Order Reconciliation Log", filters={"voucher": voucher.name}, fields=["order"]
+				)
+				if not row.order
+			]
+		)
+		self.assertEqual(after, before)
 		self.publish([])
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
 		self.publish()
@@ -341,6 +373,15 @@ class TestVoucherCorrections(unittest.TestCase):
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
 		self.assertEqual(other.items[0].fulfilled_quantity, 0)
 		self.assertEqual(other.status, "Manual Review")
+		voucher_name = frappe.db.get_value("Tally Voucher", {"tally_guid": self.payload["guid"]}, "name")
+		logged_orders = set(
+			frappe.get_all(
+				"Order Reconciliation Log",
+				filters={"voucher": voucher_name},
+				pluck="order",
+			)
+		)
+		self.assertTrue({self.order.name, other.name} <= logged_orders)
 		self.payload["lines"] = lines
 		self.publish()
 		other.reload()
@@ -496,6 +537,85 @@ class TestVoucherCorrections(unittest.TestCase):
 		self.assertEqual(others[1].items[0].fulfilled_quantity, 4)
 		self.assertEqual(voucher.source_pending_references, "[]")
 
+	def test_incremental_engine_runs_full_once_then_processes_only_changes(self):
+		previous = frappe.conf.get("tally_incremental_reconciliation_enabled")
+		try:
+			frappe.conf.tally_incremental_reconciliation_enabled = True
+			latest_run = frappe.db.get_value(
+				"Tally Sync Run",
+				{"sync_type": "Reconciliation"},
+				"name",
+				order_by="creation desc, name desc",
+			)
+			if latest_run:
+				frappe.db.set_value("Tally Sync Run", latest_run, "source_metadata", "{}")
+			self.publish()
+			first = json.loads(
+				frappe.db.get_value(
+					"Tally Sync Run",
+					{"sync_type": "Reconciliation"},
+					"source_metadata",
+					order_by="creation desc, name desc",
+				)
+			)
+			self.assertEqual(first["mode"], "full")
+
+			self.publish()
+			unchanged = json.loads(
+				frappe.db.get_value(
+					"Tally Sync Run",
+					{"sync_type": "Reconciliation"},
+					"source_metadata",
+					order_by="creation desc, name desc",
+				)
+			)
+			self.assertEqual(unchanged["mode"], "incremental")
+			self.assertEqual(unchanged["scoped_vouchers"], 0)
+
+			self.payload["lines"][0]["quantity"] = -6
+			self.publish()
+			changed = json.loads(
+				frappe.db.get_value(
+					"Tally Sync Run",
+					{"sync_type": "Reconciliation"},
+					"source_metadata",
+					order_by="creation desc, name desc",
+				)
+			)
+			self.assertEqual(changed["mode"], "incremental")
+			self.assertGreaterEqual(changed["scoped_vouchers"], 1)
+			self.assertEqual(self.order.items[0].fulfilled_quantity, 6)
+
+			safety = run_reconciliation(mode="full")
+			safety_metadata = json.loads(safety.source_metadata)
+			self.assertEqual(safety_metadata["mode"], "full")
+			self.assertEqual(safety_metadata["full_safety_changes_detected"], 0)
+		finally:
+			frappe.conf.tally_incremental_reconciliation_enabled = previous
+
+	def test_newer_work_generation_cannot_be_acknowledged_by_an_older_claim(self):
+		previous = frappe.conf.get("tally_incremental_reconciliation_enabled")
+		key = None
+		try:
+			frappe.conf.tally_incremental_reconciliation_enabled = True
+			key = enqueue_reference(self.order.portal_reference_number, "first")
+			enqueue_reference(self.order.portal_reference_number, "second")
+			claimed, problem = claim_work("Test Company")
+			claimed = [row for row in claimed if row.name == key]
+			self.assertIsNone(problem)
+			self.assertEqual(claimed[0].generation, 2)
+
+			enqueue_reference(self.order.portal_reference_number, "newer")
+			acknowledge_work(claimed)
+			self.assertEqual(
+				frappe.db.get_value("Tally Reconciliation Work Item", key, "generation"),
+				3,
+			)
+		finally:
+			if key:
+				frappe.db.delete("Tally Reconciliation Work Item", {"name": key})
+			frappe.conf.tally_incremental_reconciliation_enabled = previous
+
 	def test_reference_transfer_respects_unmapped_legacy_hold(self):
 		legacy = self._audit_legacy()
 		# Prevent adoption while retaining an existing fulfilled contribution.
@@ -560,3 +680,15 @@ class TestVoucherCorrections(unittest.TestCase):
 		run_reconciliation()
 		self.order.reload()
 		self.assertEqual(self.order.items[0].fulfilled_quantity, 4)
+
+
+class TestIncrementalVoucherCorrections(TestVoucherCorrections):
+	"""Run the complete correction suite through the feature-flagged bulk engine."""
+
+	def setUp(self):
+		super().setUp()
+		self._previous_incremental_setting = frappe.conf.get("tally_incremental_reconciliation_enabled")
+		frappe.conf.tally_incremental_reconciliation_enabled = True
+
+	def tearDown(self):
+		frappe.conf.tally_incremental_reconciliation_enabled = self._previous_incremental_setting
