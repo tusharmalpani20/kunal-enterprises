@@ -143,6 +143,30 @@ inserts. Optimize reconciliation batching and avoid reconsidering unchanged,
 unmatchable vouchers before shortening the scheduler interval or treating this
 duration as a worker failure.
 
+### Incremental reconciliation implementation
+
+The performance implementation is guarded by the default-off site setting
+`tally_incremental_reconciliation_enabled`. When disabled or absent, the existing
+full reconciliation remains active. After migration and staging parity checks,
+enabling it activates the bulk engine, transaction-local voucher change sets and
+durable generation-aware invalidation for relevant Order, Customer, voucher and
+master changes. A configuration or reconciliation-algorithm fingerprint change
+forces the next enabled run to full scope.
+
+The first enabled run is therefore full. Ordinary later runs process only the
+complete connected reference group affected by changes. The system retains the
+same uncertain-source and legacy holds, and it falls back to full scope when
+invalidation metadata is unavailable, stale or too large. A nightly full safety
+job runs at 02:17 only while incremental mode is enabled, with a 02:47 retry that
+skips when a full pass already completed that day. Owner/Admin manual full
+reconciliation remains available.
+
+Do not enable the setting until the site has been migrated and the staging
+full-versus-incremental parity gate in
+`docs/TALLY_RECONCILIATION_PERFORMANCE_PLAN.md` has passed. The implementation
+records mode, fallback reason, scope counts, write counts and phase timings in
+the Reconciliation Tally Sync Run's `source_metadata`.
+
 ## Rollout
 
 1. Back up the Frappe site and pause its import schedule during migration.

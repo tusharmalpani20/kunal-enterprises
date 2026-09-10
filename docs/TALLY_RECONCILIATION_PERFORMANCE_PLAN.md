@@ -1,8 +1,41 @@
 # Tally–Frappe reconciliation performance and safety plan
 
-**Status:** Audited implementation plan; no code or production behavior has been changed by this document.
+**Status:** Implemented behind a default-off feature flag; migration, staging parity
+validation and production activation are still required.
 
 **Prepared:** 10 September 2026
+
+### Implementation status — 10 September 2026
+
+The repository now contains the bulk full/incremental engine, transaction-local
+voucher change sets, generation-aware durable work items, Order/Customer/master
+invalidation, configuration/algorithm fingerprinting, phase metrics, measured-
+path indexes, timeout/lock headroom, a nightly full-safety job with one guarded
+retry and focused tests.
+
+The existing reconciliation remains active when
+`tally_incremental_reconciliation_enabled` is absent or false. Enabling it routes
+voucher imports and manual/nightly reconciliation through algorithm version 1.
+The first enabled run is forced to full scope because no matching algorithm and
+configuration fingerprint exists; later runs may be incremental. The nightly
+job skips itself while incremental mode is disabled.
+
+This implementation has not changed the live site configuration or run the
+migration on the live site. Phases 3–5 below are deployment/operational gates,
+not code-only steps, and must still be completed before the feature is considered
+production-enabled.
+
+Repository-only validation passed 43 focused pure tests, import checks for every
+changed runtime module, syntax parsing for all 130 app/test Python files, JSON
+validation and `git diff --check`. The feature-on Frappe correction suite and
+migration still require a disposable test site; they were intentionally not run
+against the live site, where tests are disabled.
+
+The post-implementation audit additionally hardened delete/direct-line/rename
+invalidation, malformed pending-reference handling, legacy holds that bridge
+multiple references, null-versus-empty audit-log identity, deterministic write
+ordering, nightly retry identity and batched freshness updates for unchanged
+held vouchers. These findings were fixed before rollout; the feature remains off.
 
 ## 1. Purpose
 
