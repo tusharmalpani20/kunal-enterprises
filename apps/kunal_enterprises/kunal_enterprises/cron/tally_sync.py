@@ -36,14 +36,20 @@ def sync_tally_masters(records=None, auto_onboard_customers=None):
 	lock_name = "kunal_enterprises:tally_master_sync"
 	if not _acquire_sync_lock(lock_name):
 		frappe.throw("Tally master sync is already running")
+	previous_flag = getattr(frappe.flags, "in_tally_master_import", False)
+	frappe.flags.in_tally_master_import = True
 	try:
 		return _sync_tally_masters(records, auto_onboard_customers)
 	finally:
+		frappe.flags.in_tally_master_import = previous_flag
 		_release_sync_lock(lock_name)
 
 
 def _sync_tally_masters(records=None, auto_onboard_customers=None):
 	started_at = now_datetime()
+	records = records or {}
+	reconciliation_fingerprint = _master_reconciliation_fingerprint(records)
+	previous_fingerprint = _latest_master_reconciliation_fingerprint()
 	run = frappe.get_doc(
 		{
 			"doctype": "Tally Sync Run",
@@ -56,7 +62,6 @@ def _sync_tally_masters(records=None, auto_onboard_customers=None):
 	# Release Frappe's shared naming-series row before processing large batches.
 	frappe.db.commit()
 
-	records = records or {}
 	master_rows = _flatten_master_records(records)
 	processed = 0
 	errors = 0
@@ -120,8 +125,56 @@ def _sync_tally_masters(records=None, auto_onboard_customers=None):
 	run.customer_onboarding_errors = customer_summary["errors"]
 	run.status = "Completed" if errors == 0 else "Completed With Errors"
 	run.finished_at = now_datetime()
+	run.source_metadata = json.dumps(
+		{"reconciliation_master_fingerprint": reconciliation_fingerprint}, sort_keys=True
+	)
 	run.save(ignore_permissions=True)
+	if reconciliation_fingerprint != previous_fingerprint and _incremental_reconciliation_enabled():
+		from kunal_enterprises.integrations.reconciliation_queue import enqueue_full_reconciliation
+
+		enqueue_full_reconciliation("Correctness-relevant Tally master data changed")
 	return run
+
+
+def _incremental_reconciliation_enabled():
+	value = frappe.conf.get("tally_incremental_reconciliation_enabled")
+	return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _master_reconciliation_fingerprint(records):
+	fields = {
+		"godowns": ("godown_name", "tally_guid", "is_active"),
+		"items": ("item_name", "tally_guid", "uom", "is_active"),
+		"customer_ledgers": (
+			"client_code",
+			"ledger_name",
+			"tally_guid",
+			"tally_parent",
+			"tally_parent_path",
+			"is_active",
+		),
+	}
+	payload = {
+		key: sorted(
+			[{field: record.get(field) for field in selected_fields} for record in records.get(key, [])],
+			key=lambda row: json.dumps(row, default=str, sort_keys=True),
+		)
+		for key, selected_fields in fields.items()
+	}
+	return hashlib.sha256(json.dumps(payload, default=str, sort_keys=True).encode()).hexdigest()
+
+
+def _latest_master_reconciliation_fingerprint():
+	metadata = frappe.db.get_value(
+		"Tally Sync Run",
+		{"sync_type": "Masters", "status": "Completed"},
+		"source_metadata",
+		order_by="creation desc, name desc",
+	)
+	try:
+		return json.loads(metadata or "{}").get("reconciliation_master_fingerprint")
+	except (TypeError, ValueError):
+		return None
 
 
 def tally_customer_auto_onboarding_enabled():

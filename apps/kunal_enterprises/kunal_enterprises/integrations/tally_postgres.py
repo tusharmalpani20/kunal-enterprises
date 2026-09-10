@@ -1,6 +1,7 @@
+import hashlib
+import json
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
-import hashlib
 
 import frappe
 import psycopg2
@@ -10,6 +11,7 @@ from frappe.utils import convert_utc_to_system_timezone, now_datetime, nowdate
 
 from kunal_enterprises.cron.reconciliation import run_reconciliation
 from kunal_enterprises.cron.tally_sync import sync_stock_snapshots, sync_tally_masters
+from kunal_enterprises.integrations.reconciliation_settings import TALLY_JOB_TIMEOUT_SECONDS
 
 
 DEFAULT_SCHEMA = "public"
@@ -18,6 +20,7 @@ STOCK_SNAPSHOT_TABLE = "stock_godown_summary"
 STOCK_SNAPSHOT_STATE_TABLE = "stock_godown_summary_state"
 SCHEDULED_IMPORT_JOB_ID = "kunal_enterprises:tally_postgres_import_all"
 SCHEDULED_IMPORT_LOCK = "kunal_enterprises:tally_postgres_import_all"
+SCHEDULED_FULL_RECONCILIATION_JOB_ID = "kunal_enterprises:tally_full_reconciliation"
 STOCK_SNAPSHOT_V2_COLUMNS = frozenset(
 	{
 		"item",
@@ -39,13 +42,84 @@ def enqueue_import_all():
 	job = frappe.enqueue(
 		"kunal_enterprises.integrations.tally_postgres.import_all",
 		queue="long",
-		timeout=1500,
+		timeout=TALLY_JOB_TIMEOUT_SECONDS,
 		job_id=SCHEDULED_IMPORT_JOB_ID,
 		deduplicate=True,
 	)
 	if not job:
 		return {"status": "Skipped", "reason": "The Tally import pipeline is already queued or running"}
 	return {"status": "Queued", "job_id": job.id}
+
+
+def enqueue_full_reconciliation():
+	"""Queue the nightly safety pass separately from the frequent import job."""
+	if str(frappe.conf.get("tally_incremental_reconciliation_enabled") or "").strip().lower() not in {
+		"1",
+		"true",
+		"yes",
+		"on",
+	}:
+		return {"status": "Skipped", "reason": "Incremental reconciliation is disabled"}
+	if _full_reconciliation_completed_today():
+		return {"status": "Skipped", "reason": "A full reconciliation already completed today"}
+	job = frappe.enqueue(
+		"kunal_enterprises.integrations.tally_postgres.run_scheduled_full_reconciliation",
+		queue="long",
+		timeout=TALLY_JOB_TIMEOUT_SECONDS,
+		job_id=SCHEDULED_FULL_RECONCILIATION_JOB_ID,
+		deduplicate=True,
+	)
+	if not job:
+		return {"status": "Skipped", "reason": "The nightly full reconciliation is queued or running"}
+	return {"status": "Queued", "job_id": job.id}
+
+
+def _full_reconciliation_completed_today():
+	for row in frappe.get_all(
+		"Tally Sync Run",
+		filters={
+			"sync_type": "Reconciliation",
+			"status": ("in", ["Completed", "Completed With Errors"]),
+		},
+		fields=["started_at", "source_metadata"],
+		order_by="creation desc, name desc",
+		limit_page_length=20,
+	):
+		try:
+			metadata = json.loads(row.source_metadata or "{}")
+		except (TypeError, ValueError):
+			continue
+		if (
+			metadata.get("mode") == "full"
+			and metadata.get("trigger") == "nightly_safety"
+			and str(row.started_at)[:10] == nowdate()
+		):
+			return True
+	return False
+
+
+def run_scheduled_full_reconciliation():
+	"""Wait briefly for the import pipeline, then run the serialized full safety pass."""
+	if not _acquire_import_lock(wait_seconds=300):
+		frappe.throw("Nightly full reconciliation could not acquire the Tally import lock")
+	try:
+		run = run_reconciliation(mode="full", trigger="nightly_safety")
+		metadata = json.loads(run.source_metadata or "{}")
+		if metadata.get("full_safety_changes_detected"):
+			frappe.log_error(
+				title="Tally incremental reconciliation parity correction",
+				message=json.dumps(
+					{
+						"run": run.name,
+						"changes": metadata["full_safety_changes_detected"],
+						"samples": metadata.get("stats", {}).get("change_samples", []),
+					},
+					sort_keys=True,
+				),
+			)
+		return _serialize_run(run)
+	finally:
+		_release_import_lock()
 
 
 def import_all(voucher_limit=None, run_reconciliation_after=True):
@@ -65,8 +139,10 @@ def import_all(voucher_limit=None, run_reconciliation_after=True):
 		_release_import_lock()
 
 
-def _acquire_import_lock():
-	return bool(frappe.db.sql("SELECT GET_LOCK(%s, 0)", SCHEDULED_IMPORT_LOCK)[0][0])
+def _acquire_import_lock(wait_seconds=0):
+	return bool(
+		frappe.db.sql("SELECT GET_LOCK(%s, %s)", (SCHEDULED_IMPORT_LOCK, int(wait_seconds)))[0][0]
+	)
 
 
 def _release_import_lock():

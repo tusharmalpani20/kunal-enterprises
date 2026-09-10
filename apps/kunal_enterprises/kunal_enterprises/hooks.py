@@ -34,7 +34,13 @@ scheduler_events = {
 	"cron": {
 		"*/5 * * * *": [
 			"kunal_enterprises.integrations.tally_postgres.enqueue_import_all",
-		]
+		],
+		"17 2 * * *": [
+			"kunal_enterprises.integrations.tally_postgres.enqueue_full_reconciliation",
+		],
+		"47 2 * * *": [
+			"kunal_enterprises.integrations.tally_postgres.enqueue_full_reconciliation",
+		],
 	}
 }
 
@@ -188,6 +194,37 @@ has_permission = {
 # Hook on document methods and events
 
 doc_events = {
+	"Order": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_order",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_order",
+	},
+	"Customer": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_customer",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_customer",
+	},
+	"Tally Voucher": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_voucher",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_voucher_delete",
+	},
+	"Tally Voucher Line": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_voucher_line",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_voucher_line",
+	},
+	"Tally Item": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master",
+		"after_rename": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master_rename",
+	},
+	"Tally Godown": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master",
+		"after_rename": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master_rename",
+	},
+	"Tally Customer Ledger": {
+		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master",
+		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master",
+		"after_rename": "kunal_enterprises.integrations.reconciliation_queue.invalidate_master_rename",
+	},
 	"User": {
 		"before_insert": "kunal_enterprises.permission_guards.owner_admin.guard_user_write",
 		"before_save": "kunal_enterprises.permission_guards.owner_admin.guard_user_write",
