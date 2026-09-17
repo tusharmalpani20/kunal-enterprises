@@ -218,11 +218,14 @@ class TestVoucherCorrections(unittest.TestCase):
 	def test_cancelled_order_stays_cancelled(self):
 		self.publish()
 		self.order.status = "Cancelled"
+		self.order.cancellation_reason = "Duplicate order cancelled by Owner"
 		self.order.save(ignore_permissions=True)
 		self.payload["lines"][0]["quantity"] = -6
 		self.payload["alterid"] = 2
 		self.publish()
+		self.order.reload()
 		self.assertEqual(self.order.status, "Cancelled")
+		self.assertEqual(self.order.cancellation_reason, "Duplicate order cancelled by Owner")
 
 	def test_new_entry_accumulates_and_invoice_is_ignored(self):
 		from copy import deepcopy

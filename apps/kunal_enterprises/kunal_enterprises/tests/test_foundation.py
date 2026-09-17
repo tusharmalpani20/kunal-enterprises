@@ -3025,6 +3025,13 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertIn('frm.doc.status === "Placed"', script)
 		self.assertIn('__("Move to Processing")', script)
 		self.assertIn("kunal_enterprises.api.branch_orders.mark_visible_order_processing", script)
+		self.assertIn('__("Cancel Order")', script)
+		self.assertIn('["Owner", "Admin"]', script)
+		self.assertIn('"Partially Processed"', script)
+		self.assertNotIn('"Completed",\n\t\t"Partially Closed",\n\t\t"Manual Review"', script)
+		self.assertIn("kunal_enterprises.api.order_controls.cancel_order", script)
+		self.assertIn('fieldname: "reason"', script)
+		self.assertIn("reqd: 1", script)
 
 	def test_branch_desk_action_moves_visible_placed_order_to_processing(self):
 		product_group = self._create_product_group("Branch Desk Processing PG")
@@ -3468,9 +3475,66 @@ class TestOrderSubmission(FrappeTestCase):
 		self.assertTrue(response["success"])
 		self.assertEqual(order.status, "Cancelled")
 		self.assertEqual(response["data"]["status"], "Cancelled")
+		self.assertEqual(order.cancellation_reason, "Customer requested cancellation")
 		self.assertEqual(status_log.from_status, "Placed")
 		self.assertEqual(status_log.role, "Owner")
 		self.assertEqual(status_log.note, "Customer requested cancellation")
+
+	def test_cancel_order_requires_reason(self):
+		product_group = self._create_product_group("Owner Cancel Reason PG")
+		item = self._create_item("Owner Cancel Reason Item", product_group.name)
+		customer = self._create_active_customer("9000000221", "ORDER-OWNER-REASON-001")
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Owner Cancel Reason Godown", "quantity": 2}],
+		)
+
+		response = cancel_order(order_response["data"]["order"], role="Owner", note="  ")
+		order = frappe.get_doc("Order", order_response["data"]["order"])
+
+		self.assertFalse(response["success"])
+		self.assertIn("Cancellation reason", response["error"]["message"])
+		self.assertEqual(order.status, "Placed")
+		self.assertFalse(order.cancellation_reason)
+
+	def test_direct_cancelled_transition_requires_reason(self):
+		product_group = self._create_product_group("Direct Cancel Reason PG")
+		item = self._create_item("Direct Cancel Reason Item", product_group.name)
+		customer = self._create_active_customer("9000000222", "ORDER-DIRECT-CANCEL-001")
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Direct Cancel Reason Godown", "quantity": 2}],
+		)
+		order = frappe.get_doc("Order", order_response["data"]["order"])
+		order.status = "Cancelled"
+
+		with self.assertRaises(frappe.ValidationError):
+			order.save(ignore_permissions=True)
+
+		order.reload()
+		self.assertEqual(order.status, "Placed")
+		self.assertFalse(order.cancellation_reason)
+
+	def test_terminal_and_review_orders_cannot_be_cancelled(self):
+		product_group = self._create_product_group("Protected Cancel PG")
+		item = self._create_item("Protected Cancel Item", product_group.name)
+		customer = self._create_active_customer("9000000223", "ORDER-PROTECTED-CANCEL-001")
+		order_response = submit_order(
+			customer.name,
+			[{"item": item.name, "godown": "Protected Cancel Godown", "quantity": 2}],
+		)
+		order_name = order_response["data"]["order"]
+
+		for status in ("Completed", "Partially Closed", "Manual Review"):
+			frappe.db.set_value("Order", order_name, "status", status)
+			response = cancel_order(order_name, role="Owner", note="Must remain protected")
+			order = frappe.get_doc("Order", order_name)
+			self.assertFalse(response["success"])
+			self.assertIn("cannot be cancelled", response["error"]["message"])
+			self.assertEqual(order.status, status)
+			self.assertFalse(order.cancellation_reason)
+
+		self.assertEqual(frappe.db.count("Order Status Log", {"order": order_name}), 0)
 
 	def test_admin_can_partially_close_order_with_status_log(self):
 		product_group = self._create_product_group("Admin Partial Close PG")
