@@ -5,9 +5,20 @@ from frappe.model.document import Document
 
 class Order(Document):
 	def validate(self):
+		self._validate_cancellation_reason()
 		self._validate_confirmed_lines_are_immutable()
 		self._validate_quantity_only_order()
 		self._set_totals()
+
+	def _validate_cancellation_reason(self):
+		if self.cancellation_reason:
+			self.cancellation_reason = self.cancellation_reason.strip()
+		previous = None if self.is_new() else self.get_doc_before_save()
+		entering_cancelled = self.status == "Cancelled" and (
+			previous is None or previous.status != "Cancelled"
+		)
+		if entering_cancelled and not self.cancellation_reason:
+			frappe.throw(_("Cancellation reason is required"), frappe.ValidationError)
 
 	def _validate_confirmed_lines_are_immutable(self):
 		if self.is_new():

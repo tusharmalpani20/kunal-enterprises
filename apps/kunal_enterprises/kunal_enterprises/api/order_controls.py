@@ -5,13 +5,31 @@ from kunal_enterprises.api.order_authorization import OWNER_ADMIN_ROLES, effecti
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
 
 
+CANCELLABLE_ORDER_STATUSES = {"Placed", "Processing", "Partially Processed"}
+
+
 @frappe.whitelist(methods=["POST"])
-def cancel_order(order, role, note):
+def cancel_order(order, role=None, note=None):
+	savepoint = "cancel_order_transition"
+	frappe.db.savepoint(savepoint)
 	try:
 		order_doc, effective_role = _load_owner_admin_order(order, role)
-		_transition_order(order_doc, "Cancelled", effective_role, note)
+		reason = (note or "").strip()
+		if not reason:
+			frappe.throw("Cancellation reason is required", title="Cancellation Reason Required")
+		if order_doc.status == "Cancelled":
+			frappe.throw("Order is already cancelled", title="Invalid Order Status")
+		if order_doc.status not in CANCELLABLE_ORDER_STATUSES:
+			frappe.throw(
+				"Only Placed, Processing, or Partially Processed orders can be cancelled",
+				title="Invalid Order Status",
+			)
+		order_doc.cancellation_reason = reason
+		_transition_order(order_doc, "Cancelled", effective_role, reason)
+		frappe.db.release_savepoint(savepoint)
 		return create_success_response("Order cancelled", {"order": order_doc.name, "status": order_doc.status})
 	except Exception as error:
+		frappe.db.rollback(save_point=savepoint)
 		return handle_error_response(error, "Unable to cancel order")
 
 
