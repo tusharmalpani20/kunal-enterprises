@@ -25,14 +25,30 @@ role to Owner/Admin profiles, and add Pending Godown Assignment to the Operation
 workspace. The assignment queue excludes Cancelled and Partially Closed orders.
 Individual user assignments remain site-specific.
 
-Standalone allocators can read orders awaiting godowns and the godown master,
+Standalone allocators can read Placed orders, orders awaiting godowns, and the godown master,
 but cannot use generic Order writes or privileged status actions. Branch users
-with the allocator role can also read pending orders across branches; their
+with the allocator role can also read Placed and pending orders across branches; their
 ordinary assigned-order access remains branch-scoped.
 
 ## Assignment API
 
-The portal assignment interface is deferred. Its backend action is ready:
+The Order form provides **Assign Godowns** for Owner, Admin, and Godown Allocator
+users while godowns are missing, and **Edit Godown Assignments** after they are
+saved while the order remains Placed. For Placed orders, the modal groups all
+allocations by item and pre-fills the saved quantities; for historical orders,
+it lists only missing allocations. It
+shows fixed item names/quantities, and groups **Available** and **Allocate**
+under each active godown. Allocators can split a row across godowns; its allocated
+quantities must exactly total Order Qty and use at most nine decimal places
+(the database quantity precision). Missing snapshots display —; stock
+remains informational, consistent with the existing soft stock checks.
+After saving a Placed order, the form reloads so assignments can be edited again.
+Allocators completing missing assignments on other statuses return to the list. Clicking outside,
+pressing Escape, or closing the modal with unsaved quantities offers **Discard
+Changes** or **Continue Editing**. Continue preserves entered quantities; discard
+closes without saving. Closing is blocked while a save is in progress.
+
+The modal uses this backend action:
 
 ```http
 POST /api/method/kunal_enterprises.api.godown_assignment.assign_godowns
@@ -45,19 +61,53 @@ not a mobile token.
 {
   "order": "KE-SO-00001-26-27",
   "assignments": [
-    {"allocation": "ORDER-ALLOCATION-ROW-NAME", "godown": "GODOWN-RECORD"}
+    {"allocation": "ORDER-ALLOCATION-ROW-NAME", "splits": [
+      {"godown": "GODOWN-A", "quantity": 2},
+      {"godown": "GODOWN-B", "quantity": 3}
+    ]}
   ]
 }
 ```
 
-Allocation names come from the Order child rows. The action locks the order,
-validates all assignments, fills only blank godowns, and records actor and changes
+The fill-only API below uses allocation names from the Order child rows. The action locks the order,
+validates all assignments, assigns or splits only unassigned allocations, and records actor and changes
 in Order Status Log. Requested items/quantities and existing selections remain
-immutable. Invalid batches roll back completely. Assignments may be partial;
+immutable. The older `{allocation, godown}` full-row payload remains supported.
+Invalid batches roll back completely. Rows with dispatched quantities cannot be
+split across godowns; their dispatch history is preserved by single-godown assignment. Assignments may be partial;
 Processing stays blocked until all quantities are assigned. Assignment does not
 move the order to Processing automatically. Portal Processing actions also recheck
 that selected godowns are still active. Order creation and Processing transitions
 roll back if their confirmation or audit writes fail.
+
+The modal loads its data through
+`GET /api/method/kunal_enterprises.api.godown_assignment.assignment_options`
+with the same role guard. This returns only the selected order’s unassigned
+allocations, active godowns, and latest synced stock for those items, filtered by
+the configured source company when present.
+
+To edit the distribution while Placed, load `assignment_options` with `edit=1`.
+The response has `editing=true` and item-grouped rows with `current_allocations`.
+Save every requested item through:
+
+```http
+POST /api/method/kunal_enterprises.api.godown_assignment.replace_assignments
+```
+
+```json
+{
+  "order": "KE-SO-00011-26-27",
+  "assignments": [{"item": "ITEM-RECORD", "splits": [
+    {"godown": "GODOWN-A", "quantity": 2},
+    {"godown": "GODOWN-B", "quantity": 3}
+  ]}]
+}
+```
+
+This replaces the godown distribution, preserving each item's original total and
+order status. It requires Placed status with no fulfillment history, and records
+before/after distributions in the audit log. Editing is blocked once Processing
+begins. The fill-only endpoint retains its historical missing-godown behavior.
 
 ## Deployment and mobile verification
 
@@ -77,3 +127,7 @@ adding without a godown. No mobile runtime was started; phone testing remains ma
 Manual checks should cover Customer and Sales Employee orders, mixed selections,
 saved draft restoration, and removal of an unassigned row while retaining a
 selected-godown row for the same item.
+
+The assignment table shows live allocated and remaining quantities beside each item.
+A complete distribution turns green; excess quantities or invalid entries turn red.
+Item names and order quantities remain fixed during horizontal scrolling.

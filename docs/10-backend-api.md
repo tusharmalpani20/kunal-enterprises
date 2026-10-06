@@ -490,7 +490,7 @@ Submission revalidates Customer App Access, Sales Employee status/assignment, Pr
 
 The `godown` field is optional on each allocation. Omit it (or send null/empty) to place an unassigned quantity. Assigned and unassigned quantities may coexist, and duplicates merge separately per item/godown. Unassigned rows do not retain godown-specific stock evidence. Submission, history, and detail responses include `godown_assignment_pending`. Every requested quantity must have a godown before Processing.
 
-After submission, requested Order item lines and godown allocation quantities are immutable. A Godown Allocator, Owner, or Admin can fill missing godowns through the controlled assignment endpoint; previously selected godowns remain fixed. Reconciliation and Owner/Admin controls can still update fulfillment/status fields without changing the original request.
+After submission, requested Order item lines and total quantities remain immutable. A Godown Allocator, Owner, or Admin can edit the godown distribution through the controlled reassignment endpoint while the order is Placed with no fulfillment history. Reassignment is locked after Processing; the separate fill-only endpoint can still assign historical missing godowns without changing existing selections. Reconciliation and Owner/Admin controls can still update fulfillment/status fields without changing the original request.
 
 Order-facing DocTypes remain quantity-only and do not expose price, rate, amount, tax, discount, value, or currency fields.
 
@@ -734,7 +734,7 @@ Response:
 
 ### Assign Missing Godowns
 
-`POST /api/method/kunal_enterprises.api.godown_assignment.assign_godowns` uses a Desk session with Owner, Admin, or Godown Allocator permission. Pass `order` and `assignments`, where each assignment contains the Order allocation child-row name (`allocation`) and an active `godown`. Only blank godowns can be filled; requested quantities and existing selections cannot change. The response includes `godown_assignment_pending`. Assignment is atomic and creates an actor audit log. See [optional-godown assignment](19-optional-godown-assignment.md) for the payload and deployment details.
+`POST /api/method/kunal_enterprises.api.godown_assignment.assign_godowns` uses a Desk session with Owner, Admin, or Godown Allocator permission. Pass `order` and `assignments`, where each assignment contains the Order allocation child-row name (`allocation`) and an active `godown`. Only unassigned allocations can be assigned or split; requested item totals and existing selections cannot change. For a split, pass `splits: [{godown, quantity}, ...]` instead of `godown`; the split quantities must total that allocation’s requested quantity. `GET /api/method/kunal_enterprises.api.godown_assignment.assignment_options` supplies the modal’s unassigned rows, active godowns, and latest synced available stock under the same role guard. The response includes `godown_assignment_pending`. Assignment is atomic and creates an actor audit log. See [optional-godown assignment](19-optional-godown-assignment.md) for the payload and deployment details.
 
 ### Branch Employee Mark Processing
 
@@ -1039,3 +1039,5 @@ Reconciliation runs from synced `Tally Voucher` records.
 - Prefer Sales Invoice over mirrored Delivery Challan for the same tracking movement.
 - Move to `Manual Review` with a reason when customer mismatches, extra item lines exist, over-fulfillment occurs, or duplicate movement is ambiguous.
 - `Order Reconciliation Log` stores both `reason_code` and `message`; Manual Review logs require both fields. Examples include `CUSTOMER_CLIENT_CODE_MISMATCH`, `EXTRA_VOUCHER_ITEM`, `OVER_FULFILLMENT`, and `AMBIGUOUS_DUPLICATE_MOVEMENT`.
+
+`assignment_options` with `edit=1` returns item-grouped Placed-order rows with saved `current_allocations`. `POST /api/method/kunal_enterprises.api.godown_assignment.replace_assignments` accepts every requested item as `{item, splits: [{godown, quantity}]}`; each item’s split must preserve its original requested total. This action requires Placed status without fulfillment history, records before/after allocation audit details, and uses the same role guard.

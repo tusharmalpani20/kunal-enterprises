@@ -82,7 +82,7 @@ _Avoid_: App user
 - A **Mobile Login Identity** can belong to either one **Customer** or one sales employee, never both.
 - A **Sales Employee** is always created by an internal portal user and never self-registers.
 - Godown selection is optional at placement. Every requested quantity must have a godown before an **Order** can enter Processing.
-- A **Godown Allocator**, Owner, or Admin may fill missing godowns without changing requested items, quantities, or previously selected godowns.
+- A **Godown Allocator**, Owner, or Admin may assign/split missing godowns and edit the saved distribution while Placed with no fulfillment history. Requested item totals stay fixed; saved distribution edits lock once Processing begins.
 - An **Order** does not reduce or reserve Tally stock.
 - An **Order** does not store pricing, rates, discounts, tax, or value in Frappe.
 - An **Order** is fulfilled later through Tally Delivery Challan and/or Sales Invoice reconciliation.
