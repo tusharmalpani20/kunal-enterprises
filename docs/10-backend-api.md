@@ -417,7 +417,7 @@ GET /api/method/kunal_enterprises.api.product_groups.items?customer=9000000001&p
 Auth-Token: Bearer <access_token>
 ```
 
-`product_group` is optional. When omitted, the endpoint returns a bounded page across all Product Groups visible to the Customer (and, when supplied, the Sales Employee). `search` matches the item code, item name, or root Product Group name. `limit` defaults to 60 and is capped at 60; `offset` defaults to 0.
+`product_group` is optional. When omitted, the endpoint returns a bounded page across all Product Groups visible to the Customer (and, when supplied, the Sales Employee). `search` matches the item code, item name, or root Product Group name. `limit` defaults to 60 and is capped at 60; `offset` defaults to 0. `total_count` counts all matching active items for the current search/group. `all_count` counts all active items allowed for the customer and employee, ignoring search/group; it supplies the All chip count. Counts and pages use the same access and active hierarchy rules.
 
 Response:
 
@@ -428,6 +428,8 @@ Response:
   "data": {
     "customer": "9000000001",
     "product_group": "Cotton Fabric",
+    "total_count": 1,
+    "all_count": 120,
     "has_more": false,
     "next_offset": null,
     "items": [

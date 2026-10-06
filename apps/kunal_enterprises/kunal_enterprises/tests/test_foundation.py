@@ -1775,16 +1775,20 @@ class TestProductGroupAccess(FrappeTestCase):
 
 		self.assertTrue(first_page["success"])
 		self.assertEqual(len(first_page["data"]["items"]), 60)
+		self.assertEqual(first_page["data"]["total_count"], 65)
+		self.assertEqual(first_page["data"]["all_count"], 65)
 		self.assertTrue(first_page["data"]["has_more"])
 		self.assertEqual(first_page["data"]["next_offset"], 60)
 		self.assertEqual(len(second_page["data"]["items"]), 5)
+		self.assertEqual(second_page["data"]["total_count"], 65)
 		self.assertFalse(second_page["data"]["has_more"])
 		self.assertIsNone(second_page["data"]["next_offset"])
 
 	def test_allowed_items_supports_bounded_all_product_search(self):
 		first_group = self._create_product_group("PG All Search A")
 		second_group = self._create_product_group("PG All Search B")
-		customer = self._create_active_customer("9000000445", "PG-ALL-SEARCH-001")
+		customer = self._create_active_customer("9000000445", "PG-ALL-SEARCH-001",
+			product_groups=[first_group.name, second_group.name])
 		self._create_item("All Search Item A", first_group.name)
 		self._create_item("All Search Item B", second_group.name)
 
@@ -1793,6 +1797,37 @@ class TestProductGroupAccess(FrappeTestCase):
 		self.assertTrue(response["success"])
 		self.assertEqual(len(response["data"]["items"]), 1)
 		self.assertTrue(response["data"]["has_more"])
+		self.assertEqual(response["data"]["total_count"], 2)
+		self.assertEqual(response["data"]["all_count"], 2)
+		filtered = allowed_items(customer.name, first_group.name, search="All Search")
+		self.assertEqual(filtered["data"]["total_count"], 1)
+		self.assertEqual(filtered["data"]["all_count"], 2)
+
+	def test_item_count_and_pages_exclude_inactive_disallowed_and_mismatched_hierarchy(self):
+		group = self._create_product_group("PG Count Allowed")
+		other_group = self._create_product_group("PG Count Other")
+		other_child = self._create_child_product_group("PG Count Other Child", other_group.name)
+		customer = self._create_active_customer("9000000447", "PG-COUNT-SCOPE-001", product_groups=[group.name])
+		corrupt = self._create_item("Count Scope 00 Corrupt", group.name)
+		# Imported stale hierarchy pointers must not consume a page slot or inflate the count.
+		frappe.db.set_value("Tally Item", corrupt.name, "immediate_stock_group", other_child.name)
+		inactive = self._create_item("Count Scope 01 Inactive", group.name)
+		frappe.db.set_value("Tally Item", inactive.name, "is_active", 0)
+		valid = self._create_item("Count Scope 10 Valid", group.name)
+		self._create_item("Count Scope 20 Disallowed", other_group.name)
+		self._create_item("Another item without matching search", group.name)
+		response = allowed_items(customer.name, search="Count Scope", limit=1)
+		self.assertTrue(response["success"], response)
+		self.assertEqual(response["data"]["total_count"], 1)
+		self.assertEqual(response["data"]["all_count"], 2)
+		self.assertEqual([row.name for row in response["data"]["items"]], [valid.name])
+		self.assertFalse(response["data"]["has_more"])
+		all_items = allowed_items(customer.name, group.name, offset=99)
+		self.assertEqual(all_items["data"]["total_count"], 2)
+		self.assertEqual(all_items["data"]["all_count"], 2)
+		self.assertEqual(all_items["data"]["items"], [])
+		self.assertFalse(all_items["data"]["has_more"])
+		self.assertEqual(allowed_items(customer.name, search="no matching item")['data']['total_count'], 0)
 
 	def test_allowed_items_treat_blank_immediate_group_as_root_group(self):
 		product_group = self._create_product_group("PG Blank Immediate Group")

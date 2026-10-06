@@ -39,10 +39,11 @@ def items(customer, product_group=None, sales_employee=None, search=None, limit=
 
 		item_limit = _coerce_mobile_item_limit(limit)
 		item_offset = _coerce_mobile_item_offset(offset)
+		item_search = str(search or "").strip()
 		item_rows = _load_mobile_item_page(
 			access,
 			product_group=product_group,
-			search=str(search or "").strip(),
+			search=item_search,
 			limit=item_limit,
 			offset=item_offset,
 		)
@@ -51,6 +52,8 @@ def items(customer, product_group=None, sales_employee=None, search=None, limit=
 		item_rows = item_rows[:item_limit]
 		_apply_godown_stock_totals(item_rows)
 		_apply_mobile_summary_groups(item_rows)
+		total_count = _count_mobile_items(access, product_group, item_search)
+		all_count = _count_mobile_items(access) if product_group or item_search else total_count
 
 		return create_success_response(
 			"Allowed Items",
@@ -59,6 +62,8 @@ def items(customer, product_group=None, sales_employee=None, search=None, limit=
 				"sales_employee": sales_employee,
 				"product_group": product_group,
 				"items": item_rows,
+				"total_count": total_count,
+				"all_count": all_count,
 				"has_more": has_more,
 				"next_offset": item_offset + item_limit if has_more else None,
 			},
@@ -83,23 +88,26 @@ def _coerce_mobile_item_offset(value):
 	return max(0, requested_offset)
 
 
-def _load_mobile_item_page(access, product_group=None, search="", limit=MOBILE_ITEM_PAGE_SIZE, offset=0):
-	visible_roots = [product_group] if product_group else access["visible_root_names"]
-	allowed_groups = tuple(sorted(access["effective_group_names"]))
-	if not visible_roots or not allowed_groups:
-		return []
+def _mobile_item_query_scope(access, product_group=None, search=""):
+	visible_roots = {product_group} if product_group else set(access["visible_root_names"])
+	groups_by_root = {}
+	for name in access["effective_group_names"]:
+		path = _active_group_path(name, access["groups"])
+		if path and path[0] in visible_roots:
+			groups_by_root.setdefault(path[0], []).append(name)
+	if not groups_by_root:
+		return None
 
-	conditions = [
-		"item.is_active = 1",
-		"item.root_stock_group IN %(visible_roots)s",
-		"COALESCE(NULLIF(item.immediate_stock_group, ''), item.root_stock_group) IN %(allowed_groups)s",
-	]
-	values = {
-		"visible_roots": tuple(visible_roots),
-		"allowed_groups": allowed_groups,
-		"limit": limit + 1,
-		"offset": offset,
-	}
+	values, root_conditions = {}, []
+	for index, (root, groups) in enumerate(sorted(groups_by_root.items())):
+		values[f"root_{index}"] = root
+		values[f"groups_{index}"] = tuple(sorted(groups))
+		root_conditions.append(
+			f"(item.root_stock_group = %(root_{index})s AND "
+			f"COALESCE(NULLIF(item.immediate_stock_group, ''), item.root_stock_group) IN %(groups_{index})s)"
+		)
+	# Pair each leaf with its actual active root before LIMIT, matching item_is_allowed.
+	conditions = ["item.is_active = 1", "(" + " OR ".join(root_conditions) + ")"]
 
 	if search:
 		values["search"] = f"%{search.lower()}%"
@@ -108,6 +116,25 @@ def _load_mobile_item_page(access, product_group=None, search="", limit=MOBILE_I
 			"OR LOWER(item.item_name) LIKE %(search)s "
 			"OR LOWER(item.root_stock_group) LIKE %(search)s)"
 		)
+	return conditions, values
+
+
+def _count_mobile_items(access, product_group=None, search=""):
+	scope = _mobile_item_query_scope(access, product_group, search)
+	if scope is None:
+		return 0
+	conditions, values = scope
+	return frappe.db.sql(
+		f"SELECT COUNT(*) FROM `tabTally Item` item WHERE {' AND '.join(conditions)}", values,
+	)[0][0]
+
+
+def _load_mobile_item_page(access, product_group=None, search="", limit=MOBILE_ITEM_PAGE_SIZE, offset=0):
+	scope = _mobile_item_query_scope(access, product_group, search)
+	if scope is None:
+		return []
+	conditions, values = scope
+	values.update({"limit": limit + 1, "offset": offset})
 
 	return frappe.db.sql(
 		f"""
