@@ -20,7 +20,8 @@ class GodownAllocatorPermissionTests(unittest.TestCase):
 	def test_allocator_reads_pending_orders_but_has_no_arbitrary_write(self):
 		with patch.object(orders.frappe, "get_roles", return_value=["Godown Allocator"]):
 			self.assertTrue(orders.has_permission(self._doc(1), user="allocator", permission_type="read"))
-			self.assertFalse(orders.has_permission(self._doc(0), user="allocator", permission_type="read"))
+			self.assertTrue(orders.has_permission(self._doc(0), user="allocator", permission_type="read"))
+			self.assertFalse(orders.has_permission(self._doc(0, status="Processing"), user="allocator", permission_type="read"))
 			self.assertFalse(orders.has_permission(self._doc(1), user="allocator", permission_type="write"))
 			self.assertFalse(orders.has_permission(self._doc(1), user="allocator", permission_type="delete"))
 			for status in ("Cancelled", "Partially Closed"):
@@ -42,7 +43,7 @@ class GodownAllocatorPermissionTests(unittest.TestCase):
 		):
 			self.assertTrue(orders.has_permission(self._doc(1), user="allocator", permission_type="read"))
 			self.assertTrue(orders.has_permission(self._doc(0, godown="Own Godown"), user="allocator"))
-			self.assertFalse(orders.has_permission(self._doc(0), user="allocator"))
+			self.assertFalse(orders.has_permission(self._doc(0, status="Processing"), user="allocator"))
 			self.assertFalse(orders.has_permission(self._doc(0, status="Completed", godown="Own Godown"), user="allocator"))
 			self.assertFalse(orders.has_permission(self._doc(1), user="allocator", permission_type="write"))
 
@@ -53,7 +54,7 @@ class GodownAllocatorPermissionTests(unittest.TestCase):
 			patch.object(orders.frappe, "db", db),
 		):
 			query = orders.get_permission_query_conditions("allocator")
-		self.assertEqual(query, "(`tabOrder`.`godown_assignment_pending` = 1 and `tabOrder`.`status` not in ('Cancelled', 'Partially Closed'))")
+		self.assertEqual(query, "(`tabOrder`.`status` = 'Placed' or (`tabOrder`.`godown_assignment_pending` = 1 and `tabOrder`.`status` not in ('Cancelled', 'Partially Closed')))")
 
 	def test_mixed_role_list_scope_keeps_branch_scope_and_pending_scope(self):
 		db = SimpleNamespace(db_type="postgres", escape=lambda value: repr(value))

@@ -8,6 +8,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from kunal_enterprises.api.orders import submit
 from kunal_enterprises.api.godown_assignment import assign_godowns
+from kunal_enterprises.api import godown_assignment
 from kunal_enterprises.api.order_controls import mark_processing
 from kunal_enterprises.api.branch_orders import mark_processing as branch_processing
 from kunal_enterprises.api.token_verification import issue_token
@@ -71,6 +72,157 @@ class TestGodownAssignment(FrappeTestCase):
 			{"allocation": row.name, "godown": self.godown.name}
 			for row in order.godown_allocations if not row.godown
 		])
+
+	def _second_godown(self):
+		return frappe.get_doc({"doctype": "Tally Godown", "godown_name": self.prefix + " second", "is_active": 1}).insert()
+
+	def test_split_unassigned_quantity_preserves_selected_rows_and_item_total(self):
+		order = self._order(mixed=True)
+		second = self._second_godown()
+		selected = order.godown_allocations[1].as_dict()
+		response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name,
+			"splits": [{"godown": self.godown.name, "quantity": 1}, {"godown": second.name, "quantity": 2}]}])
+		self.assertTrue(response["success"], response)
+		order.reload()
+		self.assertEqual(order.total_quantity, 5)
+		self.assertEqual(order.items[0].requested_quantity, 5)
+		self.assertEqual(order.status, "Placed")
+		self.assertFalse(order.godown_assignment_pending)
+		self.assertEqual([(row.godown, row.requested_quantity) for row in order.godown_allocations],
+			[(self.godown.name, 1), (second.name, 2), (self.godown.name, 2)])
+		self.assertEqual(order.godown_allocations[-1].name, selected.name)
+		self.assertEqual(order.godown_allocations[-1].requested_quantity, selected.requested_quantity)
+		self.assertEqual(order.godown_allocations[-1].stock_shown_at_order_time, selected.stock_shown_at_order_time)
+		log = frappe.get_last_doc("Order Status Log", filters={"order": order.name})
+		self.assertIn(second.name, log.note)
+
+	def test_split_requires_exact_finite_positive_sum_and_unique_active_godowns(self):
+		order = self._order()
+		second = self._second_godown()
+		for splits in (
+			[], [{"godown": self.godown.name, "quantity": 2}],
+			[{"godown": self.godown.name, "quantity": 0}, {"godown": second.name, "quantity": 3}],
+			[{"godown": self.godown.name, "quantity": -1}, {"godown": second.name, "quantity": 4}],
+			[{"godown": self.godown.name, "quantity": float("nan")}],
+			[{"godown": self.godown.name, "quantity": float("inf")}],
+			[{"godown": self.godown.name, "quantity": 1}, {"godown": self.godown.name, "quantity": 2}],
+			[{"godown": "Does not exist", "quantity": 3}],
+		):
+			with self.subTest(splits=splits):
+				response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name, "splits": splits}])
+				self.assertFalse(response["success"])
+				self.assertEqual(response["http_status_code"], 400)
+				order.reload()
+				self.assertEqual(len(order.godown_allocations), 1)
+				self.assertFalse(order.godown_allocations[0].godown)
+
+	def test_split_does_not_distribute_historical_fulfillment(self):
+		order = self._order()
+		second = self._second_godown()
+		order.status = "Partially Processed"
+		order.items[0].fulfilled_quantity = 1
+		order.godown_allocations[0].fulfilled_quantity = 1
+		order.save(ignore_permissions=True)
+		response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name,
+			"splits": [{"godown": self.godown.name, "quantity": 1}, {"godown": second.name, "quantity": 2}]}])
+		self.assertFalse(response["success"])
+		self.assertIn("fulfilled", response["error"]["message"])
+		self.assertTrue(self._assign(order)["success"])
+		order.reload()
+		self.assertEqual(order.godown_allocations[0].fulfilled_quantity, 1)
+		self.assertEqual(order.godown_allocations[0].pending_quantity, 2)
+		self.assertEqual(order.items[0].fulfilled_quantity, 1)
+
+	def test_assignment_options_exposes_scoped_latest_stock_without_stock_permissions(self):
+		order = self._order()
+		second = self._second_godown()
+		for name, quantity, company, synced_at in (
+			("old", 7, self.prefix, "2026-09-01 10:00:00"),
+			("latest", -2, self.prefix, "2026-09-02 10:00:00"),
+			("other-company", 99, "Other Company", "2026-09-03 10:00:00"),
+		):
+			frappe.get_doc({"doctype": "Tally Stock Snapshot", "item": self.item.name,
+				"godown": self.godown.name, "quantity": quantity, "source_company": company,
+				"synced_at": synced_at}).insert(set_name=self.prefix + " " + name)
+		allocator = self._create_role_user(uuid4().hex + "@example.com", "Godown Allocator")
+		frappe.set_user(allocator.name)
+		self.assertFalse(frappe.has_permission("Tally Stock Snapshot", "read"))
+		previous_company = frappe.conf.get("tally_source_company")
+		try:
+			frappe.conf.tally_source_company = self.prefix
+			response = godown_assignment.assignment_options(order.name)
+		finally:
+			frappe.conf.tally_source_company = previous_company
+		self.assertTrue(response["success"], response)
+		allocation = response["data"]["allocations"][0]
+		self.assertEqual(allocation["name"], order.godown_allocations[0].name)
+		self.assertEqual(allocation["quantity"], 3)
+		self.assertEqual(allocation["stock"][self.godown.name], -2)
+		self.assertIsNone(allocation["stock"][second.name])
+
+	def test_branch_employee_cannot_read_assignment_options(self):
+		order = self._order()
+		user = self._create_role_user(uuid4().hex + "@example.com", "Branch Employee")
+		frappe.set_user(user.name)
+		response = godown_assignment.assignment_options(order.name)
+		self.assertFalse(response["success"])
+
+	def test_decimal_split_quantities_conserve_requested_quantity(self):
+		second = self._second_godown()
+		response = submit(self.customer.name, [{"item": self.item.name, "quantity": 0.3}])
+		self.assertTrue(response["success"], response)
+		order = frappe.get_doc("Order", response["data"]["order"])
+		response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name,
+			"splits": [{"godown": self.godown.name, "quantity": 0.1}, {"godown": second.name, "quantity": 0.2}]}])
+		self.assertTrue(response["success"], response)
+		order.reload()
+		self.assertEqual(order.total_quantity, 0.3)
+		self.assertFalse(order.godown_assignment_pending)
+
+	def test_split_rejects_precision_that_would_round_the_stored_total(self):
+		order = self._order()
+		second = self._second_godown()
+		response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name,
+			"splits": [{"godown": self.godown.name, "quantity": 1.0000000005},
+				{"godown": second.name, "quantity": 1.9999999995}]}])
+		self.assertFalse(response["success"])
+		self.assertEqual(response["http_status_code"], 400)
+		self.assertIn("nine decimal", response["error"]["message"])
+		order.reload()
+		self.assertEqual(len(order.godown_allocations), 1)
+		self.assertEqual(order.godown_allocations[0].requested_quantity, 3)
+		self.assertFalse(order.godown_allocations[0].godown)
+
+	def test_nine_decimal_split_quantities_remain_exact_after_storage(self):
+		order = self._order()
+		second = self._second_godown()
+		response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name,
+			"splits": [{"godown": self.godown.name, "quantity": 1.000000001},
+				{"godown": second.name, "quantity": 1.999999999}]}])
+		self.assertTrue(response["success"], response)
+		stored_total = frappe.db.sql("select sum(requested_quantity) from `tabOrder Godown Allocation` where parent=%s", order.name)[0][0]
+		self.assertEqual(stored_total, 3)
+
+	def test_split_audit_failure_rolls_back_all_child_rows(self):
+		order = self._order()
+		second = self._second_godown()
+		original_get_doc = frappe.get_doc
+
+		def fail_status_log(*args, **kwargs):
+			if args and isinstance(args[0], dict) and args[0].get("doctype") == "Order Status Log":
+				raise RuntimeError("Audit storage failed")
+			return original_get_doc(*args, **kwargs)
+
+		with patch.object(frappe, "get_doc", side_effect=fail_status_log):
+			response = assign_godowns(order.name, [{"allocation": order.godown_allocations[0].name,
+				"splits": [{"godown": self.godown.name, "quantity": 1}, {"godown": second.name, "quantity": 2}]}])
+		self.assertFalse(response["success"])
+		order.reload()
+		self.assertEqual(len(order.godown_allocations), 1)
+		self.assertFalse(order.godown_allocations[0].godown)
+		self.assertEqual(order.godown_allocations[0].requested_quantity, 3)
+		self.assertEqual(frappe.db.count("Order Godown Allocation", {"parent": order.name}), 1)
+		self.assertFalse(frappe.db.exists("Order Status Log", {"order": order.name}))
 
 	def test_missing_godown_blocks_api_and_direct_processing(self):
 		order = self._order()
@@ -186,10 +338,144 @@ class TestGodownAssignment(FrappeTestCase):
 		frappe.set_user(allocator.name)
 		visible = frappe.get_list("Order", filters={"customer": self.customer.name}, pluck="name")
 		self.assertIn(pending.name, visible)
-		self.assertNotIn(assigned.name, visible)
+		self.assertIn(assigned.name, visible)
 		self.assertTrue(pending.has_permission("read"))
 		self.assertFalse(pending.has_permission("write"))
-		self.assertFalse(assigned.has_permission("read"))
+		self.assertTrue(assigned.has_permission("read"))
+		self.assertFalse(assigned.has_permission("write"))
+
+	def test_placed_assignments_can_be_replaced_with_exact_item_distribution(self):
+		order = self._order(mixed=True)
+		second = self._second_godown()
+		response = godown_assignment.replace_assignments(order.name, [{"item": self.item.name,
+			"splits": [{"godown": second.name, "quantity": 4}, {"godown": self.godown.name, "quantity": 1}]}])
+		self.assertTrue(response["success"], response)
+		order.reload()
+		self.assertEqual(order.status, "Placed")
+		self.assertEqual(order.items[0].requested_quantity, 5)
+		self.assertEqual([(row.godown, row.requested_quantity) for row in order.godown_allocations], [(second.name, 4), (self.godown.name, 1)])
+		self.assertFalse(order.godown_assignment_pending)
+		log = frappe.get_last_doc("Order Status Log", filters={"order": order.name})
+		self.assertIn("Before:", log.note)
+		self.assertIn("After:", log.note)
+
+	def test_edit_options_group_all_placed_rows_by_item_with_current_quantities(self):
+		order = self._order(mixed=True)
+		response = godown_assignment.assignment_options(order.name, edit=1)
+		self.assertTrue(response["success"], response)
+		self.assertTrue(response["data"]["editing"])
+		self.assertEqual(len(response["data"]["allocations"]), 1)
+		row = response["data"]["allocations"][0]
+		self.assertEqual(row["item"], self.item.name)
+		self.assertEqual(row["quantity"], 5)
+		self.assertEqual(row["current_allocations"], {self.godown.name: 2})
+
+	def test_edit_options_aggregate_decimal_duplicates_without_binary_rounding(self):
+		response = submit(self.customer.name, [
+			{"item": self.item.name, "quantity": 0.1},
+			{"item": self.item.name, "quantity": 0.2, "godown": self.godown.name},
+		])
+		self.assertTrue(response["success"], response)
+		order = frappe.get_doc("Order", response["data"]["order"])
+		self.assertTrue(self._assign(order)["success"])
+		response = godown_assignment.assignment_options(order.name, edit=1)
+		self.assertTrue(response["success"], response)
+		row = response["data"]["allocations"][0]
+		self.assertEqual(row["current_allocations"], {self.godown.name: 0.3})
+		response = godown_assignment.replace_assignments(order.name, [{"item": row["item"],
+			"splits": [{"godown": self.godown.name, "quantity": row["current_allocations"][self.godown.name]}]}])
+		self.assertTrue(response["success"], response)
+
+	def test_reassignment_retains_matching_godown_identity_and_stock_evidence(self):
+		order = self._order(mixed=True)
+		second = self._second_godown()
+		selected = order.godown_allocations[1]
+		frappe.db.set_value("Order Godown Allocation", selected.name, {
+			"stock_shown_at_order_time": 7, "stock_snapshot_at": "2026-09-01 10:00:00"})
+		response = godown_assignment.replace_assignments(order.name, [{"item": self.item.name,
+			"splits": [{"godown": self.godown.name, "quantity": 1}, {"godown": second.name, "quantity": 4}]}])
+		self.assertTrue(response["success"], response)
+		order.reload()
+		retained, added = order.godown_allocations
+		self.assertEqual(retained.name, selected.name)
+		self.assertEqual(retained.stock_shown_at_order_time, 7)
+		self.assertEqual(str(retained.stock_snapshot_at), "2026-09-01 10:00:00")
+		self.assertEqual(added.stock_shown_at_order_time, 0)
+		self.assertIsNone(added.stock_snapshot_at)
+
+	def test_reassignment_is_locked_after_processing_and_on_historical_fulfillment(self):
+		order = self._order()
+		self.assertTrue(self._assign(order)["success"])
+		self.assertTrue(mark_processing(order.name)["success"])
+		response = godown_assignment.replace_assignments(order.name, [{"item": self.item.name,
+			"splits": [{"godown": self.godown.name, "quantity": 3}]}])
+		self.assertFalse(response["success"])
+		self.assertFalse(godown_assignment.assignment_options(order.name, edit=1)["success"])
+		order.reload()
+		order.flags.in_godown_reassignment = True
+		order.godown_allocations[0].requested_quantity = 2
+		with self.assertRaises(frappe.ValidationError):
+			order.save(ignore_permissions=True)
+		order = self._order()
+		order.godown_allocations[0].fulfilled_quantity = 1
+		order.save(ignore_permissions=True)
+		response = godown_assignment.replace_assignments(order.name, [{"item": self.item.name,
+			"splits": [{"godown": self.godown.name, "quantity": 3}]}])
+		self.assertFalse(response["success"])
+		self.assertIn("fulfilled", response["error"]["message"])
+
+	def test_reassignment_requires_authorized_role_and_each_item_exactly_once(self):
+		order = self._order()
+		user = self._create_role_user(uuid4().hex + "@example.com", "Branch Employee")
+		frappe.set_user(user.name)
+		assignments = [{"item": self.item.name, "splits": [{"godown": self.godown.name, "quantity": 3}]}]
+		self.assertFalse(godown_assignment.replace_assignments(order.name, assignments)["success"])
+		order.flags.in_godown_reassignment = True
+		order.godown_allocations[0].godown = self.godown.name
+		with self.assertRaises(frappe.ValidationError):
+			order.save(ignore_permissions=True)
+		frappe.set_user("Administrator")
+		for payload in ([], assignments + assignments,
+			[{"item": self.item.name, "splits": [{"godown": self.godown.name, "quantity": 2}]}],
+			[{"item": self.item.name, "splits": [{"godown": self.godown.name, "quantity": 1.0000000005}, {"godown": self._second_godown().name, "quantity": 1.9999999995}]}]):
+			response = godown_assignment.replace_assignments(order.name, payload)
+			self.assertFalse(response["success"])
+			self.assertEqual(response["http_status_code"], 400)
+		order.reload()
+		self.assertFalse(order.godown_allocations[0].godown)
+
+	def test_reassignment_audit_failure_restores_previous_distribution(self):
+		order = self._order(mixed=True)
+		second = self._second_godown()
+		before = [(row.name, row.godown, row.requested_quantity) for row in order.godown_allocations]
+		original_get_doc = frappe.get_doc
+
+		def fail_status_log(*args, **kwargs):
+			if args and isinstance(args[0], dict) and args[0].get("doctype") == "Order Status Log":
+				raise RuntimeError("Audit storage failed")
+			return original_get_doc(*args, **kwargs)
+
+		with patch.object(frappe, "get_doc", side_effect=fail_status_log):
+			response = godown_assignment.replace_assignments(order.name, [{"item": self.item.name,
+				"splits": [{"godown": second.name, "quantity": 5}]}])
+		self.assertFalse(response["success"])
+		order.reload()
+		self.assertEqual([(row.name, row.godown, row.requested_quantity) for row in order.godown_allocations], before)
+
+	def test_reassignment_cannot_omit_another_requested_item(self):
+		other = self._create_item(self.prefix + " other", self.item.root_stock_group)
+		response = submit(self.customer.name, [
+			{"item": self.item.name, "quantity": 3, "godown": self.godown.name},
+			{"item": other.name, "quantity": 2, "godown": self.godown.name},
+		])
+		self.assertTrue(response["success"], response)
+		order = frappe.get_doc("Order", response["data"]["order"])
+		before = [(row.name, row.item, row.godown, row.requested_quantity) for row in order.godown_allocations]
+		response = godown_assignment.replace_assignments(order.name, [{"item": self.item.name,
+			"splits": [{"godown": self.godown.name, "quantity": 3}]}])
+		self.assertFalse(response["success"])
+		order.reload()
+		self.assertEqual([(row.name, row.item, row.godown, row.requested_quantity) for row in order.godown_allocations], before)
 
 	def test_inactive_godown_rejected_at_placement_and_assignment(self):
 		order = self._order()

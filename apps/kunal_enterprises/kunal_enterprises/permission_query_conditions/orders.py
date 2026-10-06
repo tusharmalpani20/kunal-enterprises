@@ -20,8 +20,9 @@ def get_permission_query_conditions(user=None):
 		f"({_table('Order')}.{_column('godown_assignment_pending')} = 1 "
 		f"and {_table('Order')}.{_column('status')} not in ({closed_statuses}))"
 	)
+	allocator_condition = f"({_table('Order')}.{_column('status')} = 'Placed' or {pending_condition})"
 	if not roles.intersection(BRANCH_ORDER_ROLES):
-		return pending_condition if GODOWN_ALLOCATOR_ROLE in roles else "1 = 0"
+		return allocator_condition if GODOWN_ALLOCATOR_ROLE in roles else "1 = 0"
 
 	user_sql = frappe.db.escape(user)
 	status_condition = ""
@@ -53,7 +54,7 @@ def get_permission_query_conditions(user=None):
 		)
 	"""
 	if GODOWN_ALLOCATOR_ROLE in roles:
-		return f"({pending_condition} or ({branch_condition}))"
+		return f"({allocator_condition} or ({branch_condition}))"
 	return branch_condition
 
 
@@ -68,7 +69,9 @@ def has_permission(doc, user=None, permission_type=None):
 		# Allocation changes go through the guarded assignment API, never generic Desk writes.
 		if permission_type not in (None, "read", "select"):
 			return False
-		if doc.get("godown_assignment_pending") and doc.status not in GODOWN_ASSIGNMENT_CLOSED_STATUSES:
+		if doc.status == "Placed" or (
+			doc.get("godown_assignment_pending") and doc.status not in GODOWN_ASSIGNMENT_CLOSED_STATUSES
+		):
 			return True
 
 	if not roles.intersection(BRANCH_ORDER_ROLES):
