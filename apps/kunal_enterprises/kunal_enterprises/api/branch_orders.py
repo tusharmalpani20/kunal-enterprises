@@ -29,10 +29,12 @@ def mark_processing(branch, order, role):
 		if not _order_is_visible_for_branch(order, branch, effective_role):
 			frappe.throw("Order is not visible for this Branch", title="Branch Access Required")
 
-		order_doc = frappe.get_doc("Order", order)
+		order_doc = frappe.get_doc("Order", order, for_update=True)
 		if order_doc.status != "Placed":
 			frappe.throw("Only Placed orders can move to Processing", title="Invalid Order Status")
 		order_doc.validate_processing_godowns()
+		if not _order_is_entirely_allocated_to_branch(order, branch):
+			frappe.throw("Every godown allocation must belong to this Branch; ask an Owner, Admin, Godown Allocator or Order Coordinator to process split orders", title="Entire Order Required")
 		from_status = order_doc.status
 		order_doc.status = "Processing"
 		order_doc.save(ignore_permissions=True)
@@ -55,8 +57,10 @@ def mark_visible_order_processing(order):
 			message="Branch role is required",
 			title="Branch Access Required",
 		)
-		branch = _visible_branch_for_order(order, effective_role)
+		branch = _visible_branch_for_order(order, effective_role, entire_order=True)
 		if not branch:
+			if _visible_branch_for_order(order, effective_role):
+				frappe.throw("Every godown allocation must belong to one permitted Branch", title="Entire Order Required")
 			frappe.throw("Order is not visible for this Branch", title="Branch Access Required")
 
 		return mark_processing(branch, order, effective_role)
@@ -88,11 +92,20 @@ def _current_user_has_branch_permission(branch):
 	)
 
 
-def _visible_branch_for_order(order, role):
+def _visible_branch_for_order(order, role, entire_order=False):
 	for branch in _current_user_active_branches():
-		if _order_is_visible_for_branch(order, branch, role):
+		if _order_is_visible_for_branch(order, branch, role) and (
+			not entire_order or _order_is_entirely_allocated_to_branch(order, branch)
+		):
 			return branch
 	return None
+
+
+def _order_is_entirely_allocated_to_branch(order, branch):
+	# A user's separate branch permissions must not be combined for a whole-order action.
+	godowns = set(_active_branch_godowns(branch))
+	allocations = frappe.get_all("Order Godown Allocation", filters={"parent": order, "parenttype": "Order"}, pluck="godown")
+	return bool(allocations) and all(godown and godown in godowns for godown in allocations)
 
 
 def _current_user_active_branches():

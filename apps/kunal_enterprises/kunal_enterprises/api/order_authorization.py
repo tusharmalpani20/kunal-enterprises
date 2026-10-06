@@ -8,8 +8,9 @@ BRANCH_EMPLOYEE_ROLE = "Branch Employee"
 
 OWNER_ADMIN_ROLES = (OWNER_ROLE, ADMIN_ROLE)
 BRANCH_ROLES = (BRANCH_MANAGER_ROLE, BRANCH_EMPLOYEE_ROLE)
+PROCESSING_ROLES = (OWNER_ROLE, ADMIN_ROLE, "Godown Allocator", "Order Coordinator")
 GODOWN_ASSIGNMENT_ROLES = (OWNER_ROLE, ADMIN_ROLE, "Godown Allocator")
-ORDER_ROLE_PRIORITY = (OWNER_ROLE, ADMIN_ROLE, "Godown Allocator", BRANCH_MANAGER_ROLE, BRANCH_EMPLOYEE_ROLE)
+ORDER_ROLE_PRIORITY = (OWNER_ROLE, ADMIN_ROLE, "Godown Allocator", "Order Coordinator", BRANCH_MANAGER_ROLE, BRANCH_EMPLOYEE_ROLE)
 
 
 def effective_order_role(allowed_roles, role_hint=None, message="Required role is missing", title="Permission Required"):

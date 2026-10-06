@@ -1,7 +1,7 @@
 import frappe
 from frappe.utils import now_datetime
 
-from kunal_enterprises.api.order_authorization import OWNER_ADMIN_ROLES, effective_order_role
+from kunal_enterprises.api.order_authorization import BRANCH_ROLES, OWNER_ADMIN_ROLES, PROCESSING_ROLES, effective_order_role
 from kunal_enterprises.api.utils import create_success_response, handle_error_response
 
 
@@ -84,19 +84,46 @@ def mark_processing(order, role=None):
 	savepoint = "mark_processing_transition"
 	frappe.db.savepoint(savepoint)
 	try:
-		order_doc, effective_role = _load_owner_admin_order(order, role)
+		effective_role = effective_order_role(PROCESSING_ROLES, role,
+			"A processing role is required", "Processing Permission Required")
+		order_doc = frappe.get_doc("Order", order, for_update=True)
 		if order_doc.status != "Placed":
 			frappe.throw("Only Placed orders can move to Processing", title="Invalid Order Status")
 		order_doc.validate_processing_godowns()
 		_transition_order(order_doc, "Processing", effective_role, f"{effective_role} moved order to Processing")
-		frappe.db.release_savepoint(savepoint)
-		return create_success_response(
+		can_read_order = bool(frappe.has_permission("Order", "read", doc=order_doc))
+		response = create_success_response(
 			"Order moved to Processing",
-			{"order": order_doc.name, "status": order_doc.status},
+			{"order": order_doc.name, "status": order_doc.status,
+				"can_read_order": can_read_order},
 		)
+		frappe.db.release_savepoint(savepoint)
+		return response
 	except Exception as error:
 		frappe.db.rollback(save_point=savepoint)
 		return handle_error_response(error, "Unable to move order to Processing")
+
+
+@frappe.whitelist(methods=["GET"])
+def processing_options(order):
+	"""Button eligibility uses the same branch boundary as the transition API."""
+	try:
+		role = effective_order_role(PROCESSING_ROLES + BRANCH_ROLES,
+			message="A processing role is required", title="Processing Permission Required")
+		doc = frappe.get_doc("Order", order)
+		doc._set_godown_assignment_pending()
+		can_process = doc.status == "Placed" and not doc.godown_assignment_pending
+		if can_process:
+			godowns = {row.godown for row in doc.godown_allocations}
+			active = set(frappe.get_all("Tally Godown",
+				filters={"name": ("in", tuple(godowns)), "is_active": 1}, pluck="name"))
+			can_process = bool(godowns) and godowns == active
+		if role in BRANCH_ROLES:
+			from kunal_enterprises.api.branch_orders import _visible_branch_for_order
+			can_process = can_process and bool(_visible_branch_for_order(order, role, entire_order=True))
+		return create_success_response("Processing options", {"can_process": bool(can_process)})
+	except Exception as error:
+		return handle_error_response(error, "Unable to load processing options")
 
 
 def _load_owner_admin_order(order, role=None):
