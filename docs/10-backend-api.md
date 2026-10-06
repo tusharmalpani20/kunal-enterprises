@@ -746,13 +746,13 @@ Response:
 
 `POST /api/method/kunal_enterprises.api.godown_assignment.assign_godowns` uses a Desk session with Owner, Admin, or Godown Allocator permission. Pass `order` and `assignments`, where each assignment contains the Order allocation child-row name (`allocation`) and an active `godown`. Only unassigned allocations can be assigned or split; requested item totals and existing selections cannot change. For a split, pass `splits: [{godown, quantity}, ...]` instead of `godown`; the split quantities must total that allocation’s requested quantity. `GET /api/method/kunal_enterprises.api.godown_assignment.assignment_options` supplies the modal’s unassigned rows, active godowns, and latest synced available stock under the same role guard. The response includes `godown_assignment_pending`. Assignment is atomic and creates an actor audit log. See [optional-godown assignment](19-optional-godown-assignment.md) for the payload and deployment details.
 
-### Branch Employee Mark Processing
+### Branch Mark Processing
 
 ```http
 POST /api/method/kunal_enterprises.api.branch_orders.mark_processing
 ```
 
-The current Frappe session user must have `Branch Employee` and a matching `Portal Branch` `User Permission` for `branch`.
+The current Frappe session user must have `Branch Manager` or `Branch Employee` and a matching `Portal Branch` `User Permission` for `branch`. Every allocation must belong to an active godown mapping for that one branch. Having permissions for multiple branches does not allow processing an order split between them. Order visibility still requires only one matching allocation; processing requires the entire order.
 
 Request:
 
@@ -1076,3 +1076,17 @@ Portal endpoints require Owner, Admin, or Order Coordinator:
   allowed active items for that Customer plus active godowns.
 
 See [Quick orders](20-quick-orders.md) for the portal and mobile workflow.
+
+
+### Whole-order processing permissions
+
+`POST kunal_enterprises.api.order_controls.mark_processing` allows Owner, Admin,
+Godown Allocator and Order Coordinator to move any fully assigned Placed order to
+Processing, including orders split across branches. The Administrator account
+retains its override. Other Owner/Admin controls keep their existing permissions.
+
+`GET kunal_enterprises.api.order_controls.processing_options?order=...` returns
+`data.can_process` for the Desk button. Branch users qualify only when every
+allocation belongs to one of their permitted active branches. The transition
+endpoints recheck permissions, Placed status and active godowns, and write an
+Order Status Log. Missing assignments block Processing for all roles. Processing locks the Order while checking and changing its status, coordinating with allocation edits. The Desk action requires saved changes and ignores stale eligibility responses.

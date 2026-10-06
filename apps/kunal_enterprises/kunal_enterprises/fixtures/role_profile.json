@@ -86,6 +86,7 @@
  {
   "docstatus": 0,
   "doctype": "Role Profile",
+  "modified": "2026-10-06 18:35:38.409401",
   "name": "Godown Allocator",
   "role_profile": "Godown Allocator",
   "roles": [
@@ -100,6 +101,7 @@
  {
   "docstatus": 0,
   "doctype": "Role Profile",
+  "modified": "2026-10-06 18:35:38.427868",
   "name": "Order Coordinator",
   "role_profile": "Order Coordinator",
   "roles": [
