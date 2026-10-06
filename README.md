@@ -63,6 +63,7 @@ Run the local verification suite:
 ## Handoff Documents
 
 - `docs/10-backend-api.md`: backend API request/response contract.
+- `docs/19-optional-godown-assignment.md`: optional godowns, allocator role/workspace fixtures, assignment API, and migration.
 - `docs/11-delivery-audit.md`: current delivery evidence and unresolved operational gates.
 - `docs/12-operational-readiness-checklist.md`: optional external Tally and WhatsApp proof checklist for production operations.
 - `docs/13-mobile-ui-coverage.md`: Goal 3 screen/state coverage.

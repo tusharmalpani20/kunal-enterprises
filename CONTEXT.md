@@ -45,7 +45,7 @@ An admin-created mobile app user who places orders on behalf of Customers.
 _Avoid_: Customer, self-signup user
 
 **Order**:
-A Frappe-owned customer request for items from one or more godowns, not a stock reservation or Tally invoice.
+A Frappe-owned customer request for item quantities, optionally allocated to godowns at placement, not a stock reservation or Tally invoice.
 _Avoid_: Sales order, invoice, reservation
 
 **Order Quantity**:
@@ -81,6 +81,8 @@ _Avoid_: App user
 - A **Customer** can have **Customer App Access** only when a **Client Code** is present and access is approved.
 - A **Mobile Login Identity** can belong to either one **Customer** or one sales employee, never both.
 - A **Sales Employee** is always created by an internal portal user and never self-registers.
+- Godown selection is optional at placement. Every requested quantity must have a godown before an **Order** can enter Processing.
+- A **Godown Allocator**, Owner, or Admin may fill missing godowns without changing requested items, quantities, or previously selected godowns.
 - An **Order** does not reduce or reserve Tally stock.
 - An **Order** does not store pricing, rates, discounts, tax, or value in Frappe.
 - An **Order** is fulfilled later through Tally Delivery Challan and/or Sales Invoice reconciliation.

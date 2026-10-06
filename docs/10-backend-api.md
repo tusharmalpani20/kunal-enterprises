@@ -486,9 +486,11 @@ Auth-Token: Bearer <access_token>
 
 Customer submissions require a Customer token matching `customer`. Sales Employee submissions require a Sales Employee token matching `sales_employee`.
 
-Submission revalidates Customer App Access, Sales Employee status/assignment, Product Group item access, positive quantity, and active Tally Godown membership. Active zero-stock godowns remain valid because stock is advisory; inactive or unknown godowns are rejected once Tally Godown masters have been synced.
+Submission revalidates Customer App Access, Sales Employee status/assignment, Product Group item access, positive quantity, and active Tally Godown membership when a godown is supplied. Active zero-stock godowns remain valid because stock is advisory; inactive or unknown godowns are rejected once Tally Godown masters have been synced.
 
-After submission, requested Order item lines and godown allocation quantities are immutable. Reconciliation and Owner/Admin controls can still update fulfillment/status fields without changing the original request.
+The `godown` field is optional on each allocation. Omit it (or send null/empty) to place an unassigned quantity. Assigned and unassigned quantities may coexist, and duplicates merge separately per item/godown. Unassigned rows do not retain godown-specific stock evidence. Submission, history, and detail responses include `godown_assignment_pending`. Every requested quantity must have a godown before Processing.
+
+After submission, requested Order item lines and godown allocation quantities are immutable. A Godown Allocator, Owner, or Admin can fill missing godowns through the controlled assignment endpoint; previously selected godowns remain fixed. Reconciliation and Owner/Admin controls can still update fulfillment/status fields without changing the original request.
 
 Order-facing DocTypes remain quantity-only and do not expose price, rate, amount, tax, discount, value, or currency fields.
 
@@ -729,6 +731,10 @@ Response:
   }
 }
 ```
+
+### Assign Missing Godowns
+
+`POST /api/method/kunal_enterprises.api.godown_assignment.assign_godowns` uses a Desk session with Owner, Admin, or Godown Allocator permission. Pass `order` and `assignments`, where each assignment contains the Order allocation child-row name (`allocation`) and an active `godown`. Only blank godowns can be filled; requested quantities and existing selections cannot change. The response includes `godown_assignment_pending`. Assignment is atomic and creates an actor audit log. See [optional-godown assignment](19-optional-godown-assignment.md) for the payload and deployment details.
 
 ### Branch Employee Mark Processing
 

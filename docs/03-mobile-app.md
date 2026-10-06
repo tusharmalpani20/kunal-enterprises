@@ -177,8 +177,8 @@ Customer order flow:
 4. App loads allowed items under that selection.
 5. Customer selects an item.
 6. App shows latest synced stock by godown.
-7. Customer selects one or more godowns.
-8. Customer enters quantity for each selected godown.
+7. Customer optionally selects one or more godowns, or chooses Add without godown.
+8. Customer enters the requested quantity, with or without a godown.
 9. Customer adds item to cart/order.
 10. Customer may add more items.
 11. App shows order summary.
@@ -199,8 +199,8 @@ Sales employee order flow:
 6. App loads allowed items.
 7. Sales employee selects item.
 8. App shows latest synced stock by godown.
-9. Sales employee selects one or more godowns.
-10. Sales employee enters quantity for each selected godown.
+9. Sales employee optionally selects one or more godowns, or chooses Add without godown.
+10. Sales employee enters the requested quantity, with or without a godown.
 11. Sales employee adds item to cart/order.
 12. Sales employee may add more items.
 13. Sales employee may add a note.
@@ -271,6 +271,8 @@ The cart/order draft should support:
 - Removing item
 - Removing godown allocation
 - Order summary before confirmation
+
+Quantities without a godown display as Godown not assigned and do not trigger godown-specific stock warnings. Internal staff must assign every requested quantity before Processing.
 
 If the same item and same godown are added more than once, the app/backend should merge them into one row by summing quantity. The same item can still appear under different godowns.
 
