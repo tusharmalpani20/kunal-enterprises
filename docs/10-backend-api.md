@@ -564,6 +564,14 @@ Auth-Token: Bearer <access_token>
 
 Customer history is scoped by `customer` and includes both self-placed orders and orders placed by Sales Employees for that Customer.
 
+For the customer mobile combined feed, add `include_quick_orders=1`. This requires
+a matching Customer token and returns Orders plus unconverted Quick Order Requests
+in `data.orders`, using shared `limit` and `offset`. Entries have `entry_type`
+(`order` or `quick_order`); converted Orders retain `quick_order_request` and
+their source request is omitted to avoid duplication. `has_more` and `next_offset`
+describe the combined feed. Authenticated customer Order details include
+`quick_order_text` from the matching converted request for the Order Note tab.
+
 Sales Employee history can be requested without a Customer filter:
 
 ```http
@@ -1043,3 +1051,28 @@ Reconciliation runs from synced `Tally Voucher` records.
 - `Order Reconciliation Log` stores both `reason_code` and `message`; Manual Review logs require both fields. Examples include `CUSTOMER_CLIENT_CODE_MISMATCH`, `EXTRA_VOUCHER_ITEM`, `OVER_FULFILLMENT`, and `AMBIGUOUS_DUPLICATE_MOVEMENT`.
 
 `assignment_options` with `edit=1` returns item-grouped Placed-order rows with saved `current_allocations`. `POST /api/method/kunal_enterprises.api.godown_assignment.replace_assignments` accepts every requested item as `{item, splits: [{godown, quantity}]}`; each item’s split must preserve its original requested total. This action requires Placed status without fulfillment history, records before/after allocation audit details, and uses the same role guard.
+
+## Quick Order Requests
+
+Customer-token-only endpoints under `kunal_enterprises.api.quick_orders`:
+
+- `submit` (POST): `text` (1–5,000 nonblank characters), optional `customer`
+  must match token identity. Returns request detail.
+- `history` (GET): optional `customer`, `limit`, `offset`; returns `requests`,
+  `has_more`, and `next_offset`.
+- `detail` (GET): `request`, optional `customer`; returns only the token
+  Customer's own request, including status, original text, rejection reason,
+  and resulting `order`/`portal_reference_number` when converted.
+
+Portal endpoints require Owner, Admin, or Order Coordinator:
+
+- `start_review` (POST): `request`; Pending Review → In Review.
+- `reject` (POST): `request`, nonblank `reason`; Pending Review/In Review → Rejected.
+- `convert` (POST): `request`, optional `allocations` in the existing order
+  item/quantity/optional-godown format. Defaults to the saved request items.
+  Locks the request and creates/links a regular Order atomically. Repeated
+  calls return the existing Order instead of creating another.
+- `reviewer_options` (GET): `request`, `search`, `limit`, `offset`; returns
+  allowed active items for that Customer plus active godowns.
+
+See [Quick orders](20-quick-orders.md) for the portal and mobile workflow.
