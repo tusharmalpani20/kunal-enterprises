@@ -1,7 +1,7 @@
 [
  {
   "charts": [],
-  "content": "[{\"id\":\"operation-workspace-title\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Operation</span>\",\"col\":12}},{\"id\":\"operation-top-space\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"operation-section-orders\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Orders</b></span>\",\"col\":12}},{\"id\":\"operation-shortcut-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Orders\",\"col\":3}},{\"id\":\"operation-shortcut-placed-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Placed Orders\",\"col\":3}},{\"id\":\"operation-shortcut-processing-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Processing Orders\",\"col\":3}},{\"id\":\"operation-shortcut-manual-review-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Manual Review Orders\",\"col\":3}},{\"id\":\"operation-assignment-space\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"operation-section-godown-assignment\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Godown Assignment</b></span>\",\"col\":12}},{\"id\":\"operation-shortcut-pending-godown-assignment\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pending Godown Assignment\",\"col\":3}}]",
+  "content": "[{\"id\":\"operation-workspace-title\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Operation</span>\",\"col\":12}},{\"id\":\"operation-top-space\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"operation-section-orders\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Orders</b></span>\",\"col\":12}},{\"id\":\"operation-shortcut-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Orders\",\"col\":3}},{\"id\":\"operation-shortcut-placed-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Placed Orders\",\"col\":3}},{\"id\":\"operation-shortcut-processing-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Processing Orders\",\"col\":3}},{\"id\":\"operation-shortcut-manual-review-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Manual Review Orders\",\"col\":3}},{\"id\":\"operation-assignment-space\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"operation-section-godown-assignment\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Godown Assignment</b></span>\",\"col\":12}},{\"id\":\"operation-shortcut-pending-godown-assignment\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pending Godown Assignment\",\"col\":3}},{\"id\":\"operation-quick-order-space\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"operation-section-quick-orders\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick Orders</b></span>\",\"col\":12}},{\"id\":\"operation-shortcut-quick-order-requests\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Quick Order Requests\",\"col\":3}},{\"id\":\"operation-shortcut-pending-quick-orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pending Quick Orders\",\"col\":3}},{\"id\":\"operation-shortcut-quick-orders-in-review\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Quick Orders In Review\",\"col\":3}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -50,6 +50,12 @@
     "parentfield": "roles",
     "parenttype": "Workspace",
     "role": "Godown Allocator"
+   },
+   {
+    "parent": "Operation",
+    "parentfield": "roles",
+    "parenttype": "Workspace",
+    "role": "Order Coordinator"
    }
   ],
   "sequence_id": 1.0,
@@ -136,6 +142,57 @@
     "report_ref_doctype": null,
     "restrict_to_domain": null,
     "stats_filter": "[[\"Order\", \"godown_assignment_pending\", \"=\", 1, false], [\"Order\", \"status\", \"not in\", [\"Cancelled\", \"Partially Closed\"], false]]",
+    "type": "DocType",
+    "url": null
+   },
+   {
+    "color": "Grey",
+    "doc_view": "List",
+    "format": null,
+    "icon": null,
+    "kanban_board": null,
+    "label": "Quick Order Requests",
+    "link_to": "Quick Order Request",
+    "parent": "Operation",
+    "parentfield": "shortcuts",
+    "parenttype": "Workspace",
+    "report_ref_doctype": null,
+    "restrict_to_domain": null,
+    "stats_filter": "[]",
+    "type": "DocType",
+    "url": null
+   },
+   {
+    "color": "Grey",
+    "doc_view": "List",
+    "format": null,
+    "icon": null,
+    "kanban_board": null,
+    "label": "Pending Quick Orders",
+    "link_to": "Quick Order Request",
+    "parent": "Operation",
+    "parentfield": "shortcuts",
+    "parenttype": "Workspace",
+    "report_ref_doctype": null,
+    "restrict_to_domain": null,
+    "stats_filter": "[[\"Quick Order Request\", \"status\", \"=\", \"Pending Review\", false]]",
+    "type": "DocType",
+    "url": null
+   },
+   {
+    "color": "Grey",
+    "doc_view": "List",
+    "format": null,
+    "icon": null,
+    "kanban_board": null,
+    "label": "Quick Orders In Review",
+    "link_to": "Quick Order Request",
+    "parent": "Operation",
+    "parentfield": "shortcuts",
+    "parenttype": "Workspace",
+    "report_ref_doctype": null,
+    "restrict_to_domain": null,
+    "stats_filter": "[[\"Quick Order Request\", \"status\", \"=\", \"In Review\", false]]",
     "type": "DocType",
     "url": null
    }

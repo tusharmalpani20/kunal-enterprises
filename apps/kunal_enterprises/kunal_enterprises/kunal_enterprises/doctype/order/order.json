@@ -28,7 +28,8 @@
   "items_section",
   "items",
   "godown_allocations",
-  "tally_reconciliation_managed"
+  "tally_reconciliation_managed",
+  "quick_order_request"
  ],
  "fields": [
   {
@@ -179,6 +180,14 @@
    "default": "0",
    "read_only": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "quick_order_request",
+   "fieldtype": "Link",
+   "options": "Quick Order Request",
+   "label": "Quick Order Request",
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "links": [],
@@ -219,6 +228,11 @@
   },
   {
    "role": "Godown Allocator",
+   "read": 1,
+   "select": 1
+  },
+  {
+   "role": "Order Coordinator",
    "read": 1,
    "select": 1
   }

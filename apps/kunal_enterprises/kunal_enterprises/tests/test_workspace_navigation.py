@@ -12,7 +12,7 @@ WORKSPACE_NAMES = {"Operation", "Admin"}
 ADMIN_NAVIGATION_DOCTYPES = {"User", "Role", "Role Profile"}
 WORKSPACE_METADATA = {
 	"Operation": {
-		"roles": {"Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator"},
+		"roles": {"Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator"},
 		"icon": "list",
 		"indicator_color": "blue",
 	},
@@ -24,6 +24,15 @@ WORKSPACE_METADATA = {
 }
 
 OPERATION_SHORTCUTS = {
+	"Quick Order Requests": {"link_to": "Quick Order Request", "stats_filter": None},
+	"Pending Quick Orders": {
+		"link_to": "Quick Order Request",
+		"stats_filter": [["Quick Order Request", "status", "=", "Pending Review", False]],
+	},
+	"Quick Orders In Review": {
+		"link_to": "Quick Order Request",
+		"stats_filter": [["Quick Order Request", "status", "=", "In Review", False]],
+	},
 	"Pending Godown Assignment": {
 		"link_to": "Order",
 		"stats_filter": [
@@ -205,6 +214,7 @@ class TestWorkspaceNavigation(FrappeTestCase):
 
 	def test_boot_workspace_filter_keeps_only_kunal_workspaces_for_kunal_roles(self):
 		self.assert_workspace_filter(["Godown Allocator"], ["Operation"])
+		self.assert_workspace_filter(["Order Coordinator"], ["Operation"])
 		self.assert_workspace_filter(
 			["Owner"],
 			["Operation", "Admin"],
@@ -236,6 +246,7 @@ class TestWorkspaceNavigation(FrappeTestCase):
 		self.assert_workspace_page_filter(["Branch Manager"], all_workspaces, ["Operation"])
 		self.assert_workspace_page_filter(["Branch Employee"], all_workspaces, ["Operation"])
 		self.assert_workspace_page_filter(["Godown Allocator"], all_workspaces, ["Operation"])
+		self.assert_workspace_page_filter(["Order Coordinator"], all_workspaces, ["Operation"])
 
 	def test_workspace_content_references_existing_unique_shortcuts(self):
 		for workspace in self._workspace_fixtures().values():

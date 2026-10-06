@@ -9,6 +9,7 @@ ADMIN_ROLE = "Admin"
 BRANCH_MANAGER_ROLE = "Branch Manager"
 BRANCH_EMPLOYEE_ROLE = "Branch Employee"
 GODOWN_ALLOCATOR_ROLE = "Godown Allocator"
+ORDER_COORDINATOR_ROLE = "Order Coordinator"
 SYSTEM_MANAGER_ROLE = "System Manager"
 
 
@@ -56,7 +57,7 @@ def _allowed_workspace_names_for_user(user):
 		return None
 	if roles.intersection({OWNER_ROLE, ADMIN_ROLE}):
 		return {KUNAL_OPERATIONS_WORKSPACE, KUNAL_ADMIN_WORKSPACE}
-	if roles.intersection({BRANCH_MANAGER_ROLE, BRANCH_EMPLOYEE_ROLE, GODOWN_ALLOCATOR_ROLE}):
+	if roles.intersection({BRANCH_MANAGER_ROLE, BRANCH_EMPLOYEE_ROLE, GODOWN_ALLOCATOR_ROLE, ORDER_COORDINATOR_ROLE}):
 		return {KUNAL_OPERATIONS_WORKSPACE}
 	return None
 

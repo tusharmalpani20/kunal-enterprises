@@ -68,6 +68,10 @@
    "role": "Godown Allocator",
    "read": 1,
    "select": 1
+  },
+  {
+   "role": "Order Coordinator",
+   "select": 1
   }
  ],
  "sort_field": "modified",

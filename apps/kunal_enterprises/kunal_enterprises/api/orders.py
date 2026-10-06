@@ -6,7 +6,7 @@ from html import escape
 import frappe
 from frappe.utils.file_manager import save_file
 from frappe.utils.pdf import get_pdf
-from frappe.utils import get_datetime, now_datetime
+from frappe.utils import cint, get_datetime, now_datetime
 
 from kunal_enterprises.api.product_groups import item_is_allowed, resolve_product_access
 from kunal_enterprises.api.token_verification import verify_token
@@ -48,8 +48,18 @@ def submit(customer, allocations, sales_employee=None, sales_employee_note=None,
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def history(customer=None, sales_employee=None, limit=20, offset=0, headers=None):
+def history(customer=None, sales_employee=None, limit=20, offset=0, headers=None, include_quick_orders=0):
 	try:
+		if cint(include_quick_orders):
+			from kunal_enterprises.api.quick_orders import _customer_identity
+
+			customer, error = _customer_identity(customer, headers)
+			if error:
+				return error
+			if sales_employee:
+				frappe.throw("Unified Order history is only available to Customers", frappe.PermissionError)
+			_validate_order_history_access(customer)
+			return _unified_customer_history(customer, limit, offset)
 		token_error = _validate_order_token(customer, sales_employee, headers, "Order history")
 		if token_error:
 			return token_error
@@ -74,6 +84,7 @@ def history(customer=None, sales_employee=None, limit=20, offset=0, headers=None
 				"total_item_count",
 				"total_quantity",
 				"godown_assignment_pending",
+				"quick_order_request",
 			],
 			order_by="confirmation_datetime desc",
 			limit_start=_coerce_history_offset(offset),
@@ -96,7 +107,13 @@ def detail(order, customer=None, sales_employee=None, headers=None):
 			return token_error
 		order_doc = frappe.get_doc("Order", order)
 		_validate_order_detail_access(order_doc, customer, sales_employee)
-		return create_success_response("Order detail", _serialize_order_detail(order_doc, customer, sales_employee))
+		data = _serialize_order_detail(order_doc, customer, sales_employee)
+		if customer and not sales_employee and _resolve_headers(headers) is not None:
+			data["quick_order_text"] = frappe.db.get_value("Quick Order Request", {
+				"name": order_doc.quick_order_request, "order": order_doc.name,
+				"customer": customer, "status": "Converted to Order",
+			}, "text") if order_doc.quick_order_request else None
+		return create_success_response("Order detail", data)
 	except Exception as error:
 		return handle_error_response(error, "Unable to load order detail")
 
@@ -242,9 +259,39 @@ def _coerce_history_offset(offset):
 	return max(0, value)
 
 
+def _unified_customer_history(customer, limit, offset):
+	limit, offset = _coerce_history_limit(limit), _coerce_history_offset(offset)
+	# Taking the first shared window from each source contains every possible merged-page row.
+	window = offset + limit + 1
+	orders = frappe.get_all("Order", filters={"customer": customer},
+		fields=["name", "portal_reference_number", "order_source", "customer", "sales_employee",
+			"status", "confirmation_datetime", "total_item_count", "total_quantity",
+			"godown_assignment_pending", "quick_order_request"],
+		order_by="confirmation_datetime desc, name desc", limit_page_length=window)
+	requests = frappe.get_all("Quick Order Request",
+		filters={"customer": customer, "status": ("!=", "Converted to Order")},
+		fields=["name", "customer", "status", "confirmation_datetime", "text"],
+		order_by="confirmation_datetime desc, name desc", limit_page_length=window)
+	entries = [_serialize_order_summary(order) for order in orders]
+	entries.extend({
+		"entry_type": "quick_order", "name": row.name, "request": row.name,
+		"quick_order_request": row.name, "portal_reference_number": row.name,
+		"order_source": "Quick Order", "customer": row.customer, "status": row.status,
+		"display_status": row.status,
+		"confirmation_datetime": str(row.confirmation_datetime) if row.confirmation_datetime else None,
+		"text": row.text,
+	} for row in requests)
+	entries.sort(key=lambda row: (row["confirmation_datetime"] or "", row["name"]), reverse=True)
+	has_more = len(entries) > offset + limit
+	return create_success_response("Order history", {"orders": entries[offset:offset + limit],
+		"has_more": has_more, "next_offset": offset + limit if has_more else None})
+
+
 def _serialize_order_summary(order):
 	return {
+		"entry_type": "order",
 		"name": order.name,
+		"quick_order_request": order.get("quick_order_request"),
 		"portal_reference_number": order.portal_reference_number,
 		"order_source": order.order_source,
 		"customer": order.customer,

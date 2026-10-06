@@ -5,6 +5,7 @@ BRANCH_EMPLOYEE_VISIBLE_STATUSES = ("Placed", "Processing", "Manual Review")
 GLOBAL_ORDER_ROLES = {"System Manager", "Owner", "Admin"}
 BRANCH_ORDER_ROLES = {"Branch Manager", "Branch Employee"}
 GODOWN_ALLOCATOR_ROLE = "Godown Allocator"
+ORDER_COORDINATOR_ROLE = "Order Coordinator"
 GODOWN_ASSIGNMENT_CLOSED_STATUSES = ("Cancelled", "Partially Closed")
 
 
@@ -21,8 +22,19 @@ def get_permission_query_conditions(user=None):
 		f"and {_table('Order')}.{_column('status')} not in ({closed_statuses}))"
 	)
 	allocator_condition = f"({_table('Order')}.{_column('status')} = 'Placed' or {pending_condition})"
+	global_conditions = []
+	if GODOWN_ALLOCATOR_ROLE in roles:
+		global_conditions.append(allocator_condition)
+	if ORDER_COORDINATOR_ROLE in roles:
+		global_conditions.append(
+			f"exists (select 1 from {_table('Quick Order Request')} request "
+			f"where request.{_column('order')} = {_table('Order')}.{_column('name')} "
+			f"and request.{_column('status')} = 'Converted to Order')"
+		)
 	if not roles.intersection(BRANCH_ORDER_ROLES):
-		return allocator_condition if GODOWN_ALLOCATOR_ROLE in roles else "1 = 0"
+		if len(global_conditions) == 1:
+			return global_conditions[0]
+		return "(" + " or ".join(global_conditions) + ")" if global_conditions else "1 = 0"
 
 	user_sql = frappe.db.escape(user)
 	status_condition = ""
@@ -53,8 +65,8 @@ def get_permission_query_conditions(user=None):
 			{status_condition}
 		)
 	"""
-	if GODOWN_ALLOCATOR_ROLE in roles:
-		return f"({allocator_condition} or ({branch_condition}))"
+	if global_conditions:
+		return "(" + " or ".join(global_conditions + [f"({branch_condition})"]) + ")"
 	return branch_condition
 
 
@@ -64,6 +76,10 @@ def has_permission(doc, user=None, permission_type=None):
 
 	if roles.intersection(GLOBAL_ORDER_ROLES):
 		return True
+
+	if ORDER_COORDINATOR_ROLE in roles and permission_type in (None, "read", "select"):
+		if frappe.db.exists("Quick Order Request", {"order": doc.name, "status": "Converted to Order"}):
+			return True
 
 	if GODOWN_ALLOCATOR_ROLE in roles:
 		# Allocation changes go through the guarded assignment API, never generic Desk writes.

@@ -92,7 +92,7 @@ class TestFoundation(FrappeTestCase):
 		self.assertEqual(error["error"]["message"], "Not allowed")
 
 	def test_required_portal_roles_are_installed(self):
-		for role in ("Owner", "Admin", "Branch Manager", "Branch Employee"):
+		for role in ("Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator"):
 			self.assertTrue(frappe.db.exists("Role", role), role)
 
 	def test_required_goal_doctypes_are_installed(self):
@@ -169,7 +169,7 @@ class TestFoundation(FrappeTestCase):
 			"Tally Voucher": ("Owner", "Admin"),
 			"Tally Sync Run": ("Owner", "Admin"),
 			"Tally Sync Error": ("Owner", "Admin"),
-			"Order": ("Owner", "Admin", "Branch Manager", "Branch Employee"),
+			"Order": ("Owner", "Admin", "Branch Manager", "Branch Employee", "Order Coordinator"),
 			"Order PDF": ("Owner", "Admin"),
 			"Order WhatsApp Notification": ("Owner", "Admin"),
 			"Order Reconciliation Log": ("Owner", "Admin"),
@@ -181,13 +181,21 @@ class TestFoundation(FrappeTestCase):
 			for role in roles:
 				self.assertIn(role, permission_roles, f"{doctype} missing {role} permission")
 
+	def test_order_coordinator_has_read_only_order_desk_permissions(self):
+		permission = self._permissions_for("Order")["Order Coordinator"]
+		self.assertEqual(permission.read, 1)
+		self.assertEqual(permission.select, 1)
+		for action in ("write", "create", "delete", "submit", "cancel", "amend"):
+			self.assertFalse(permission.get(action), f"Order Coordinator must not have Order {action}")
+
 	def test_required_role_profiles_are_installed_without_extra_roles(self):
 		expected_profiles = {
-			"Owner": {"Owner", "Godown Allocator"},
-			"Admin": {"Admin", "Godown Allocator"},
+			"Owner": {"Owner", "Godown Allocator", "Order Coordinator"},
+			"Admin": {"Admin", "Godown Allocator", "Order Coordinator"},
 			"Branch Manager": {"Branch Manager"},
 			"Branch Employee": {"Branch Employee"},
 			"Godown Allocator": {"Godown Allocator"},
+			"Order Coordinator": {"Order Coordinator", "Godown Allocator"},
 		}
 
 		for profile, expected_roles in expected_profiles.items():
@@ -199,7 +207,7 @@ class TestFoundation(FrappeTestCase):
 
 	def test_hooks_export_only_kunal_roles_and_role_profiles(self):
 		fixture_filters = {fixture["dt"]: fixture.get("filters") for fixture in hooks.fixtures}
-		expected_roles = ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator"]
+		expected_roles = ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator"]
 
 		self.assertIn("Role", fixture_filters)
 		self.assertIn("Role Profile", fixture_filters)

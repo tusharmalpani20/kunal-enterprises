@@ -104,6 +104,10 @@
   {
    "read": 1,
    "role": "Admin"
+  },
+  {
+   "role": "Order Coordinator",
+   "select": 1
   }
  ],
  "sort_field": "modified",
