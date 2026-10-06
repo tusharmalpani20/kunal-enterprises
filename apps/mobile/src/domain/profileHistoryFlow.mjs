@@ -123,15 +123,21 @@ export function orderDetailForMobile(order, { viewerIdentityType = 'Customer' } 
   };
 }
 
+/**
+ * @template {{godown?: string | null}} T
+ * @param {T[]} allocations
+ * @returns {Array<{godown: string, rows: T[]}>}
+ */
 export function groupGodownAllocationsForMobile(allocations = []) {
-  const groups = new Map();
+  const groups = /** @type {Map<string, T[]>} */ (new Map());
 
   for (const allocation of allocations) {
     const godown = allocation.godown || 'Unassigned Godown';
     if (!groups.has(godown)) {
       groups.set(godown, []);
     }
-    groups.get(godown).push(allocation);
+    const rows = groups.get(godown);
+    if (rows) rows.push(allocation);
   }
 
   return [...groups.entries()]

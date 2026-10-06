@@ -44,6 +44,7 @@ export function apiErrorMessage(error) {
 
 export function detectStockChanges(cart, latestStockRows) {
   return cart.flatMap((allocation) => {
+    if (!allocation.godown) return [];
     const latest = latestStockRows.find(
       (row) => row.item === allocation.item && row.godown === allocation.godown,
     );

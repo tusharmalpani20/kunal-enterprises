@@ -332,12 +332,52 @@ export const mockApi = {
   },
 
   async submitOrder(payload) {
-    return {
-      order: 'KE-26-05-0001',
-      portal_reference_number: 'KE-26-05-0001',
+    const reference = `KE-MOCK-${String(orders.length + 1).padStart(4, '0')}`;
+    const totalQuantity = payload.allocations.reduce((total, row) => total + row.quantity, 0);
+    const summary = {
+      name: reference,
+      portal_reference_number: reference,
+      customer: payload.customer,
+      customer_name: customers.find((customer) => customer.customer === payload.customer)?.customer_name || payload.customer,
+      sales_employee: payload.sales_employee,
       status: 'Placed',
-      total_item_count: new Set(payload.allocations.map((row) => row.item)).size,
-      total_quantity: payload.allocations.reduce((total, row) => total + row.quantity, 0),
+      confirmation_datetime: new Date().toISOString(),
+      total_quantity: totalQuantity,
+    };
+    const requestedItems = new Map();
+    const allocations = payload.allocations.map((row) => {
+      const item = items.find((item) => item.name === row.item);
+      requestedItems.set(row.item, (requestedItems.get(row.item) || 0) + row.quantity);
+      return {
+        item: row.item,
+        item_name: item?.item_name || row.item,
+        unit: item?.uom,
+        godown: row.godown || null,
+        requested_quantity: row.quantity,
+        fulfilled_quantity: 0,
+        pending_quantity: row.quantity,
+      };
+    });
+    orders.unshift(summary);
+    orderDetails[reference] = {
+      ...summary,
+      placed_by_identity_type: payload.sales_employee ? 'Sales Employee' : 'Customer',
+      sales_employee_note: payload.sales_employee_note,
+      items: [...requestedItems].map(([itemId, quantity]) => ({
+        item: itemId,
+        item_name: items.find((item) => item.name === itemId)?.item_name || itemId,
+        requested_quantity: quantity,
+        fulfilled_quantity: 0,
+        pending_quantity: quantity,
+      })),
+      godown_allocations: allocations,
+    };
+    return {
+      order: reference,
+      portal_reference_number: reference,
+      status: 'Placed',
+      total_item_count: requestedItems.size,
+      total_quantity: totalQuantity,
     };
   },
 

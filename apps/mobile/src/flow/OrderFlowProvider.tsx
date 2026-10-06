@@ -113,6 +113,8 @@ function useOrderFlowState() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const catalogRequestIdRef = useRef(0);
   const itemsRequestIdRef = useRef(0);
+  const stockRequestIdRef = useRef(0);
+  const [godownStockState, setGodownStockState] = useState<{ kind: string; message?: string }>({ kind: 'idle' });
   const [stockRows, setStockRows] = useState<ItemStock[]>([]);
   const [customers, setCustomers] = useState<AllowedCustomer[]>([]);
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
@@ -529,6 +531,13 @@ function useOrderFlowState() {
     };
   }, [cartStorageKey, hasActiveModeSession, mode, step, session]);
 
+  useEffect(() => {
+    stockRequestIdRef.current += 1;
+    setGodownSelectorOpen(false);
+    setStockRows([]);
+    setGodownStockState({ kind: 'idle' });
+  }, [session?.accessToken, mode, selectedCustomer?.customer]);
+
   function chooseGroup(group: ProductGroup | null) {
     setSelectedGroup(group);
     setItemSearch('');
@@ -537,14 +546,26 @@ function useOrderFlowState() {
   }
 
   async function chooseItem(item: TallyItem) {
+    const requestId = ++stockRequestIdRef.current;
+    setSelectedItem(item);
+    setStockRows([]);
+    setQuantity('1');
+    // Quantity-only ordering must remain available while optional stock loads or fails.
+    setGodownSelectorOpen(true);
+    setGodownStockState({ kind: 'loading' });
     try {
-      setSelectedItem(item);
-      setStockRows(await api.itemStock(activeCustomer(), item.name, activeSalesEmployeeContext()));
-      setQuantity('1');
-      setGodownSelectorOpen(true);
+      const rows = await api.itemStock(activeCustomer(), item.name, activeSalesEmployeeContext());
+      if (requestId !== stockRequestIdRef.current) return;
+      setStockRows(rows);
+      setGodownStockState({ kind: 'idle' });
     } catch (error) {
+      if (requestId !== stockRequestIdRef.current) return;
       const failure = classifyApiFailure(error);
-      setSystemState(failure);
+      setGodownStockState(failure);
+      if (failure.kind === 'expired_session' || failure.kind === 'access_removed') {
+        setGodownSelectorOpen(false);
+        setSystemState(failure);
+      }
     }
   }
 
@@ -633,6 +654,22 @@ function useOrderFlowState() {
     showToast('success', 'Added to cart', `${selectedItem.item_name} from ${stock.godown}.`);
   }
 
+  function addWithoutGodown() {
+    if (!selectedItem) return;
+    const parsedQuantity = parseOrderQuantityInput(quantity);
+    if (!parsedQuantity.ok) {
+      setSystemState(parsedQuantity.state);
+      return;
+    }
+    setCart((current) => addAllocation(current, {
+      item: selectedItem.name,
+      itemName: selectedItem.item_name,
+      quantity: parsedQuantity.quantity,
+    }));
+    setGodownSelectorOpen(false);
+    showToast('success', 'Added to cart', `${selectedItem.item_name} · Godown not assigned.`);
+  }
+
   function backToItems() {
     setSelectedItem(null);
     setStockRows([]);
@@ -656,7 +693,7 @@ function useOrderFlowState() {
   }
 
   function removeCartItem(item: string) {
-    setCart((current) => removeAllocation(current, { item, godown: undefined }));
+    setCart((current) => removeAllocation(current, { item }));
   }
 
   async function submitOrder() {
@@ -1199,6 +1236,7 @@ function useOrderFlowState() {
     selectedGroup,
     selectedItem,
     godownSelectorOpen, setGodownSelectorOpen,
+    godownStockState,
     cart,
     draftCarts,
     draftCartsExpanded, setDraftCartsExpanded,
@@ -1267,6 +1305,7 @@ function useOrderFlowState() {
     clearDraftCart,
     customerForDraftCart,
     addFromGodown,
+    addWithoutGodown,
     backToItems,
     changeCartQuantity,
     removeCartItem,

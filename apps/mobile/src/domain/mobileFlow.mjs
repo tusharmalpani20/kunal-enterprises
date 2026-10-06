@@ -2,21 +2,21 @@ import { classifyApiFailure } from './sharedStateFlow.mjs';
 import { detectStockChanges } from './sharedStateFlow.mjs';
 
 export function addAllocation(cart, allocation) {
-  if (!allocation.item || !allocation.godown) {
-    throw new Error('Item and godown are required');
+  if (!allocation.item) {
+    throw new Error('Item is required');
   }
   if (!Number.isFinite(allocation.quantity) || allocation.quantity <= 0) {
     throw new Error('Order Quantity must be positive');
   }
 
-  const key = `${allocation.item}:${allocation.godown}`;
-  const existing = cart.find((row) => `${row.item}:${row.godown}` === key);
+  const key = `${allocation.item}:${allocation.godown || ''}`;
+  const existing = cart.find((row) => `${row.item}:${row.godown || ''}` === key);
   if (!existing) {
     return [...cart, { ...allocation }];
   }
 
   return cart.map((row) =>
-    `${row.item}:${row.godown}` === key
+    `${row.item}:${row.godown || ''}` === key
       ? {
           ...row,
           quantity: row.quantity + allocation.quantity,
@@ -31,7 +31,7 @@ export function updateAllocationQuantity(cart, { item, godown, quantity }) {
   if (!Number.isFinite(quantity) || quantity <= 0) {
     throw new Error('Order Quantity must be positive');
   }
-  return cart.map((row) => (row.item === item && row.godown === godown ? { ...row, quantity } : row));
+  return cart.map((row) => (row.item === item && (row.godown || '') === (godown || '') ? { ...row, quantity } : row));
 }
 
 export function parseOrderQuantityInput(value) {
@@ -50,9 +50,11 @@ export function parseOrderQuantityInput(value) {
   };
 }
 
-export function removeAllocation(cart, { item, godown }) {
-  if (godown) {
-    return cart.filter((row) => !(row.item === item && row.godown === godown));
+export function removeAllocation(cart, selection) {
+  const { item, godown } = selection;
+  // An explicit empty godown removes only the unassigned row; omitting it removes the item.
+  if (Object.hasOwn(selection, 'godown')) {
+    return cart.filter((row) => !(row.item === item && (row.godown || '') === (godown || '')));
   }
   return cart.filter((row) => row.item !== item);
 }
@@ -68,6 +70,9 @@ export function buildCustomerOrderPayload({ customer, allocations }) {
 }
 
 export function orderAllocationForApi(allocation) {
+  if (!allocation.godown) {
+    return { item: allocation.item, quantity: allocation.quantity };
+  }
 	return {
 		item: allocation.item,
 		godown: allocation.godown,
@@ -138,7 +143,7 @@ export function searchItemsForMobile(items, search) {
 }
 
 export function stockRefreshItemsForCart(cart) {
-  return [...new Set(cart.map((row) => row.item).filter(Boolean))];
+  return [...new Set(cart.filter((row) => row.godown).map((row) => row.item).filter(Boolean))];
 }
 
 export function stockReviewAfterRefresh({
@@ -193,6 +198,7 @@ export function orderTotals(cart) {
 
 export function buildConfirmationNotes(cart, latestStockRows = []) {
   const availabilityNotes = cart
+    .filter((row) => row.godown)
     .map((row) => {
       const latestStock = latestStockRows.find((stock) => stock.item === row.item && stock.godown === row.godown);
       return {

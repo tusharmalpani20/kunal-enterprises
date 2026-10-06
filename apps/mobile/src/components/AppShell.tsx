@@ -29,6 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     stockRows,
     quantity, setQuantity,
     godownSelectorOpen, setGodownSelectorOpen,
+    godownStockState,
     groupSheetOpen, setGroupSheetOpen,
     itemSearch, setItemSearch,
     revokeAndLogout,
@@ -43,6 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     switchCustomer,
     setStep,
     addFromGodown,
+    addWithoutGodown,
   } = useOrderFlow();
   const showBackButton = canGoBack && step !== 'groups' && step !== 'customer';
 
@@ -172,11 +174,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Text style={styles.fieldLabel}>Quantity to order</Text>
               <TextInput value={quantity} onChangeText={setQuantity} keyboardType="numeric" style={styles.input} />
               <View style={styles.sheetSectionHeading}>
-                <Text style={styles.fieldLabel}>Choose godown to order from</Text>
+                <Text style={styles.fieldLabel}>Choose godown to order from (optional)</Text>
                 <Text style={styles.helperText}>
                   Tap a godown to add {Number(quantity) > 0 ? quantity : 0} {selectedItem?.uom || 'units'} to your cart.
                 </Text>
               </View>
+              <RowButton
+                title="Add without godown"
+                detail="Our team will assign a godown before processing your order."
+                onPress={addWithoutGodown}
+                actionLabel="Add"
+              />
+              {godownStockState.kind === 'loading' && (
+                <Text style={styles.helperText}>Loading godown stock… You can add without a godown now.</Text>
+              )}
+              {godownStockState.kind !== 'idle' && godownStockState.kind !== 'loading' && (
+                <Text style={styles.helperText}>Godown stock is unavailable. You can still add without a godown.</Text>
+              )}
               {stockRows.map((stock) => (
                 <RowButton
                   key={stock.godown}

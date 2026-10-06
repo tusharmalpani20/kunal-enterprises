@@ -233,3 +233,11 @@ function filesUnder(directory) {
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+test('optional godown selection opens before stock finishes and ignores superseded responses', () => {
+  const source = readFileSync(new URL('../src/flow/OrderFlowProvider.tsx', import.meta.url), 'utf8');
+  const selection = source.slice(source.indexOf('  async function chooseItem('), source.indexOf('  async function chooseCustomer('));
+  assert.ok(selection.indexOf('setGodownSelectorOpen(true)') < selection.indexOf('await api.itemStock'));
+  assert.match(selection, /requestId !== stockRequestIdRef.current/);
+  assert.match(selection, /setGodownStockState\(failure\)/);
+});

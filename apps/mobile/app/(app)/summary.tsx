@@ -93,7 +93,7 @@ export default function SummaryScreen() {
                 />
                 <View style={styles.summaryItemText}>
                   <Text style={[styles.rowTitle, styles.summaryItemTitle]}>{row.itemName}</Text>
-                  <Text style={styles.rowDetail}>{row.godown}</Text>
+                  <Text style={styles.rowDetail}>{row.godown || 'Godown not assigned'}</Text>
                 </View>
                 <View style={styles.cartControls}>
                   <FeedbackPressable style={styles.iconButton} pressedStyle={styles.iconButtonPressed} onPress={() => changeCartQuantity(row, -1)}>

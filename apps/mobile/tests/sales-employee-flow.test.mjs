@@ -105,3 +105,14 @@ test('sales employee history only includes orders placed by that employee', () =
     ['KE-26-05-0001', 'KE-26-05-0003'],
   );
 });
+
+
+test('sales employee can submit unassigned quantities with the customer and note preserved', () => {
+  const payload = buildSalesEmployeeOrderPayload({ salesEmployee: 'SE-1', customer: 'CUST-1',
+    note: 'Call first', allocations: [{ item: 'ITEM-1', quantity: 2 }] });
+  assert.deepEqual(payload.allocations, [{ item: 'ITEM-1', quantity: 2 }]);
+  assert.equal(payload.customer, 'CUST-1');
+  assert.equal(payload.sales_employee, 'SE-1');
+  assert.equal(payload.sales_employee_note, 'Call first');
+  assert.equal(salesEmployeeOrderGuard({ selectedCustomer: { customer: 'CUST-1' }, allocations: payload.allocations }).canSubmit, true);
+});

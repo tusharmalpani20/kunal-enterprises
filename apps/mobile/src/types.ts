@@ -31,9 +31,9 @@ export interface ItemStock {
 export interface CartAllocation {
   item: string;
   itemName: string;
-  godown: string;
+  godown?: string | null;
   quantity: number;
-  stockShownAtOrderTime: number;
+  stockShownAtOrderTime?: number;
   stockSnapshotAt?: string;
 }
 
@@ -79,7 +79,7 @@ export interface OrderDetail extends OrderSummary {
     item: string;
     item_name?: string;
     unit?: string;
-    godown: string;
+    godown?: string | null;
     requested_quantity: number;
     fulfilled_quantity?: number;
     pending_quantity?: number;

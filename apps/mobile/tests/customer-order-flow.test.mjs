@@ -433,3 +433,37 @@ test('final submission requires backend reference before showing success', async
     },
   });
 });
+
+test('unassigned quantities merge separately and removing them preserves selected godowns', () => {
+  const selected = { item: 'ITEM-1', itemName: 'Item', godown: 'Main', quantity: 4, stockShownAtOrderTime: 8 };
+  let cart = addAllocation([selected], { item: 'ITEM-1', itemName: 'Item', quantity: 2 });
+  cart = addAllocation(cart, { item: 'ITEM-1', itemName: 'Item', godown: '', quantity: 3 });
+  assert.equal(cart.length, 2);
+  assert.equal(cart[1].quantity, 5);
+  cart = updateAllocationQuantity(cart, { item: 'ITEM-1', godown: undefined, quantity: 6 });
+  assert.equal(cart[1].quantity, 6);
+  assert.deepEqual(removeAllocation(cart, { item: 'ITEM-1', godown: undefined }), [selected]);
+  assert.deepEqual(removeAllocation(cart, { item: 'ITEM-1' }), []);
+});
+
+test('unassigned payload omits godown and stock evidence while preserving selected allocations', () => {
+  const payload = buildCustomerOrderPayload({ customer: 'CUST-1', allocations: [
+    { item: 'ITEM-1', quantity: 2, stockShownAtOrderTime: 0 },
+    { item: 'ITEM-1', godown: 'Main', quantity: 3, stockShownAtOrderTime: 8 },
+  ] });
+  assert.deepEqual(payload.allocations[0], { item: 'ITEM-1', quantity: 2 });
+  assert.equal(payload.allocations[1].godown, 'Main');
+  assert.equal(payload.allocations[1].stock_shown_at_order_time, 8);
+});
+
+test('unassigned quantities submit without godown stock refresh or warnings', async () => {
+  const cart = [{ item: 'ITEM-1', itemName: 'Item', godown: '', quantity: 99, stockShownAtOrderTime: 0 }];
+  const result = await prepareStockReviewBeforeSubmit({ cart, refreshItemStock: async () => {
+    assert.fail('There is no selected godown whose stock needs refreshing');
+  } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.review.notes, []);
+  assert.equal(result.review.shouldReview, false);
+  assert.equal(customerOrderGuard({ allocations: cart }).canSubmit, true);
+  assert.deepEqual(buildConfirmationNotes(cart, [{ item: 'ITEM-1', godown: '', quantity: 1 }]), []);
+});

@@ -166,3 +166,18 @@ test('sales employee draft carts can be listed by selected customer context', as
     { customer: 'CUST-002', rowCount: 2, totalQuantity: 5 },
   ]);
 });
+
+
+test('draft cart restores mixed assigned and unassigned quantities without inventing stock evidence', async () => {
+  const storage = memoryStorage();
+  const key = 'Sales Employee:SE-1:CUST-1';
+  const cart = [
+    { item: 'ITEM-1', itemName: 'Item', quantity: 2 },
+    { item: 'ITEM-1', itemName: 'Item', godown: 'Main', quantity: 3, stockShownAtOrderTime: 8 },
+  ];
+  await saveCart(storage, key, cart);
+  assert.deepEqual(await loadCart(storage, key), cart);
+  assert.deepEqual(await listSalesEmployeeDraftCarts(storage, 'SE-1'), [
+    { customer: 'CUST-1', rowCount: 2, totalQuantity: 5 },
+  ]);
+});

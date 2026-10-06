@@ -241,3 +241,16 @@ test('sales employee order detail labels orders placed by that employee as you',
   assert.equal(Object.hasOwn(detail, 'sales_employee_note'), true);
   assert.equal(Object.hasOwn(detail.godown_allocations[0], 'stock_shown_at_order_time'), false);
 });
+
+
+test('order detail groups missing godowns for later assignment alongside selected godowns', () => {
+  const allocations = [
+    { item: 'ITEM-1', requested_quantity: 2 },
+    { item: 'ITEM-1', godown: null, requested_quantity: 3 },
+    { item: 'ITEM-1', godown: 'Main', requested_quantity: 4 },
+  ];
+  const groups = groupGodownAllocationsForMobile(allocations);
+  const unassigned = groups.find((group) => group.godown === 'Unassigned Godown');
+  assert.equal(unassigned.rows.length, 2);
+  assert.equal(groups.find((group) => group.godown === 'Main').rows[0].requested_quantity, 4);
+});

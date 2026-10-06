@@ -38,3 +38,18 @@ test('mobile api uses live Frappe adapter when call object is available', async 
   assert.equal(groups[0].name, 'Cotton Fabric');
   assert.equal(calls[0].method, 'kunal_enterprises.api.product_groups.allowed');
 });
+
+test('fixture submission preserves mixed optional godown allocations in history and detail', async () => {
+  const api = createMobileApi({ call: null });
+  const payload = { customer: 'CUST-001', sales_employee: 'SE-001', allocations: [
+    { item: 'ITEM-COTTON-001', quantity: 2 },
+    { item: 'ITEM-COTTON-001', godown: 'Main Godown', quantity: 3, stock_shown_at_order_time: 12 },
+  ] };
+  const result = await api.submitOrder(payload);
+  const detail = await api.orderDetail(result.order, { salesEmployee: 'SE-001' });
+  assert.equal(detail.status, 'Placed');
+  assert.equal(detail.items[0].requested_quantity, 5);
+  assert.deepEqual(detail.godown_allocations.map((row) => [row.godown || null, row.requested_quantity]), [[null, 2], ['Main Godown', 3]]);
+  const history = await api.orderHistory('CUST-001', 'SE-001');
+  assert.equal(history.find((row) => row.name === result.order).total_quantity, 5);
+});
