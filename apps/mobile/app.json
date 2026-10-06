@@ -3,7 +3,7 @@
     "name": "Kunal Enterprises",
     "slug": "kunal-enterprises-mobile",
     "scheme": "kunalenterprises",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.amol909.kunal-enterprises-mobile",
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
       "edgeToEdgeEnabled": false,
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.amol909.kunalenterprisesmobile",
-      "versionCode": 2
+      "versionCode": 3
     },
     "androidStatusBar": {
       "backgroundColor": "#ffffff",
