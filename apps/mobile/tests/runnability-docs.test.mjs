@@ -16,7 +16,7 @@ test('mobile package exposes run, test, and typecheck commands for Expo handoff'
 	assert.equal(packageJson.scripts.typecheck, 'tsc --noEmit');
 });
 
-test('mobile package pins Expo SDK compatible runtime versions', () => {
+test('mobile package pins Expo runtime and installed compiler versions', () => {
 	assert.equal(packageJson.dependencies.expo, '~54.0.0');
 	assert.equal(packageJson.dependencies['@react-native-async-storage/async-storage'], '2.2.0');
 	assert.equal(packageJson.dependencies['expo-constants'], '~18.0.13');
@@ -26,7 +26,7 @@ test('mobile package pins Expo SDK compatible runtime versions', () => {
 	assert.equal(packageJson.dependencies['react-native'], '0.81.5');
 	assert.equal(packageJson.dependencies['react-native-svg'], '15.12.1');
 	assert.equal(packageJson.devDependencies['@types/react'], '~19.1.10');
-	assert.equal(packageJson.devDependencies.typescript, '~5.9.2');
+	assert.equal(packageJson.devDependencies.typescript, '6.0.3');
 	assert.equal(packageJson.overrides.postcss, '8.5.10');
 });
 

@@ -1,3 +1,8 @@
+// Expo replaces these environment references at build time; no Node runtime is required.
+declare const process: {
+  env: { NODE_ENV?: string; EXPO_PUBLIC_FRAPPE_BASE_URL?: string };
+};
+
 export const LOCAL_BASE_URL = 'http://127.0.0.1:8000';
 export const REMOTE_BASE_URL = 'https://ke-dev.hopnet.co.in';
 export const MOBILE_API_TIMEOUT_MS = 15000;
