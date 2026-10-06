@@ -1,14 +1,23 @@
 frappe.ui.form.on("Order", {
 	refresh(frm) {
+		const processing_request = frm.__processing_options_request = (frm.__processing_options_request || 0) + 1;
+		frm.remove_custom_button?.(__("Move to Processing"));
 		if (should_show_assign_godowns(frm)) {
 			const label = frm.doc.godown_assignment_pending ? __("Assign Godowns") : __("Edit Godown Assignments");
 			frm.add_custom_button(label, () => assign_godowns(frm)).addClass("btn-primary");
 		}
 		if (should_show_move_to_processing(frm)) {
-			const button = frm.add_custom_button(__("Move to Processing"), () => {
-				move_to_processing(frm);
+			const order = frm.doc.name;
+			frappe.call({
+				method: "kunal_enterprises.api.order_controls.processing_options",
+				args: { order },
+				callback(response) {
+					if (frm.__processing_options_request === processing_request && frm.doc.name === order
+						&& should_show_move_to_processing(frm) && response.message?.success && response.message.data?.can_process) {
+						frm.add_custom_button(__("Move to Processing"), () => move_to_processing(frm)).addClass("btn-primary");
+					}
+				},
 			});
-			button.addClass("btn-primary");
 		}
 		if (should_show_cancel_order(frm)) {
 			const button = frm.add_custom_button(__("Cancel Order"), () => {
@@ -75,25 +84,46 @@ function should_show_move_to_processing(frm) {
 		!frm.is_new()
 		&& frm.doc.status === "Placed"
 		&& !frm.doc.godown_assignment_pending
-		&& frappe.user_roles.some((role) => ["Branch Manager", "Branch Employee"].includes(role))
+		&& (frappe.session.user === "Administrator" || (frappe.user_roles || []).some((role) =>
+			["Owner", "Admin", "Godown Allocator", "Order Coordinator", "Branch Manager", "Branch Employee"].includes(role)))
 	);
 }
 
 function move_to_processing(frm) {
+	if (frm.__processing_busy) return;
+	if (frm.is_dirty()) {
+		frappe.msgprint(__("Save or discard your changes before moving this order to Processing."));
+		return;
+	}
+	const order = frm.doc.name;
+	frm.__processing_busy = true;
 	frappe.confirm(__("Move this order to Processing?"), () => {
+		if (frm.doc.name !== order || !should_show_move_to_processing(frm) || frm.is_dirty()) {
+			frm.__processing_busy = false;
+			return;
+		}
 		frappe.call({
-			method: "kunal_enterprises.api.branch_orders.mark_visible_order_processing",
-			args: {
-				order: frm.doc.name,
-			},
+			method: frappe.session.user === "Administrator" || (frappe.user_roles || []).some((role) =>
+				["Owner", "Admin", "Godown Allocator", "Order Coordinator"].includes(role))
+				? "kunal_enterprises.api.order_controls.mark_processing"
+				: "kunal_enterprises.api.branch_orders.mark_visible_order_processing",
+			args: { order },
 			freeze: true,
+			always() { frm.__processing_busy = false; },
 			callback(response) {
-				if (!response.exc) {
-					frm.reload_doc();
+				if (frm.doc.name !== order) return;
+				if (!response.exc && response.message?.success) {
+					if (response.message.data?.can_read_order === false) {
+						// Allocators retain their existing Placed-only visibility after this action.
+						frappe.show_alert({ message: __("Order moved to Processing"), indicator: "green" });
+						frappe.set_route("List", "Order");
+					} else {
+						frm.reload_doc();
+					}
 				}
 			},
 		});
-	});
+	}, () => { frm.__processing_busy = false; });
 }
 
 function should_show_assign_godowns(frm) {
