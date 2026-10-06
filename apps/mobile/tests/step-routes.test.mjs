@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { navigationActionForStep, routeForStep, stepForRoute } from '../src/flow/stepRoutes.mjs';
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const STEPS = ['auth', 'pending', 'customer', 'groups', 'summary', 'success', 'history', 'detail', 'profile'];
+const STEPS = ['auth', 'pending', 'customer', 'groups', 'summary', 'success', 'history', 'detail', 'profile', 'quickOrder', 'quickOrderDetail'];
 
 // Maps the URL each step routes to onto the expo-router file that serves it.
 // Route groups (auth)/(app) are not part of the URL, so we resolve them here.
@@ -21,6 +21,8 @@ const ROUTE_FILES = {
   '/history': 'app/(app)/history.tsx',
   '/detail': 'app/(app)/detail.tsx',
   '/profile': 'app/(app)/profile.tsx',
+  '/quick-order': 'app/(app)/quick-order.tsx',
+  '/quick-order-detail': 'app/(app)/quick-order-detail.tsx',
 };
 
 test('every step resolves to a route file that actually exists', () => {
@@ -80,4 +82,11 @@ test('switching between top-level sections replaces instead of stacking (tab beh
   // Even when switching tabs from a drilled-in screen
   assert.equal(navigationActionForStep('summary', 'history'), 'replace');
   assert.equal(navigationActionForStep('detail', 'groups'), 'replace');
+});
+
+
+test('quick request details drill down from unified history', () => {
+  assert.equal(navigationActionForStep('groups', 'quickOrder'), 'replace');
+  assert.equal(navigationActionForStep('history', 'quickOrderDetail'), 'navigate');
+  assert.equal(navigationActionForStep('quickOrderDetail', 'detail'), 'navigate');
 });

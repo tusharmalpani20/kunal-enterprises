@@ -10,6 +10,8 @@ const STEP_TO_ROUTE = {
   history: '/history',
   detail: '/detail',
   profile: '/profile',
+  quickOrder: '/quick-order',
+  quickOrderDetail: '/quick-order-detail',
 };
 
 const ROUTE_TO_STEP = Object.fromEntries(

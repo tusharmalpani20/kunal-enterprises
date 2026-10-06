@@ -27,7 +27,8 @@ export function shouldShowFloatingCartBar({ step, rowCount }) {
 }
 
 export function appSectionForStep(step) {
-  if (step === 'history' || step === 'detail') {
+  if (step === 'quickOrder') return 'quickOrder';
+  if (step === 'history' || step === 'detail' || step === 'quickOrderDetail') {
     return 'history';
   }
   if (step === 'profile') {

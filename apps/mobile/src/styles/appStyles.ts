@@ -119,6 +119,11 @@ export const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
+  appHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   appHeaderBackButton: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -242,6 +247,41 @@ export const styles = StyleSheet.create({
   historyLoadMore: {
     marginTop: 4,
   },
+  historyCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e4e7e4',
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+  },
+  historyCardHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  historySourceLabels: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  historySourceBadge: {
+    backgroundColor: '#eaf4ee',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  historySourceText: {
+    color: colors.brandGreen,
+    fontSize: 12,
+    fontFamily: fonts.medium,
+  },
+  historySalesBadge: {
+    backgroundColor: '#eef2ff',
+  },
+  historySalesText: {
+    color: '#354a86',
+  },
   historyEndText: {
     textAlign: 'center',
     paddingVertical: 10,
@@ -277,6 +317,11 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 4,
+  },
+  detailSegmentedActive: {
+    borderColor: colors.brandGreen,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   segmentedButtonText: {
     color: '#111111',
@@ -793,6 +838,25 @@ export const styles = StyleSheet.create({
   modalScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
+  },
+  draftWarningOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  draftWarningCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    gap: 12,
+  },
+  draftWarningAction: {
+    flex: 1,
+    minWidth: 0,
+    marginTop: 0,
   },
   bottomSheet: {
     ...bottomSheetBase,

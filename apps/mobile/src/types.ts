@@ -49,6 +49,9 @@ export interface AllowedCustomerFixture extends AllowedCustomer {
 }
 
 export interface OrderSummary {
+  entry_type?: 'order' | 'quick_order';
+  order_source?: string;
+  quick_order_request?: string | null;
   name: string;
   portal_reference_number: string;
   customer: string;
@@ -61,6 +64,7 @@ export interface OrderSummary {
 }
 
 export interface OrderDetail extends OrderSummary {
+  quick_order_text?: string | null;
   placed_by?: string;
   placed_by_identity_type?: IdentityType;
   placed_by_name?: string;
@@ -84,4 +88,16 @@ export interface OrderDetail extends OrderSummary {
     fulfilled_quantity?: number;
     pending_quantity?: number;
   }>;
+}
+
+
+export interface QuickOrderRequest {
+  name: string;
+  request?: string;
+  status: 'Pending Review' | 'In Review' | 'Converted to Order' | 'Rejected';
+  text: string;
+  confirmation_datetime?: string | null;
+  order?: string | null;
+  portal_reference_number?: string | null;
+  rejection_reason?: string | null;
 }

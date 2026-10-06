@@ -568,3 +568,16 @@ test('frappe client can request sales employee order history without a customer 
     },
   });
 });
+
+test('catalogue pages preserve totals and the next cursor while the legacy method returns items', async () => {
+  const page = { items: [{ name: 'ITEM-A' }], total_count: 3, all_count: 12, has_more: true, next_offset: 2 };
+  const fake = fakeCall({
+    'kunal_enterprises.api.product_groups.items': { message: { success: true, data: page } },
+  });
+  const client = createFrappeApiClient(fake.call);
+  assert.deepEqual(await client.allowedItemsPage('CUSTOMER-A', 'GROUP-A', 'EMPLOYEE-A', { search: 'wood', offset: 1, limit: 1 }), page);
+  assert.equal(fake.calls[0].params.offset, 1);
+  assert.equal(fake.calls[0].params.limit, 1);
+  assert.equal(fake.calls[0].params.sales_employee, 'EMPLOYEE-A');
+  assert.deepEqual(await client.allowedItems('CUSTOMER-A'), page.items);
+});

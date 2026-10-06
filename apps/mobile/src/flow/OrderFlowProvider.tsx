@@ -5,6 +5,9 @@ import { type DateTimePickerEvent } from '@react-native-community/datetimepicker
 import { usePathname, useRouter } from 'expo-router';
 
 import { createMobileApi } from '../api/mobileApi';
+import { canUseQuickOrders, loadQuickOrderLinkedOrder } from '../domain/quickOrderFlow.mjs';
+import { useQuickOrders } from './useQuickOrders';
+import { useCataloguePagination } from './useCataloguePagination';
 import {
   buildCustomerSignupPayload,
   canStartOtpRequest,
@@ -91,8 +94,11 @@ function useOrderFlowState() {
   const router = useRouter();
   const pathname = usePathname();
   const step = stepForRoute(pathname) as Step;
+  const navigationChangeRevision = useRef(0);
   const setStep = useCallback(
     (next: Step) => {
+      // Invalidate pending screen work immediately, before Expo publishes the new pathname.
+      if (stepForRoute(pathname) !== next) navigationChangeRevision.current++;
       const action = navigationActionForStep(stepForRoute(pathname), next);
       const href = routeForStep(next) as Parameters<typeof router.navigate>[0];
       if (action === 'replace') {
@@ -166,6 +172,80 @@ function useOrderFlowState() {
   const hasActiveModeSession = canUseProtectedMobileApi({ mode, session });
   const protectedCallReady = !session?.accessToken || callAccessToken === session.accessToken;
   const catalogLoading = groupsLoading || itemsLoading;
+  const quickOrderContextKey = `${mode}:${session?.identity || ''}:${session?.accessToken || ''}`;
+  const quickOrdersEnabled = canUseQuickOrders({ mode, session }) && protectedCallReady;
+  const quickOrders = useQuickOrders({
+    api,
+    customer: session?.identity || '',
+    contextKey: quickOrderContextKey,
+    enabled: quickOrdersEnabled,
+    active: step === 'quickOrder',
+    onError(error) {
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+      if (failure.kind === 'expired_session') {
+        setStep('auth');
+        void logout();
+      }
+    },
+  });
+
+  function showQuickOrder() {
+    if (!quickOrdersEnabled) return;
+    setSystemState({ kind: 'idle' });
+    setStep('quickOrder');
+  }
+
+  function showQuickOrderDetail(request: string) {
+    if (!quickOrdersEnabled) return;
+    setStep('quickOrderDetail');
+    void quickOrders.loadDetail(request);
+  }
+
+  const [linkedLoadingRevision, setLinkedLoadingRevision] = useState<number | null>(null);
+  const linkedOrderRequestId = useRef(0);
+  const linkedOrderInFlight = useRef<number | null>(null);
+  const linkedNavigation = useRef({ key: '', revision: 0 });
+  const navigationKey = `${quickOrderContextKey}:${pathname}:${step}:${navigationChangeRevision.current}:${quickOrders.detail?.name || ''}`;
+  if (linkedNavigation.current.key !== navigationKey) {
+    linkedNavigation.current = { key: navigationKey, revision: linkedNavigation.current.revision + 1 };
+  }
+
+  const quickOrderLinkedLoading = linkedLoadingRevision === linkedNavigation.current.revision;
+
+  async function showQuickOrderLinkedOrder() {
+    const request = quickOrders.detail;
+    if (!request?.order || !quickOrdersEnabled) return;
+    const revision = linkedNavigation.current.revision;
+    const navigationRevision = navigationChangeRevision.current;
+    if (linkedOrderInFlight.current === revision) return;
+    linkedOrderInFlight.current = revision;
+    const requestId = ++linkedOrderRequestId.current;
+    const isCurrent = () => linkedNavigation.current.revision === revision
+      && linkedOrderRequestId.current === requestId
+      && navigationChangeRevision.current === navigationRevision;
+    setLinkedLoadingRevision(revision);
+    try {
+      const detail = await loadQuickOrderLinkedOrder({ order: request.order,
+        customer: session?.identity || '', loadOrder: api.orderDetail, isCurrent });
+      if (!detail || !isCurrent()) return;
+      setOrderDetail(detail);
+      setStep('detail');
+    } catch (error) {
+      if (!isCurrent()) return;
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+      if (failure.kind === 'expired_session') {
+        setStep('auth');
+        await logout();
+      }
+    } finally {
+      if (linkedOrderRequestId.current === requestId) {
+        linkedOrderInFlight.current = null;
+        setLinkedLoadingRevision(null);
+      }
+    }
+  }
 
   useEffect(() => {
     const banner = requestBanner(systemState);
@@ -327,6 +407,27 @@ function useOrderFlowState() {
     };
   }, [api, catalogLoadedKey, customerSearch, hasActiveModeSession, loadCatalogForCustomer, logout, mode, protectedCallReady, step, session]);
 
+  const catalogueIdentity = `${quickOrderContextKey}:${activeCustomer()}:${activeSalesEmployeeContext() || ''}`;
+  const catalogueQuery = `${catalogueIdentity}:${selectedGroup?.name || ''}:${itemSearch.trim()}`;
+  const pagination = useCataloguePagination({
+    contextKey: catalogueQuery,
+    catalogueKey: catalogueIdentity,
+    active: step === 'groups' && hasActiveModeSession && protectedCallReady && !groupsLoading && !itemsLoading
+      && itemsLoadedKey === `${activeCustomer()}:${activeSalesEmployeeContext() || ''}:${selectedGroup?.name || ''}:${itemSearch.trim()}`,
+    fetchPage: (offset) => (api as any).allowedItemsPage(activeCustomer(), selectedGroup?.name, activeSalesEmployeeContext(), {
+      search: itemSearch.trim(), limit: MAX_VISIBLE_ITEMS, offset,
+    }),
+    appendItems(nextItems) {
+      setItems(current => [...new Map([...current, ...nextItems].map(item => [item.name, item])).values()]);
+      setItemIndex(current => ({ ...current, ...Object.fromEntries(nextItems.map(item => [item.name, item])) }));
+    },
+    onError(error) {
+      const failure = classifyApiFailure(error);
+      setSystemState(failure);
+      if (failure.kind === 'expired_session') void logout();
+    },
+  });
+
   useEffect(() => {
     if (!hasActiveModeSession || !protectedCallReady || groupsLoading || step !== 'groups') {
       return;
@@ -357,7 +458,7 @@ function useOrderFlowState() {
       setItemsLoading(true);
       try {
         const catalogApi = api as any;
-        const nextItems = await catalogApi.allowedItems(customer, productGroup, salesEmployee, {
+        const page = await catalogApi.allowedItemsPage(customer, productGroup, salesEmployee, {
           search,
           limit: MAX_VISIBLE_ITEMS,
           offset: 0,
@@ -365,6 +466,8 @@ function useOrderFlowState() {
         if (cancelled || requestId !== itemsRequestIdRef.current) {
           return;
         }
+        const nextItems = page.items;
+        pagination.acceptPage(page);
         setItems(nextItems);
         setItemIndex((current) => {
           const next = { ...current };
@@ -423,7 +526,7 @@ function useOrderFlowState() {
     },
     [items, selectedGroup, itemSearch],
   );
-  const renderedItems = useMemo(() => visibleItems.slice(0, MAX_VISIBLE_ITEMS), [visibleItems]);
+  const renderedItems = visibleItems;
   const resend = otpResendState({ lastSentAtMs: otpSentAtMs, nowMs: Date.now(), waitSeconds: otpCooldownSeconds });
   const currentOtpIdentityType = customerAuthIntent === 'signup' ? 'Customer' : otpIdentityType || 'Customer';
   const currentOtpRequestKey = otpRequestKey({ mode: currentOtpIdentityType, mobileNumber, customerAuthIntent });
@@ -1061,7 +1164,7 @@ function useOrderFlowState() {
     const options = { limit: HISTORY_PAGE_SIZE + 1, offset };
     return mode === 'Sales Employee'
       ? api.orderHistory(undefined, activeSalesEmployeeIdentity(), options)
-      : api.orderHistory(activeCustomerIdentity(), undefined, options);
+      : api.orderHistory(activeCustomerIdentity(), undefined, { ...options, includeQuickOrders: true });
   }
 
   async function showProfile() {
@@ -1222,12 +1325,18 @@ function useOrderFlowState() {
 
   return {
     // state
+    quickOrders, quickOrdersEnabled, quickOrderLinkedLoading, showQuickOrder, showQuickOrderDetail, showQuickOrderLinkedOrder,
     mode, setMode,
     step, setStep,
     groups,
     catalogLoading,
     groupsLoading,
     itemsLoading,
+    itemsTotalCount: pagination.itemsTotalCount,
+    itemsAllCount: pagination.itemsAllCount,
+    itemsHasMore: pagination.itemsHasMore,
+    itemsMoreLoading: pagination.itemsMoreLoading,
+    loadMoreItems: pagination.loadMoreItems,
     items,
     stockRows,
     customers,

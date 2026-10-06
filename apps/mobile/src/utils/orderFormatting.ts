@@ -42,10 +42,13 @@ export function cartQuantityForItem(cart: CartAllocation[], item: string) {
 }
 
 export function orderHistoryRowDetail(order: OrderSummary, mode: Mode) {
+  if (order.entry_type === 'quick_order') {
+    return ['Quick Order', order.display_status || order.status, formatOrderPlacedStamp(order.confirmation_datetime)].filter(Boolean).join('\n');
+  }
   const statusLine = `${order.display_status || order.status} · Quantity ${order.total_quantity || 0}`;
   const placedStamp = formatOrderPlacedStamp(order.confirmation_datetime);
   const placedLine = placedStamp ? `Placed ${placedStamp}` : '';
-  const detailLine = placedLine ? `${statusLine}\n${placedLine}` : statusLine;
+  const detailLine = [order.quick_order_request ? 'Quick Order' : '', statusLine, placedLine].filter(Boolean).join('\n');
   if (mode !== 'Sales Employee') {
     return detailLine;
   }

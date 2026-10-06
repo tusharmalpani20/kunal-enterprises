@@ -7,9 +7,11 @@ export type Step =
   | 'success'
   | 'history'
   | 'detail'
-  | 'profile';
+  | 'profile'
+  | 'quickOrder'
+  | 'quickOrderDetail';
 
-export type AppSection = 'order' | 'history' | 'profile';
+export type AppSection = 'order' | 'history' | 'profile' | 'quickOrder';
 export type Mode = 'Customer' | 'Sales Employee';
 export type DatePickerTarget =
   | 'signupDateOfBirth'

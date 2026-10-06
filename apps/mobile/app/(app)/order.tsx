@@ -1,7 +1,8 @@
-import React from 'react';
-import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
-import { Maximize2 } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { ChevronDown, Maximize2 } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
+import { QuickOrderModal } from '../../src/components/QuickOrderModal';
 import { FeedbackPressable, GroupLogo, ItemSearchRow } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { colors, styles } from '../../src/styles/appStyles';
@@ -9,9 +10,12 @@ import { cartQuantityForItem } from '../../src/utils/orderFormatting';
 import type { TallyItem } from '../../src/types';
 
 export default function OrderScreen() {
+  const [quickOrderOpen, setQuickOrderOpen] = useState(false);
   const {
+    quickOrdersEnabled,
     groups,
     itemsLoading,
+    itemsTotalCount, itemsAllCount, itemsHasMore, itemsMoreLoading, loadMoreItems,
     selectedGroup,
     chooseGroup,
     renderedGroups,
@@ -27,10 +31,18 @@ export default function OrderScreen() {
   } = useOrderFlow();
 
   return (
-    <AppShell>
-      <View style={styles.workspace}>
+    <>
+    <AppShell itemList={{
+      searchHeader: (
         <View style={styles.searchPanel}>
-          <Text style={styles.fieldLabel}>Search products</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <Text style={styles.fieldLabel}>Search products</Text>
+            {quickOrdersEnabled && (
+              <FeedbackPressable onPress={() => setQuickOrderOpen(true)} style={{ paddingVertical: 10, paddingHorizontal: 4 }} accessibilityRole="button">
+                <Text style={[styles.utilityText, { color: colors.brandGreen, textDecorationLine: 'underline' }]}>Quick Order</Text>
+              </FeedbackPressable>
+            )}
+          </View>
           <TextInput
             value={itemSearch}
             onChangeText={setItemSearch}
@@ -38,6 +50,31 @@ export default function OrderScreen() {
             style={styles.input}
           />
         </View>
+      ),
+      items: itemsLoading ? [] : renderedItems,
+      renderItem: (item: TallyItem) => (
+        <ItemSearchRow
+          item={item}
+          logoUrl={resolveLogoUrl(logoForTallyItem(item))}
+          cartQuantity={cartQuantityForItem(cart, item.name)}
+          onPress={() => chooseItem(item)}
+        />
+      ),
+      footer: !itemsLoading && itemsTotalCount !== null ? (
+        <View style={{ gap: 12, alignItems: 'center', paddingTop: 20, paddingBottom: 24 }}>
+          <Text style={styles.helperText}>Showing {renderedItems.length} of {itemsTotalCount} products</Text>
+          {itemsHasMore && <FeedbackPressable
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 24, backgroundColor: colors.brandGreen }}
+            pressedStyle={styles.primaryActionPressed}
+            onPress={loadMoreItems} disabled={itemsMoreLoading} accessibilityRole="button"
+          >
+            {itemsMoreLoading ? <ActivityIndicator color={colors.onPrimary} /> : <ChevronDown size={16} color={colors.onPrimary} />}
+            <Text style={[styles.secondaryActionText, { color: colors.onPrimary }]}>{itemsMoreLoading ? 'Loading more…' : 'Load more'}</Text>
+          </FeedbackPressable>}
+        </View>
+      ) : null,
+    }}>
+      <View style={styles.workspace}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.fieldLabel}>Product groups ({groups.length})</Text>
           <FeedbackPressable
@@ -48,53 +85,46 @@ export default function OrderScreen() {
             <Maximize2 size={12} color="#111111" />
           </FeedbackPressable>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChips}>
-          <FeedbackPressable
-            style={[styles.groupChip, !selectedGroup && styles.groupChipActive]}
-            pressedStyle={!selectedGroup ? styles.groupChipActivePressed : styles.buttonPressed}
-            rippleColor={!selectedGroup ? colors.primaryPressed : '#eeeeee'}
-            onPress={() => chooseGroup(null)}
-          >
-            <Text style={[styles.groupChipText, !selectedGroup && styles.groupChipTextActive]}>All</Text>
-          </FeedbackPressable>
-          {renderedGroups.map((group) => (
-            <FeedbackPressable
-              key={group.name}
-              style={[styles.groupChip, selectedGroup?.name === group.name && styles.groupChipActive]}
-              pressedStyle={selectedGroup?.name === group.name ? styles.groupChipActivePressed : styles.buttonPressed}
-              rippleColor={selectedGroup?.name === group.name ? colors.primaryPressed : '#eeeeee'}
-              onPress={() => chooseGroup(group)}
-            >
-              <GroupLogo logoUrl={resolveLogoUrl(logoForGroupName(group.name))} size={12} fallbackLabel={group.group_name} style={styles.groupChipLogo} />
-              <Text style={[styles.groupChipText, selectedGroup?.name === group.name && styles.groupChipTextActive]}>
-                {group.group_name}
-              </Text>
-            </FeedbackPressable>
-          ))}
-        </ScrollView>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.groupChips}
+          data={[null, ...renderedGroups]}
+          keyExtractor={group => group ? `group:${group.name}` : 'all'}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          extraData={`${selectedGroup?.name || ''}:${itemsAllCount}`}
+          renderItem={({ item: group }) => {
+            const active = group ? selectedGroup?.name === group.name : !selectedGroup;
+            return (
+              <Pressable
+                style={[styles.groupChip, active && styles.groupChipActive]}
+                android_ripple={{ color: active ? colors.primaryPressed : '#eeeeee' }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => chooseGroup(group)}
+              >
+                {group ? <GroupLogo logoUrl={resolveLogoUrl(logoForGroupName(group.name))} size={12} fallbackLabel={group.group_name} style={styles.groupChipLogo} /> : null}
+                <Text style={[styles.groupChipText, active && styles.groupChipTextActive]}>
+                  {group?.group_name || (itemsAllCount === null ? 'All' : `All (${itemsAllCount})`)}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
         {itemsLoading ? (
           <View style={styles.loadingProducts}>
             <ActivityIndicator color="#111111" />
             <Text style={styles.helperText}>Loading products</Text>
           </View>
-        ) : renderedItems.map((item: TallyItem) => (
-            <ItemSearchRow
-              key={item.name}
-              item={item}
-              logoUrl={resolveLogoUrl(logoForTallyItem(item))}
-              cartQuantity={cartQuantityForItem(cart, item.name)}
-              onPress={() => chooseItem(item)}
-            />
-          ))}
+        ) : null}
         {!itemsLoading && visibleItems.length === 0 && (
           <Text style={styles.helperText}>No items match this search and product group filter.</Text>
         )}
-        {!itemsLoading && visibleItems.length > renderedItems.length && (
-          <Text style={styles.helperText}>
-            Showing {renderedItems.length} of {visibleItems.length} matches. Refine search to narrow results.
-          </Text>
-        )}
       </View>
     </AppShell>
+    <QuickOrderModal visible={quickOrderOpen} onClose={() => setQuickOrderOpen(false)} />
+    </>
   );
 }

@@ -8,6 +8,8 @@ export default function AppLayout() {
       <Stack.Screen name="order" options={{ animation: 'none' }} />
       <Stack.Screen name="customer" options={{ animation: 'none' }} />
       <Stack.Screen name="history" options={{ animation: 'none' }} />
+      <Stack.Screen name="quick-order" options={{ animation: 'none' }} />
+      <Stack.Screen name="quick-order-detail" />
       <Stack.Screen name="profile" options={{ animation: 'none' }} />
       {/* Drill-down screens keep the default push/slide animation. */}
       <Stack.Screen name="summary" />

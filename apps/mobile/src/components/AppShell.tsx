@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { FlatList, Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, ChevronLeft, History, LogOut, Package, ShoppingBag, ShoppingCart, UserRound } from 'lucide-react-native';
 import { useNavigation } from 'expo-router';
@@ -7,9 +7,13 @@ import { useNavigation } from 'expo-router';
 import { useOrderFlow } from '../flow/OrderFlowProvider';
 import { colors, styles } from '../styles/appStyles';
 import { godownStockDetailForSelection } from '../utils/orderFormatting';
+import type { TallyItem } from '../types';
 import { FeedbackPressable, GroupLogo, RowButton, SpinningRefreshIcon, TopLevelTab } from './orderUi';
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, itemList }: {
+  children: React.ReactNode;
+  itemList?: { items: TallyItem[]; renderItem: (item: TallyItem) => React.ReactElement; footer?: React.ReactNode; searchHeader: React.ReactNode };
+}) {
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
   const [keyboardInset, setKeyboardInset] = useState(0);
@@ -34,6 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     itemSearch, setItemSearch,
     revokeAndLogout,
     groups,
+    itemsAllCount,
     logoForGroupName,
     resolveLogoUrl,
     showOrder,
@@ -62,9 +67,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  return (
-    <SafeAreaView style={styles.shell}>
-      <ScrollView contentContainerStyle={styles.page}>
+  const pageHeader = (
+    <>
         <View style={[styles.appHeader, !showBackButton && styles.appHeaderCentered]}>
           <View style={styles.appHeaderText}>
             <Text style={styles.appName}>Kunal Enterprises</Text>
@@ -75,25 +79,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </FeedbackPressable>
             )}
           </View>
-          {appSection === 'order' && (
-            <FeedbackPressable
-              style={[styles.iconOnlyButton, { borderWidth: 0, backgroundColor: 'transparent' }]}
-              onPress={refreshCatalog}
-              disabled={catalogLoading}
-            >
-              <SpinningRefreshIcon size={17} color="#111111" spinning={catalogLoading} />
-            </FeedbackPressable>
-          )}
-          {appSection === 'profile' && (
-            <FeedbackPressable style={styles.iconOnlyButton} onPress={revokeAndLogout}>
-              <LogOut size={17} color="#111111" />
-            </FeedbackPressable>
-          )}
+          <View style={styles.appHeaderActions}>
+            {appSection === 'order' && (
+              <FeedbackPressable
+                style={[styles.iconOnlyButton, { borderWidth: 0, backgroundColor: 'transparent' }]}
+                onPress={refreshCatalog}
+                disabled={catalogLoading}
+              >
+                <SpinningRefreshIcon size={17} color="#111111" spinning={catalogLoading} />
+              </FeedbackPressable>
+            )}
+            {appSection === 'profile' && (
+              <FeedbackPressable style={styles.iconOnlyButton} onPress={revokeAndLogout}>
+                <LogOut size={17} color="#111111" />
+              </FeedbackPressable>
+            )}
+          </View>
         </View>
 
         <View style={styles.tabBar}>
           <TopLevelTab
-            label="Order"
+            label="Orders"
             active={appSection === 'order'}
             icon={<ShoppingBag size={16} color={appSection === 'order' ? colors.onPrimary : '#111111'} />}
             onPress={showOrder}
@@ -121,8 +127,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </View>
         )}
 
-        {children}
-      </ScrollView>
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.shell}>
+      {itemList ? (
+        <>
+        <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 12, gap: 24 }}>{pageHeader}</View>
+        <FlatList
+          data={itemList.items}
+          keyExtractor={item => item.name}
+          renderItem={({ item }) => itemList.renderItem(item)}
+          ListHeaderComponent={<View style={{ backgroundColor: '#ffffff', paddingBottom: 12, gap: 12 }}>{itemList.searchHeader}{children}</View>}
+          stickyHeaderIndices={[0]}
+          ListFooterComponent={<>{itemList.footer}</>}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          keyboardShouldPersistTaps="handled"
+        />
+        </>
+      ) : (
+        <ScrollView contentContainerStyle={styles.page}>{pageHeader}{children}</ScrollView>
+      )}
       {step === 'summary' && cart.length > 0 ? (
         <FeedbackPressable
           style={styles.cartBar}
@@ -173,23 +203,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </View>
               <Text style={styles.fieldLabel}>Quantity to order</Text>
               <TextInput value={quantity} onChangeText={setQuantity} keyboardType="numeric" style={styles.input} />
-              <View style={styles.sheetSectionHeading}>
-                <Text style={styles.fieldLabel}>Choose godown to order from (optional)</Text>
-                <Text style={styles.helperText}>
-                  Tap a godown to add {Number(quantity) > 0 ? quantity : 0} {selectedItem?.uom || 'units'} to your cart.
-                </Text>
-              </View>
-              <RowButton
-                title="Add without godown"
-                detail="Our team will assign a godown before processing your order."
+              <FeedbackPressable
+                style={styles.primaryAction}
+                pressedStyle={styles.primaryActionPressed}
+                rippleColor={colors.primaryPressed}
                 onPress={addWithoutGodown}
-                actionLabel="Add"
-              />
+              >
+                <Text style={styles.primaryActionText}>Quick Add</Text>
+              </FeedbackPressable>
+              <View style={styles.sheetSectionHeading}>
+                <Text style={styles.fieldLabel}>Godown (optional)</Text>
+              </View>
               {godownStockState.kind === 'loading' && (
-                <Text style={styles.helperText}>Loading godown stock… You can add without a godown now.</Text>
+                <Text style={styles.helperText}>Loading stock… Quick Add is available.</Text>
               )}
               {godownStockState.kind !== 'idle' && godownStockState.kind !== 'loading' && (
-                <Text style={styles.helperText}>Godown stock is unavailable. You can still add without a godown.</Text>
+                <Text style={styles.helperText}>Stock unavailable. Use Quick Add.</Text>
               )}
               {stockRows.map((stock) => (
                 <RowButton
@@ -238,7 +267,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <View style={styles.groupSheetRowLogo}>
                   <Package size={18} color="#9a9a9a" />
                 </View>
-                <Text style={styles.groupSheetRowTitle}>All Products</Text>
+                <Text style={styles.groupSheetRowTitle}>All Products{itemsAllCount === null ? '' : ` (${itemsAllCount})`}</Text>
               </FeedbackPressable>
               {groups.filter((group) => {
                 const query = itemSearch.trim().toLowerCase();

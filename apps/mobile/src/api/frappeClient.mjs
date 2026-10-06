@@ -17,6 +17,9 @@ const METHODS = {
   allowedItems: 'kunal_enterprises.api.product_groups.items',
   itemStock: 'kunal_enterprises.api.product_groups.item_stock',
   submitOrder: 'kunal_enterprises.api.orders.submit',
+  quickOrderSubmit: 'kunal_enterprises.api.quick_orders.submit',
+  quickOrderHistory: 'kunal_enterprises.api.quick_orders.history',
+  quickOrderDetail: 'kunal_enterprises.api.quick_orders.detail',
   orderHistory: 'kunal_enterprises.api.orders.history',
   orderDetail: 'kunal_enterprises.api.orders.detail',
   getProfile: 'kunal_enterprises.api.profile.get_profile',
@@ -112,7 +115,7 @@ export function createFrappeApiClient(call) {
       return groups;
     },
 
-    async allowedItems(customer, productGroup, salesEmployee = undefined, options = {}) {
+    async allowedItemsPage(customer, productGroup, salesEmployee = undefined, options = {}) {
       const params = {
         customer,
         product_group: productGroup,
@@ -131,6 +134,11 @@ export function createFrappeApiClient(call) {
       const data = unwrap(
         await call.get(METHODS.allowedItems, params),
       );
+      return data;
+    },
+
+    async allowedItems(customer, productGroup, salesEmployee = undefined, options = {}) {
+      const data = await this.allowedItemsPage(customer, productGroup, salesEmployee, options);
       return data.items;
     },
 
@@ -149,6 +157,20 @@ export function createFrappeApiClient(call) {
       return unwrap(await call.post(METHODS.submitOrder, payload));
     },
 
+    async quickOrderSubmit(text, customer) {
+      return unwrap(await call.post(METHODS.quickOrderSubmit, { text, customer }));
+    },
+
+    async quickOrderHistory(customer, options = {}) {
+      return unwrap(await call.get(METHODS.quickOrderHistory, {
+        customer, limit: options.limit ?? 20, offset: options.offset ?? 0,
+      }));
+    },
+
+    async quickOrderDetail(request, customer) {
+      return unwrap(await call.get(METHODS.quickOrderDetail, { request, customer }));
+    },
+
     async orderHistory(customer, salesEmployee = undefined, options = {}) {
       const data = unwrap(
         await call.get(METHODS.orderHistory, {
@@ -156,6 +178,7 @@ export function createFrappeApiClient(call) {
           sales_employee: salesEmployee,
           limit: options.limit ?? 20,
           offset: options.offset ?? 0,
+          ...(options.includeQuickOrders ? { include_quick_orders: 1 } : {}),
         }),
       );
       return data.orders.map(orderSummaryForMobile);

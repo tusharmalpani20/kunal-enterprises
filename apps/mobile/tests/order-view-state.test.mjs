@@ -109,3 +109,12 @@ test('floating cart bar shows in order section with items, off the summary step'
   assert.equal(shouldShowFloatingCartBar({ step: 'auth', rowCount: 2 }), false);
   assert.equal(shouldShowFloatingCartBar({ step: 'history', rowCount: 2 }), false);
 });
+
+
+test('quick order screens do not expose the regular cart or floating cart bar', () => {
+  for (const step of ['quickOrder', 'quickOrderDetail']) {
+    assert.equal(appSectionForStep(step), step === 'quickOrderDetail' ? 'history' : 'quickOrder');
+    assert.equal(showCartControls({ mode: 'Customer', step }), false);
+    assert.equal(shouldShowFloatingCartBar({ step, rowCount: 3 }), false);
+  }
+});

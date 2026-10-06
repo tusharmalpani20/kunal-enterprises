@@ -88,6 +88,13 @@ export function orderSummaryForMobile(order) {
   };
 }
 
+export function orderSourceLabels(order) {
+  const labels = [];
+  if (order.entry_type === 'quick_order' || order.quick_order_request) labels.push('Quick Order');
+  if (order.sales_employee || order.order_source === 'Sales Employee') labels.push('Sales Employee');
+  return labels;
+}
+
 export function orderPlacedByLabel(order, viewerIdentityType) {
   if (order.placed_by_identity_type === viewerIdentityType) {
     return 'You';

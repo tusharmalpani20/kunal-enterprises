@@ -14,6 +14,9 @@ import {
 } from '../domain/profileHistoryFlow.mjs';
 import { searchItemsForMobile, sortGodownStockForMobile } from '../domain/mobileFlow.mjs';
 
+/** @type {Array<import('../types').QuickOrderRequest & {customer: string}>} */
+const quickOrderRequests = [];
+
 const productGroups = [
   { name: 'Cotton Fabric', group_name: 'Cotton Fabric', full_path: 'Cotton Fabric', product_group_logo: '/files/cotton_fabric_logo.jpeg' },
   { name: 'Lining', group_name: 'Lining', full_path: 'Lining', product_group_logo: null },
@@ -309,14 +312,20 @@ export const mockApi = {
     return productGroups;
   },
 
-  async allowedItems(_customer, productGroup, _salesEmployee, options = {}) {
+  async allowedItemsPage(_customer, productGroup, _salesEmployee, options = {}) {
     const scopedItems = productGroup
       ? items.filter((item) => item.root_stock_group === productGroup)
       : items;
     const filteredItems = searchItemsForMobile(scopedItems, options.search || '');
     const offset = Number.isFinite(options.offset) ? options.offset : 0;
     const limit = Number.isFinite(options.limit) ? options.limit : filteredItems.length;
-    return filteredItems.slice(offset, offset + limit);
+    const hasMore = filteredItems.length > offset + limit;
+    return { items: filteredItems.slice(offset, offset + limit), total_count: filteredItems.length, all_count: items.length,
+      has_more: hasMore, next_offset: hasMore ? offset + limit : null };
+  },
+
+  async allowedItems(customer, productGroup, salesEmployee, options = {}) {
+    return (await this.allowedItemsPage(customer, productGroup, salesEmployee, options)).items;
   },
 
   async itemStock(_customer, item) {
@@ -381,8 +390,40 @@ export const mockApi = {
     };
   },
 
+  async quickOrderSubmit(text, customer) {
+    const name = `QO-MOCK-${String(quickOrderRequests.length + 1).padStart(4, '0')}`;
+    /** @type {import('../types').QuickOrderRequest & {customer: string}} */
+    const request = { name, request: name, text, customer, status: 'Pending Review',
+      confirmation_datetime: new Date().toISOString(), order: null, portal_reference_number: null,
+      rejection_reason: null };
+    quickOrderRequests.unshift(request);
+    return { ...request };
+  },
+
+  async quickOrderHistory(customer, options = {}) {
+    const scoped = quickOrderRequests.filter((row) => row.customer === customer);
+    const offset = options.offset ?? 0;
+    const limit = options.limit ?? 20;
+    const requests = scoped.slice(offset, offset + limit).map((row) => ({ ...row }));
+    const hasMore = scoped.length > offset + limit;
+    return { requests, has_more: hasMore, next_offset: hasMore ? offset + limit : null };
+  },
+
+  async quickOrderDetail(request, customer) {
+    const found = quickOrderRequests.find((row) => row.name === request && row.customer === customer);
+    if (!found) throw new Error('Quick order was not found');
+    return { ...found };
+  },
+
   async orderHistory(customer, salesEmployee = undefined, options = {}) {
-    const scoped = salesEmployee ? salesEmployeeHistory(orders, salesEmployee) : orders.filter((order) => order.customer === customer);
+    let scoped = salesEmployee ? salesEmployeeHistory(orders, salesEmployee) : orders.filter((order) => order.customer === customer);
+    if (options.includeQuickOrders && !salesEmployee) {
+      scoped = [...scoped, ...quickOrderRequests
+        .filter((request) => request.customer === customer && request.status !== 'Converted to Order')
+        .map((request) => ({ ...request, entry_type: 'quick_order', quick_order_request: request.name,
+          portal_reference_number: request.name }))]
+        .sort((a, b) => String(b.confirmation_datetime || '').localeCompare(String(a.confirmation_datetime || '')) || b.name.localeCompare(a.name));
+    }
     return scoped.slice(options.offset || 0, (options.offset || 0) + (options.limit || scoped.length)).map(orderSummaryForMobile);
   },
 

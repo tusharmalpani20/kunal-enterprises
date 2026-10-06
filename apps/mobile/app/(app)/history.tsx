@@ -3,15 +3,15 @@ import { Text, View } from 'react-native';
 import { History } from 'lucide-react-native';
 
 import { AppShell } from '../../src/components/AppShell';
-import { FeedbackPressable, RowButton, Workspace } from '../../src/components/orderUi';
+import { FeedbackPressable, Workspace } from '../../src/components/orderUi';
 import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { styles } from '../../src/styles/appStyles';
-import { orderHistoryRowDetail } from '../../src/utils/orderFormatting';
+import { OrderHistoryCard } from '../../src/components/OrderHistoryCard';
 
 const HISTORY_PAGE_SIZE = 20;
 
 export default function HistoryScreen() {
-  const { mode, historyRows, historyLoading, historyHasMore, loadMoreHistory, showOrderDetail } = useOrderFlow();
+  const { mode, historyRows, historyLoading, historyHasMore, loadMoreHistory, showOrderDetail, showQuickOrderDetail } = useOrderFlow();
 
   return (
     <AppShell>
@@ -19,14 +19,14 @@ export default function HistoryScreen() {
         {historyRows.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.workspaceTitle}>No orders yet</Text>
-            <Text style={styles.rowDetail}>Placed orders will appear here.</Text>
+            <Text style={styles.rowDetail}>{mode === 'Customer' ? 'Orders and Quick Order requests will appear here.' : 'Placed orders will appear here.'}</Text>
           </View>
         ) : historyRows.map((order) => (
-          <RowButton
-            key={order.name}
-            title={order.portal_reference_number}
-            detail={orderHistoryRowDetail(order, mode)}
-            onPress={() => showOrderDetail(order)}
+          <OrderHistoryCard
+            key={`${order.entry_type || 'order'}:${order.name}`}
+            order={order}
+            mode={mode}
+            onPress={() => order.entry_type === 'quick_order' ? showQuickOrderDetail(order.name) : showOrderDetail(order)}
           />
         ))}
         {historyHasMore && (

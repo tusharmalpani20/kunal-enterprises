@@ -115,7 +115,7 @@ test('auth provider validates stored sessions through the Frappe SDK by default'
 test('sales employee item and stock requests include sales employee context', () => {
   const source = combinedMobileSource();
 
-  assert.match(source, /catalogApi\.allowedItems\(customer, productGroup, salesEmployee/);
+  assert.match(source, /catalogApi\.allowedItemsPage\(customer, productGroup, salesEmployee/);
   assert.match(source, /api\.itemStock\(activeCustomer\(\), item\.name, activeSalesEmployeeContext\(\)\)/);
   assert.match(source, /api\.itemStock\(activeCustomer\(\), item, activeSalesEmployeeContext\(\)\)/);
   assert.match(source, /function activeSalesEmployeeContext\(\)/);
@@ -137,7 +137,7 @@ test('catalogue group strip renders every allowed group and keeps the expanded b
   const shellSource = readFileSync(join(projectRoot, 'src/components/AppShell.tsx'), 'utf8');
 
   assert.doesNotMatch(providerSource, /visibleGroups\.slice\(0,\s*MAX_VISIBLE_GROUPS\)/);
-  assert.match(orderSource, /<ScrollView horizontal/);
+  assert.match(orderSource, /<FlatList\s+horizontal/);
   assert.match(orderSource, /setGroupSheetOpen\(true\)/);
   assert.match(shellSource, /groups\.filter\(\(group\) =>/);
 });
@@ -198,10 +198,11 @@ test('customer order screen keeps continuous catalog search, group filters, godo
     'Product groups',
     'Search item or product group',
     'MAX_VISIBLE_ITEMS',
-    'Refine search to narrow results',
+    'Load more',
     'ItemSearchRow',
     'cartQuantityForItem(cart, item.name)',
-    'Choose godown to order from',
+    'Godown (optional)',
+    'Quick Add',
     'function BackButton',
     'items in cart',
     'Open carts',

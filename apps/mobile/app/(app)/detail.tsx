@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { History } from 'lucide-react-native';
 
@@ -8,11 +8,12 @@ import { useOrderFlow } from '../../src/flow/OrderFlowProvider';
 import { groupGodownAllocationsForMobile } from '../../src/domain/profileHistoryFlow.mjs';
 import { colors, styles } from '../../src/styles/appStyles';
 
-type DetailView = 'overall' | 'godown';
+type DetailView = 'overall' | 'godown' | 'note';
 
 export default function DetailScreen() {
   const { orderDetail, showHistory, logoForItemName, resolveLogoUrl } = useOrderFlow();
   const [detailView, setDetailView] = useState<DetailView>('overall');
+  useEffect(() => setDetailView('overall'), [orderDetail?.name]);
 
   const itemNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -35,32 +36,46 @@ export default function DetailScreen() {
     <AppShell>
       <Workspace title="Order Detail" icon={<History size={18} color="#111111" />}>
         <BackButton label="Order History" onPress={showHistory} />
-        <Text style={styles.successRef}>{orderDetail.portal_reference_number}</Text>
+        <Text style={styles.successRef}>{orderDetail.name}</Text>
         <Text style={styles.rowDetail}>{orderDetail.display_status || orderDetail.status}</Text>
         <Text style={styles.rowDetail}>Placed by {orderDetail.placed_by_label || orderDetail.placed_by || 'You'}</Text>
+        {orderDetail.quick_order_request ? <Text style={styles.rowDetail}>Quick Order</Text> : null}
         <View style={styles.segmentedControl}>
           <FeedbackPressable
             style={styles.segmentedButtonPressable}
-            pressedStyle={detailView === 'overall' ? styles.segmentedButtonActive : styles.buttonPressed}
+            pressedStyle={detailView === 'overall' ? [styles.segmentedButtonActive, styles.detailSegmentedActive] : styles.buttonPressed}
             rippleColor={detailView === 'overall' ? colors.primaryPressed : '#eeeeee'}
             onPress={() => setDetailView('overall')}
           >
-            <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'overall' && styles.segmentedButtonActive]}>
+            <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'overall' && [styles.segmentedButtonActive, styles.detailSegmentedActive]]}>
               <Text style={[styles.segmentedButtonText, detailView === 'overall' && styles.segmentedButtonTextActive]}>Overall</Text>
             </View>
           </FeedbackPressable>
           <FeedbackPressable
             style={styles.segmentedButtonPressable}
-            pressedStyle={detailView === 'godown' ? styles.segmentedButtonActive : styles.buttonPressed}
+            pressedStyle={detailView === 'godown' ? [styles.segmentedButtonActive, styles.detailSegmentedActive] : styles.buttonPressed}
             rippleColor={detailView === 'godown' ? colors.primaryPressed : '#eeeeee'}
             onPress={() => setDetailView('godown')}
           >
-            <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'godown' && styles.segmentedButtonActive]}>
+            <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'godown' && [styles.segmentedButtonActive, styles.detailSegmentedActive]]}>
               <Text style={[styles.segmentedButtonText, detailView === 'godown' && styles.segmentedButtonTextActive]}>Godown Summary</Text>
             </View>
           </FeedbackPressable>
+          {orderDetail.quick_order_text != null && (
+            <FeedbackPressable
+              style={styles.segmentedButtonPressable}
+              pressedStyle={styles.buttonPressed}
+              onPress={() => setDetailView('note')}
+            >
+              <View pointerEvents="none" style={[styles.segmentedButton, detailView === 'note' && [styles.segmentedButtonActive, styles.detailSegmentedActive]]}>
+                <Text style={[styles.segmentedButtonText, detailView === 'note' && styles.segmentedButtonTextActive]}>Order Note</Text>
+              </View>
+            </FeedbackPressable>
+          )}
         </View>
-        {detailView === 'overall' ? (
+        {detailView === 'note' ? (
+          <Text style={styles.rowDetail} selectable>{orderDetail.quick_order_text}</Text>
+        ) : detailView === 'overall' ? (
           overallRows.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.rowDetail}>No item summary is available for this order.</Text>

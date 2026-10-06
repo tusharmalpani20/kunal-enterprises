@@ -8,11 +8,20 @@ import {
 	loadProfileForMobile,
 	orderDetailForMobile,
 	orderSummaryForMobile,
+	orderSourceLabels,
 	orderPlacedByLabel,
 	groupGodownAllocationsForMobile,
 	saveCustomerProfileForMobile,
 	salesEmployeeProfileForMobile,
 } from '../src/domain/profileHistoryFlow.mjs';
+
+test('history identifies Quick Order and Sales Employee sources without marking ordinary customer orders', () => {
+  assert.deepEqual(orderSourceLabels({ entry_type: 'quick_order' }), ['Quick Order']);
+  assert.deepEqual(orderSourceLabels({ quick_order_request: 'QOR-1' }), ['Quick Order']);
+  assert.deepEqual(orderSourceLabels({ sales_employee: 'SE-1' }), ['Sales Employee']);
+  assert.deepEqual(orderSourceLabels({ order_source: 'Sales Employee' }), ['Sales Employee']);
+  assert.deepEqual(orderSourceLabels({ order_source: 'Customer' }), []);
+});
 
 test('godown allocations are grouped by godown while preserving item rows', () => {
   const groups = groupGodownAllocationsForMobile([
