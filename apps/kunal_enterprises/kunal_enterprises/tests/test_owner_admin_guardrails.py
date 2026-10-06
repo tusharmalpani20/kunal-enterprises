@@ -64,7 +64,7 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 	def test_role_lookup_methods_are_filtered_for_admin(self):
 		frappe.set_user(self.admin.name)
 
-		self.assertEqual(owner_admin.get_all_roles(), ["Admin", "Branch Manager", "Branch Employee"])
+		self.assertEqual(owner_admin.get_all_roles(), ["Admin", "Branch Manager", "Branch Employee", "Godown Allocator"])
 		self.assertEqual(
 			[row.role for row in owner_admin.get_role_profile("Branch Employee")],
 			["Branch Employee"],
@@ -85,7 +85,16 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 	def test_role_lookup_methods_show_only_portal_roles_for_administrator(self):
 		frappe.set_user("Administrator")
 
-		self.assertEqual(owner_admin.get_all_roles(), ["Owner", "Admin", "Branch Manager", "Branch Employee"])
+		self.assertEqual(owner_admin.get_all_roles(), ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator"])
+
+	def test_admin_can_create_standalone_allocator_without_management_privileges(self):
+		frappe.set_user(self.admin.name)
+		user = self._new_user("guard.allocator@example.com", role_profile_name="Godown Allocator").insert()
+		self.assertEqual({row.role for row in user.roles}, {"Godown Allocator"})
+		self.assertEqual([row.role for row in owner_admin.get_role_profile("Godown Allocator")], ["Godown Allocator"])
+		frappe.set_user(user.name)
+		self.assertEqual(owner_admin.get_all_roles(), [])
+		self.assertFalse(owner_admin.has_user_permission(self.admin))
 
 	def test_user_guard_suppresses_welcome_email_delivery(self):
 		user = self._new_user("guard.no.email@example.com", roles=["Branch Employee"])

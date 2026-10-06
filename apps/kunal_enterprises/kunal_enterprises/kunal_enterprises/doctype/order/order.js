@@ -70,6 +70,7 @@ function should_show_move_to_processing(frm) {
 	return (
 		!frm.is_new()
 		&& frm.doc.status === "Placed"
+		&& !frm.doc.godown_assignment_pending
 		&& frappe.user_roles.some((role) => ["Branch Manager", "Branch Employee"].includes(role))
 	);
 }

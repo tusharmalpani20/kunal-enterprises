@@ -169,7 +169,7 @@ class ReconciliationScopeTests(unittest.TestCase):
 			status="Placed",
 			items=[SimpleNamespace(item="ITEM-1", requested_quantity=4)],
 		)
-		self.assertEqual(_order_inputs(order), ("KE-1", "CUSTOMER-1", "Placed", (("ITEM-1", "4"),)))
+		self.assertEqual(_order_inputs(order), ("KE-1", "CUSTOMER-1", "Placed", False, (("ITEM-1", "4"),)))
 
 	def test_master_fingerprint_is_order_independent_but_change_sensitive(self):
 		first = {

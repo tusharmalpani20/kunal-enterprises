@@ -77,6 +77,9 @@ def evaluate_order(order, vouchers):
 			status = "Partially Processed"
 		else:
 			status = "Placed" if status == "Placed" else "Processing"
+		# Review recovery must respect the same Processing gate as portal actions.
+		if status == "Processing" and order.get("godown_assignment_pending"):
+			status = "Placed"
 	return {
 		"status": status,
 		"fulfilled": {item: float(qty) for item, qty in fulfilled.items()},

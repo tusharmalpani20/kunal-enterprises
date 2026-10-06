@@ -1,4 +1,5 @@
 import json
+import math
 from collections import defaultdict
 from html import escape
 
@@ -15,9 +16,12 @@ from kunal_enterprises.kunal_enterprises.doctype.customer.customer import has_sa
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def submit(customer, allocations, sales_employee=None, sales_employee_note=None, headers=None):
+	savepoint = "submit_customer_order"
+	frappe.db.savepoint(savepoint)
 	try:
 		token_error = _validate_submit_token(customer, sales_employee, headers)
 		if token_error:
+			frappe.db.release_savepoint(savepoint)
 			return token_error
 		order = submit_order(
 			customer=customer,
@@ -25,17 +29,21 @@ def submit(customer, allocations, sales_employee=None, sales_employee_note=None,
 			sales_employee=sales_employee,
 			sales_employee_note=sales_employee_note,
 		)
+		frappe.db.release_savepoint(savepoint)
 		return create_success_response(
 			"Order placed",
 			{
 				"order": order.name,
 				"portal_reference_number": order.portal_reference_number,
 				"status": order.status,
+				"godown_assignment_pending": bool(order.godown_assignment_pending),
 				"total_item_count": order.total_item_count,
 				"total_quantity": order.total_quantity,
 			},
 		)
 	except Exception as error:
+		# Returning an error envelope does not make Frappe roll back the request.
+		frappe.db.rollback(save_point=savepoint)
 		return handle_error_response(error, "Unable to submit order")
 
 
@@ -65,6 +73,7 @@ def history(customer=None, sales_employee=None, limit=20, offset=0, headers=None
 				"confirmation_datetime",
 				"total_item_count",
 				"total_quantity",
+				"godown_assignment_pending",
 			],
 			order_by="confirmation_datetime desc",
 			limit_start=_coerce_history_offset(offset),
@@ -97,7 +106,7 @@ def submit_order(customer, allocations, sales_employee=None, sales_employee_note
 	merged_allocations = _merge_allocations(allocations)
 	product_access = resolve_product_access(customer, sales_employee)
 	items_by_name = _load_items([row["item"] for row in merged_allocations])
-	_validate_active_godowns({row["godown"] for row in merged_allocations})
+	_validate_active_godowns({row["godown"] for row in merged_allocations if row["godown"]})
 
 	item_rows = {}
 	allocation_rows = []
@@ -246,6 +255,7 @@ def _serialize_order_summary(order):
 		"confirmation_datetime": str(order.confirmation_datetime) if order.confirmation_datetime else None,
 		"total_item_count": order.total_item_count,
 		"total_quantity": order.total_quantity,
+		"godown_assignment_pending": bool(order.get("godown_assignment_pending")),
 	}
 
 
@@ -382,7 +392,7 @@ def _build_customer_pdf_summary(order):
 	for allocation in order.godown_allocations:
 		item_name = frappe.db.get_value("Tally Item", allocation.item, "item_name") or allocation.item
 		lines.append(
-			f"- {item_name} | Godown: {allocation.godown} | Quantity: {allocation.requested_quantity:g}"
+			f"- {item_name} | Godown: {allocation.godown or 'Not assigned'} | Quantity: {allocation.requested_quantity:g}"
 		)
 	return "\n".join(lines)
 
@@ -468,27 +478,37 @@ def _customer_pdf_placed_by(order):
 
 
 def _merge_allocations(allocations):
-	if not allocations:
+	if not isinstance(allocations, list) or not allocations:
 		frappe.throw("Order must contain at least one allocation")
 
 	merged = defaultdict(float)
 	allocation_metadata = {}
 	for allocation in allocations:
+		if not isinstance(allocation, dict):
+			frappe.throw("Each allocation must contain an item and quantity")
 		item = allocation.get("item")
 		godown = allocation.get("godown")
-		quantity = float(allocation.get("quantity") or 0)
-		if not item or not godown:
-			frappe.throw("Item and godown are required for every allocation")
-		if quantity <= 0:
-			frappe.throw("Order Quantity must be positive")
+		if godown is not None and not isinstance(godown, str):
+			frappe.throw("Godown must be a record name or omitted")
+		godown = (godown or "").strip() or None
+		try:
+			quantity = float(allocation.get("quantity") or 0)
+		except (TypeError, ValueError, OverflowError):
+			frappe.throw("Order Quantity must be finite and positive")
+		if not isinstance(item, str) or not item.strip():
+			frappe.throw("Item is required for every allocation")
+		if not math.isfinite(quantity) or quantity <= 0:
+			frappe.throw("Order Quantity must be finite and positive")
 
 		key = (item, godown)
 		merged[key] += quantity
+		if not math.isfinite(merged[key]):
+			frappe.throw("Order Quantity must be finite and positive")
 		allocation_metadata.setdefault(
 			key,
 			{
-				"stock_shown_at_order_time": allocation.get("stock_shown_at_order_time") or 0,
-				"stock_snapshot_at": allocation.get("stock_snapshot_at"),
+				"stock_shown_at_order_time": (allocation.get("stock_shown_at_order_time") or 0) if godown else 0,
+				"stock_snapshot_at": allocation.get("stock_snapshot_at") if godown else None,
 			},
 		)
 
@@ -515,6 +535,8 @@ def _load_items(item_names):
 
 
 def _validate_active_godowns(godown_names):
+	if not godown_names:
+		return
 	if not frappe.db.count("Tally Godown"):
 		return
 

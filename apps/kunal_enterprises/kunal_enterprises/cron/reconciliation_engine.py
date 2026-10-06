@@ -18,7 +18,7 @@ from kunal_enterprises.integrations.reconciliation_settings import (
 )
 
 
-RECONCILIATION_ALGORITHM_VERSION = 1
+RECONCILIATION_ALGORITHM_VERSION = 2
 DEFAULT_INCREMENTAL_SCOPE_RATIO = 0.5
 DEFAULT_WORK_MAX_AGE_HOURS = 24
 BATCH_SIZE = 500
@@ -245,6 +245,7 @@ def _run_reconciliation(change_set=None, requested_mode=None, trigger=None):
 					reference=order.portal_reference_number,
 					customer_guid=customer_guids.get(order.customer),
 					status=order.status,
+					godown_assignment_pending=bool(order.godown_assignment_pending),
 					items={row.item: row.requested_quantity for row in order.items},
 				),
 				payloads,

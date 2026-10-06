@@ -140,7 +140,7 @@ class TestFoundation(FrappeTestCase):
 			field = frappe.get_meta(doctype).get_field("godown")
 			self.assertEqual(field.fieldtype, "Link", doctype)
 			self.assertEqual(field.options, "Tally Godown", doctype)
-			self.assertTrue(field.reqd, doctype)
+			self.assertEqual(bool(field.reqd), doctype != "Order Godown Allocation", doctype)
 
 	def test_manual_review_reconciliation_log_requires_reason_code_and_message(self):
 		for missing_field in ("reason_code", "message"):
@@ -183,10 +183,11 @@ class TestFoundation(FrappeTestCase):
 
 	def test_required_role_profiles_are_installed_without_extra_roles(self):
 		expected_profiles = {
-			"Owner": {"Owner"},
-			"Admin": {"Admin"},
+			"Owner": {"Owner", "Godown Allocator"},
+			"Admin": {"Admin", "Godown Allocator"},
 			"Branch Manager": {"Branch Manager"},
 			"Branch Employee": {"Branch Employee"},
+			"Godown Allocator": {"Godown Allocator"},
 		}
 
 		for profile, expected_roles in expected_profiles.items():
@@ -198,7 +199,7 @@ class TestFoundation(FrappeTestCase):
 
 	def test_hooks_export_only_kunal_roles_and_role_profiles(self):
 		fixture_filters = {fixture["dt"]: fixture.get("filters") for fixture in hooks.fixtures}
-		expected_roles = ["Owner", "Admin", "Branch Manager", "Branch Employee"]
+		expected_roles = ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator"]
 
 		self.assertIn("Role", fixture_filters)
 		self.assertIn("Role Profile", fixture_filters)
@@ -255,9 +256,8 @@ class TestFoundation(FrappeTestCase):
 				self.assertFalse(permissions[role].create, f"{doctype} should not grant {role} create")
 				self.assertFalse(permissions[role].delete, f"{doctype} should not grant {role} delete")
 
-	def test_sensitive_internal_doctypes_are_not_exposed_to_branch_or_admin_roles(self):
+	def test_sensitive_internal_doctypes_have_only_intended_portal_access(self):
 		no_desk_doctypes = (
-			"Mobile OTP",
 			"Mobile Auth Token",
 			"Order Reference Sequence",
 		)
@@ -273,6 +273,15 @@ class TestFoundation(FrappeTestCase):
 			self.assertEqual(set(permissions), {"System Manager"}, doctype)
 			for role in ("Owner", "Admin", "Branch Manager", "Branch Employee", "Guest", "All"):
 				self.assertNotIn(role, permissions, f"{doctype} should not expose {role}")
+
+		# The reviewed OTP fixtures allow Owner/Admin support staff to inspect delivery records.
+		otp_permissions = self._permissions_for("Mobile OTP")
+		self.assertEqual(set(otp_permissions), {"Owner", "Admin"})
+		for permission in otp_permissions.values():
+			self.assertTrue(permission.read)
+			self.assertTrue(permission.select)
+			for action in ("write", "create", "delete", "import", "share"):
+				self.assertFalse(permission.get(action), f"Mobile OTP should not grant {action}")
 
 		for doctype in operational_read_only_doctypes:
 			permissions = self._permissions_for(doctype)

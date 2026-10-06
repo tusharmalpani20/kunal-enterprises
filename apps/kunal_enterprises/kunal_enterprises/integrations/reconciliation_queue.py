@@ -239,6 +239,7 @@ def _order_inputs(doc):
 		doc.get("portal_reference_number"),
 		doc.get("customer"),
 		doc.get("status"),
+		bool(doc.get("godown_assignment_pending")),
 		tuple((row.item, str(row.requested_quantity)) for row in doc.get("items", [])),
 	)
 

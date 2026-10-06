@@ -81,16 +81,21 @@ def resolve_manual_review(order, role, resolution_note):
 
 @frappe.whitelist(methods=["POST"])
 def mark_processing(order, role=None):
+	savepoint = "mark_processing_transition"
+	frappe.db.savepoint(savepoint)
 	try:
 		order_doc, effective_role = _load_owner_admin_order(order, role)
 		if order_doc.status != "Placed":
 			frappe.throw("Only Placed orders can move to Processing", title="Invalid Order Status")
+		order_doc.validate_processing_godowns()
 		_transition_order(order_doc, "Processing", effective_role, f"{effective_role} moved order to Processing")
+		frappe.db.release_savepoint(savepoint)
 		return create_success_response(
 			"Order moved to Processing",
 			{"order": order_doc.name, "status": order_doc.status},
 		)
 	except Exception as error:
+		frappe.db.rollback(save_point=savepoint)
 		return handle_error_response(error, "Unable to move order to Processing")
 
 

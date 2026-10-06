@@ -88,6 +88,12 @@ class FulfillmentTests(unittest.TestCase):
 		self.v["party_guid"] = None
 		self.assertEqual(self.result(self.v)["status"], "Manual Review")
 
+	def test_review_recovery_without_dispatch_waits_for_godown_assignment(self):
+		self.order.update(status="Manual Review", godown_assignment_pending=True)
+		self.assertEqual(self.result()["status"], "Placed")
+		self.order["godown_assignment_pending"] = False
+		self.assertEqual(self.result()["status"], "Processing")
+
 
 if __name__ == "__main__":
 	unittest.main()

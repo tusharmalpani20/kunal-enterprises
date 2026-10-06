@@ -6,7 +6,7 @@ app_description = "Kunal Enterprise Tally-connected order system"
 app_email = "admin@kunal-enterprises.local"
 app_license = "mit"
 
-KUNAL_ROLES = ["Owner", "Admin", "Branch Manager", "Branch Employee"]
+KUNAL_ROLES = ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator"]
 
 fixtures = [
 	{

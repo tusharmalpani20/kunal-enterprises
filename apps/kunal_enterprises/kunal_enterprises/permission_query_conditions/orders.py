@@ -4,6 +4,8 @@ import frappe
 BRANCH_EMPLOYEE_VISIBLE_STATUSES = ("Placed", "Processing", "Manual Review")
 GLOBAL_ORDER_ROLES = {"System Manager", "Owner", "Admin"}
 BRANCH_ORDER_ROLES = {"Branch Manager", "Branch Employee"}
+GODOWN_ALLOCATOR_ROLE = "Godown Allocator"
+GODOWN_ASSIGNMENT_CLOSED_STATUSES = ("Cancelled", "Partially Closed")
 
 
 def get_permission_query_conditions(user=None):
@@ -13,8 +15,13 @@ def get_permission_query_conditions(user=None):
 	if roles.intersection(GLOBAL_ORDER_ROLES):
 		return None
 
+	closed_statuses = ", ".join(frappe.db.escape(status) for status in GODOWN_ASSIGNMENT_CLOSED_STATUSES)
+	pending_condition = (
+		f"({_table('Order')}.{_column('godown_assignment_pending')} = 1 "
+		f"and {_table('Order')}.{_column('status')} not in ({closed_statuses}))"
+	)
 	if not roles.intersection(BRANCH_ORDER_ROLES):
-		return "1 = 0"
+		return pending_condition if GODOWN_ALLOCATOR_ROLE in roles else "1 = 0"
 
 	user_sql = frappe.db.escape(user)
 	status_condition = ""
@@ -27,7 +34,7 @@ def get_permission_query_conditions(user=None):
 		statuses = ", ".join(frappe.db.escape(status) for status in BRANCH_EMPLOYEE_VISIBLE_STATUSES)
 		status_condition = f"and {order_table}.{_column('status')} in ({statuses})"
 
-	return f"""
+	branch_condition = f"""
 		exists (
 			select 1
 			from {allocation_table} allocation
@@ -45,6 +52,9 @@ def get_permission_query_conditions(user=None):
 			{status_condition}
 		)
 	"""
+	if GODOWN_ALLOCATOR_ROLE in roles:
+		return f"({pending_condition} or ({branch_condition}))"
+	return branch_condition
 
 
 def has_permission(doc, user=None, permission_type=None):
@@ -53,6 +63,13 @@ def has_permission(doc, user=None, permission_type=None):
 
 	if roles.intersection(GLOBAL_ORDER_ROLES):
 		return True
+
+	if GODOWN_ALLOCATOR_ROLE in roles:
+		# Allocation changes go through the guarded assignment API, never generic Desk writes.
+		if permission_type not in (None, "read", "select"):
+			return False
+		if doc.get("godown_assignment_pending") and doc.status not in GODOWN_ASSIGNMENT_CLOSED_STATUSES:
+			return True
 
 	if not roles.intersection(BRANCH_ORDER_ROLES):
 		return False

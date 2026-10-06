@@ -161,6 +161,7 @@ def _run_reconciliation(change_set=None):
 				reference=order.portal_reference_number,
 				customer_guid=customer_guid,
 				status=order.status,
+				godown_assignment_pending=bool(order.godown_assignment_pending),
 				items={row.item: row.requested_quantity for row in order.items},
 			),
 			payloads,

@@ -28,8 +28,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Godown",
-   "options": "Tally Godown",
-   "reqd": 1
+   "options": "Tally Godown"
   },
   {
    "fieldname": "requested_quantity",

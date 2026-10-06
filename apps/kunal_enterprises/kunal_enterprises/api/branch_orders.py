@@ -22,6 +22,8 @@ def visible_orders(branch, role):
 
 @frappe.whitelist(methods=["POST"])
 def mark_processing(branch, order, role):
+	savepoint = "mark_processing_transition"
+	frappe.db.savepoint(savepoint)
 	try:
 		effective_role = _require_branch_access(branch, role, allowed_roles=BRANCH_ROLES)
 		if not _order_is_visible_for_branch(order, branch, effective_role):
@@ -30,15 +32,18 @@ def mark_processing(branch, order, role):
 		order_doc = frappe.get_doc("Order", order)
 		if order_doc.status != "Placed":
 			frappe.throw("Only Placed orders can move to Processing", title="Invalid Order Status")
+		order_doc.validate_processing_godowns()
 		from_status = order_doc.status
 		order_doc.status = "Processing"
 		order_doc.save(ignore_permissions=True)
 		_create_status_log(order_doc.name, from_status, order_doc.status, effective_role)
+		frappe.db.release_savepoint(savepoint)
 		return create_success_response(
 			"Order moved to Processing",
 			{"order": order_doc.name, "status": order_doc.status},
 		)
 	except Exception as error:
+		frappe.db.rollback(save_point=savepoint)
 		return handle_error_response(error, "Unable to move order to Processing")
 
 

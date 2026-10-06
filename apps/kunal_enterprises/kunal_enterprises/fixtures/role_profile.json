@@ -11,6 +11,12 @@
     "parentfield": "roles",
     "parenttype": "Role Profile",
     "role": "Owner"
+   },
+   {
+    "parent": "Owner",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Godown Allocator"
    }
   ]
  },
@@ -26,6 +32,12 @@
     "parentfield": "roles",
     "parenttype": "Role Profile",
     "role": "Admin"
+   },
+   {
+    "parent": "Admin",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Godown Allocator"
    }
   ]
  },
@@ -56,6 +68,20 @@
     "parentfield": "roles",
     "parenttype": "Role Profile",
     "role": "Branch Employee"
+   }
+  ]
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Role Profile",
+  "name": "Godown Allocator",
+  "role_profile": "Godown Allocator",
+  "roles": [
+   {
+    "parent": "Godown Allocator",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Godown Allocator"
    }
   ]
  }

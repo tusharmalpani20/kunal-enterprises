@@ -1,7 +1,7 @@
 import frappe
 
 
-KUNAL_APP_ROLES = {"Owner", "Admin", "Branch Manager", "Branch Employee", "System Manager"}
+KUNAL_APP_ROLES = {"Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "System Manager"}
 
 
 def has_app_permission():
