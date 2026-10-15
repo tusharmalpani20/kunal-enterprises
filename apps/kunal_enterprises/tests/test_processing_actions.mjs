@@ -89,3 +89,9 @@ test('a failed request unlocks the action for retry', () => {
   click();
   assert.equal(flow.calls.filter(call => call.method.endsWith('.mark_processing')).length, 2);
 });
+
+test('processing eligibility uses GET as required by the read-only endpoint', () => {
+  const flow = form('Owner');
+  const options = flow.calls.find(call => call.method.endsWith('.processing_options'));
+  assert.equal(options.type, 'GET');
+});

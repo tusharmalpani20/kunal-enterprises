@@ -10,6 +10,7 @@ frappe.ui.form.on("Order", {
 			const order = frm.doc.name;
 			frappe.call({
 				method: "kunal_enterprises.api.order_controls.processing_options",
+				type: "GET",
 				args: { order },
 				callback(response) {
 					if (frm.__processing_options_request === processing_request && frm.doc.name === order
