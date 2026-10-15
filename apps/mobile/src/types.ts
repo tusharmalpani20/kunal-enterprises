@@ -92,6 +92,11 @@ export interface OrderDetail extends OrderSummary {
 
 
 export interface QuickOrderRequest {
+  customer?: string;
+  customer_name?: string;
+  order_source?: IdentityType;
+  sales_employee?: string | null;
+  sales_employee_name?: string | null;
   name: string;
   request?: string;
   status: 'Pending Review' | 'In Review' | 'Converted to Order' | 'Rejected';

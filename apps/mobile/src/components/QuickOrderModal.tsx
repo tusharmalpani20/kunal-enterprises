@@ -47,7 +47,7 @@ export function QuickOrderForm({ onSubmitted }: { onSubmitted?: () => void } = {
 }
 
 export function QuickOrderModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { quickOrders, quickOrdersEnabled } = useOrderFlow();
+  const { quickOrders, quickOrdersEnabled, quickOrderTitle } = useOrderFlow();
   const { text, setText, submitting } = quickOrders;
   const warningOpen = useRef(false);
   const [showWarning, setShowWarning] = useState(false);
@@ -79,7 +79,7 @@ export function QuickOrderModal({ visible, onClose }: { visible: boolean; onClos
           <ScrollView contentContainerStyle={styles.bottomSheetContent} keyboardShouldPersistTaps="handled">
             <View style={styles.sheetHandle} />
             <View style={styles.appHeaderActions}>
-              <Text style={[styles.workspaceTitle, { flex: 1 }]}>Quick Order</Text>
+              <Text style={[styles.workspaceTitle, { flex: 1 }]}>{quickOrderTitle}</Text>
               <FeedbackPressable onPress={requestClose} disabled={submitting} style={styles.iconOnlyButton} accessibilityLabel="Close Quick Order">
                 <Text style={styles.rowDetail}>✕</Text>
               </FeedbackPressable>

@@ -7,9 +7,9 @@ import { formatOrderPlacedStamp } from '../../src/utils/orderFormatting';
 import { styles, colors } from '../../src/styles/appStyles';
 
 export default function QuickOrderDetailScreen() {
-  const { quickOrders, quickOrdersEnabled, quickOrderLinkedLoading, showHistory, showQuickOrderLinkedOrder } = useOrderFlow();
+  const { quickOrders, quickOrderAccessEnabled, mode, quickOrderLinkedLoading, showHistory, showQuickOrderLinkedOrder } = useOrderFlow();
   const { detail, detailLoading, error } = quickOrders;
-  if (!quickOrdersEnabled) return <AppShell><Text style={styles.rowDetail}>Quick Order is available to signed-in Customers.</Text></AppShell>;
+  if (!quickOrderAccessEnabled) return <AppShell><Text style={styles.rowDetail}>Sign in to view Quick Order Requests.</Text></AppShell>;
   return (
     <AppShell>
       <Workspace title="Quick Order Request">
@@ -19,6 +19,7 @@ export default function QuickOrderDetailScreen() {
         {detail ? <>
           <Text style={styles.successRef}>{detail.name}</Text>
           <Text style={styles.rowTitle}>{detail.status}</Text>
+          {mode === 'Sales Employee' ? <Text style={styles.rowDetail}>{detail.customer_name || detail.customer}</Text> : null}
           <Text style={styles.rowDetail}>{formatOrderPlacedStamp(detail.confirmation_datetime)}</Text>
           <View style={styles.segmentedControl}>
             <FeedbackPressable style={[styles.segmentedButtonPressable, { flex: 0, minWidth: 112 }]} pressedStyle={styles.detailSegmentedActive} rippleColor={colors.primaryPressed} accessibilityRole="tab" accessibilityState={{ selected: true }}>

@@ -19,7 +19,7 @@ export default function HistoryScreen() {
         {historyRows.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.workspaceTitle}>No orders yet</Text>
-            <Text style={styles.rowDetail}>{mode === 'Customer' ? 'Orders and Quick Order requests will appear here.' : 'Placed orders will appear here.'}</Text>
+            <Text style={styles.rowDetail}>Orders and Quick Order requests will appear here.</Text>
           </View>
         ) : historyRows.map((order) => (
           <OrderHistoryCard

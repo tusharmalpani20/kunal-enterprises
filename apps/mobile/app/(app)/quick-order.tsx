@@ -12,7 +12,7 @@ export default function QuickOrderScreen() {
   const { quickOrders, quickOrdersEnabled, showQuickOrderDetail } = useOrderFlow();
   const { requests, submitting, loading, hasMore, error, loadHistory } = quickOrders;
   if (!quickOrdersEnabled) {
-    return <AppShell><Text style={styles.rowDetail}>Quick Order is available to signed-in Customers.</Text></AppShell>;
+    return <AppShell><Text style={styles.rowDetail}>Sign in and select a customer to submit a Quick Order.</Text></AppShell>;
   }
   return (
     <AppShell>

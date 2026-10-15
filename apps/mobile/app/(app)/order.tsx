@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { ChevronDown, Maximize2 } from 'lucide-react-native';
 import { AppShell } from '../../src/components/AppShell';
@@ -12,7 +12,7 @@ import type { TallyItem } from '../../src/types';
 export default function OrderScreen() {
   const [quickOrderOpen, setQuickOrderOpen] = useState(false);
   const {
-    quickOrdersEnabled,
+    quickOrdersEnabled, quickOrderContextKey,
     groups,
     itemsLoading,
     itemsTotalCount, itemsAllCount, itemsHasMore, itemsMoreLoading, loadMoreItems,
@@ -29,6 +29,8 @@ export default function OrderScreen() {
     logoForTallyItem,
     resolveLogoUrl,
   } = useOrderFlow();
+
+  useEffect(() => { setQuickOrderOpen(false); }, [quickOrderContextKey]);
 
   return (
     <>

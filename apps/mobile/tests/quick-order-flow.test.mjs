@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canUseQuickOrders, createQuickOrderSubmitter, loadQuickOrderLinkedOrder, quickOrderTextForSubmit } from '../src/domain/quickOrderFlow.mjs';
+import { canUseQuickOrders, quickOrderHeading, createQuickOrderSubmitter, loadQuickOrderLinkedOrder, quickOrderTextForSubmit } from '../src/domain/quickOrderFlow.mjs';
 import { mockApi } from '../src/api/mockApi.mjs';
 import { createFrappeApiClient } from '../src/api/frappeClient.mjs';
 
-test('quick orders are available only to verified customer sessions', () => {
+test('quick orders require a verified session matching the active mode', () => {
   const session = { identityType: 'Customer', identity: 'CUST-1', accessToken: 'customer-token' };
   assert.equal(canUseQuickOrders({ mode: 'Customer', session }), true);
   assert.equal(canUseQuickOrders({ mode: 'Sales Employee', session }), false);
@@ -105,4 +105,52 @@ test('linked order results and errors are discarded after leaving the account or
     loadOrder: async () => { throw new Error('Network request failed'); }, isCurrent: () => true }), /Network/);
   assert.deepEqual(await loadQuickOrderLinkedOrder({ order: 'ORDER-1', customer: 'CUST-1',
     loadOrder: async () => ({ name: 'ORDER-1' }), isCurrent: () => true }), { name: 'ORDER-1' });
+});
+
+
+test('sales quick order access requires the matching employee token and the heading identifies the customer', () => {
+  assert.equal(canUseQuickOrders({ mode: 'Sales Employee', session: { identityType: 'Sales Employee', identity: 'SE-1', accessToken: 'token' } }), true);
+  assert.equal(canUseQuickOrders({ mode: 'Sales Employee', session: { identityType: 'Sales Employee', identity: 'SE-1' } }), false);
+  assert.equal(quickOrderHeading('Sales Employee', { customer: 'CUST-1', customer_name: 'Retailer One' }), 'Quick Order for Retailer One');
+  assert.equal(quickOrderHeading('Sales Employee', { customer: 'CUST-1', business_legal_name: 'Business One' }), 'Quick Order for Business One');
+  assert.equal(quickOrderHeading('Customer', { customer_name: 'Retailer One' }), 'Quick Order');
+});
+
+test('sales quick order adapters preserve employee and customer scope', async () => {
+  const calls = [];
+  const api = createFrappeApiClient({
+    post: async (method, params) => { calls.push({ method, params }); return { message: { success: true, data: { name: 'QOR-SALES' } } }; },
+    get: async (method, params) => { calls.push({ method, params }); return { message: { success: true, data: {} } }; },
+  });
+  await api.quickOrderSubmit('3 sheets', 'CUST-1', 'SE-1');
+  await api.quickOrderHistory(undefined, { limit: 20, offset: 0 }, 'SE-1');
+  await api.quickOrderDetail('QOR-SALES', undefined, 'SE-1');
+  assert.deepEqual(calls.map(call => call.params), [
+    { text: '3 sheets', customer: 'CUST-1', sales_employee: 'SE-1' },
+    { customer: undefined, limit: 20, offset: 0, sales_employee: 'SE-1' },
+    { request: 'QOR-SALES', customer: undefined, sales_employee: 'SE-1' },
+  ]);
+});
+
+test('employee mock history includes own quick orders across customers and hides other employees', async () => {
+  const own = await mockApi.quickOrderSubmit('3 sheets', 'CUST-SALES-1', 'SE-QUICK-1');
+  const another = await mockApi.quickOrderSubmit('1 roll', 'CUST-SALES-2', 'SE-QUICK-1');
+  const hidden = await mockApi.quickOrderSubmit('Private request', 'CUST-SALES-1', 'SE-QUICK-2');
+  const page = await mockApi.quickOrderHistory(undefined, {}, 'SE-QUICK-1');
+  assert.deepEqual(new Set(page.requests.map(row => row.name)), new Set([own.name, another.name]));
+  const combined = await mockApi.orderHistory(undefined, 'SE-QUICK-1', { includeQuickOrders: true });
+  assert.equal(combined.some(row => row.name === own.name && row.sales_employee === 'SE-QUICK-1'), true);
+  assert.equal(combined.some(row => row.name === hidden.name), false);
+  assert.equal((await mockApi.quickOrderHistory('CUST-SALES-1')).requests.some(row => row.name === own.name), true);
+  await assert.rejects(mockApi.quickOrderDetail(hidden.name, undefined, 'SE-QUICK-1'), /not found/);
+});
+
+test('opening a converted employee request uses its own customer and employee identity', async () => {
+  const detail = await loadQuickOrderLinkedOrder({ order: 'ORDER-SA', customer: 'CUST-B', salesEmployee: 'SE-1',
+    loadOrder: async (order, options) => {
+      assert.equal(order, 'ORDER-SA');
+      assert.deepEqual(options, { customer: 'CUST-B', salesEmployee: 'SE-1' });
+      return { name: order, customer: 'CUST-B', order_source: 'Sales Employee' };
+    }, isCurrent: () => true });
+  assert.equal(detail.customer, 'CUST-B');
 });

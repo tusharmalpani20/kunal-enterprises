@@ -157,18 +157,19 @@ export function createFrappeApiClient(call) {
       return unwrap(await call.post(METHODS.submitOrder, payload));
     },
 
-    async quickOrderSubmit(text, customer) {
-      return unwrap(await call.post(METHODS.quickOrderSubmit, { text, customer }));
+    async quickOrderSubmit(text, customer, salesEmployee = undefined) {
+      return unwrap(await call.post(METHODS.quickOrderSubmit, { text, customer, ...(salesEmployee ? { sales_employee: salesEmployee } : {}) }));
     },
 
-    async quickOrderHistory(customer, options = {}) {
+    async quickOrderHistory(customer, options = {}, salesEmployee = undefined) {
       return unwrap(await call.get(METHODS.quickOrderHistory, {
         customer, limit: options.limit ?? 20, offset: options.offset ?? 0,
+        ...(salesEmployee ? { sales_employee: salesEmployee } : {}),
       }));
     },
 
-    async quickOrderDetail(request, customer) {
-      return unwrap(await call.get(METHODS.quickOrderDetail, { request, customer }));
+    async quickOrderDetail(request, customer, salesEmployee = undefined) {
+      return unwrap(await call.get(METHODS.quickOrderDetail, { request, customer, ...(salesEmployee ? { sales_employee: salesEmployee } : {}) }));
     },
 
     async orderHistory(customer, salesEmployee = undefined, options = {}) {

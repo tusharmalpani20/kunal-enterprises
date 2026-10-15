@@ -390,18 +390,18 @@ export const mockApi = {
     };
   },
 
-  async quickOrderSubmit(text, customer) {
+  async quickOrderSubmit(text, customer, salesEmployee = undefined) {
     const name = `QO-MOCK-${String(quickOrderRequests.length + 1).padStart(4, '0')}`;
     /** @type {import('../types').QuickOrderRequest & {customer: string}} */
-    const request = { name, request: name, text, customer, status: 'Pending Review',
+    const request = { name, request: name, text, customer, order_source: salesEmployee ? 'Sales Employee' : 'Customer', sales_employee: salesEmployee || null, status: 'Pending Review',
       confirmation_datetime: new Date().toISOString(), order: null, portal_reference_number: null,
       rejection_reason: null };
     quickOrderRequests.unshift(request);
     return { ...request };
   },
 
-  async quickOrderHistory(customer, options = {}) {
-    const scoped = quickOrderRequests.filter((row) => row.customer === customer);
+  async quickOrderHistory(customer, options = {}, salesEmployee = undefined) {
+    const scoped = quickOrderRequests.filter((row) => (!customer || row.customer === customer) && (!salesEmployee || row.sales_employee === salesEmployee));
     const offset = options.offset ?? 0;
     const limit = options.limit ?? 20;
     const requests = scoped.slice(offset, offset + limit).map((row) => ({ ...row }));
@@ -409,17 +409,17 @@ export const mockApi = {
     return { requests, has_more: hasMore, next_offset: hasMore ? offset + limit : null };
   },
 
-  async quickOrderDetail(request, customer) {
-    const found = quickOrderRequests.find((row) => row.name === request && row.customer === customer);
+  async quickOrderDetail(request, customer, salesEmployee = undefined) {
+    const found = quickOrderRequests.find((row) => row.name === request && (!customer || row.customer === customer) && (!salesEmployee || row.sales_employee === salesEmployee));
     if (!found) throw new Error('Quick order was not found');
     return { ...found };
   },
 
   async orderHistory(customer, salesEmployee = undefined, options = {}) {
     let scoped = salesEmployee ? salesEmployeeHistory(orders, salesEmployee) : orders.filter((order) => order.customer === customer);
-    if (options.includeQuickOrders && !salesEmployee) {
+    if (options.includeQuickOrders) {
       scoped = [...scoped, ...quickOrderRequests
-        .filter((request) => request.customer === customer && request.status !== 'Converted to Order')
+        .filter((request) => (!customer || request.customer === customer) && (!salesEmployee || request.sales_employee === salesEmployee) && request.status !== 'Converted to Order')
         .map((request) => ({ ...request, entry_type: 'quick_order', quick_order_request: request.name,
           portal_reference_number: request.name }))]
         .sort((a, b) => String(b.confirmation_datetime || '').localeCompare(String(a.confirmation_datetime || '')) || b.name.localeCompare(a.name));

@@ -10,7 +10,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: {
   module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true,
 } }).outputText;
 
-function setup(text = '', busy = false, enabled = true) {
+function setup(text = '', busy = false, enabled = true, title = 'Quick Order') {
   let closes = 0;
   let result;
   const toasts = [];
@@ -30,7 +30,7 @@ function setup(text = '', busy = false, enabled = true) {
     if (name === 'react-native') return { Modal: 'Modal', View: 'View', Pressable: 'Pressable',
       KeyboardAvoidingView: 'KeyboardAvoidingView', ScrollView: 'ScrollView', Text: 'Text', TextInput: 'TextInput',
       Platform: { OS: 'android' }, Keyboard: { dismiss() {} } };
-    if (name.includes('OrderFlowProvider')) return { useOrderFlow: () => ({ quickOrders, quickOrdersEnabled: enabled }) };
+    if (name.includes('OrderFlowProvider')) return { useOrderFlow: () => ({ quickOrders, quickOrdersEnabled: enabled, quickOrderTitle: title }) };
     if (name.includes('quickOrderFlow')) return { QUICK_ORDER_TEXT_LIMIT: 5000 };
     if (name.includes('appStyles')) return { styles: {}, colors: {} };
     if (name === './orderUi') return { FeedbackPressable: 'Button' };
@@ -110,4 +110,11 @@ test('failed or superseded submissions keep the form open without a success toas
   assert.equal(flow.closes(), 0);
   assert.equal(flow.toasts.length, 0);
   assert.equal(flow.quickOrders.text, 'Item A');
+});
+
+
+test('sales employee modal clearly identifies the selected customer', () => {
+  const flow = setup('', false, true, 'Quick Order for Retailer One');
+  const header = flow.tree.children[0].children[1].children[0].children[1];
+  assert.equal(header.children[0].children[0], 'Quick Order for Retailer One');
 });

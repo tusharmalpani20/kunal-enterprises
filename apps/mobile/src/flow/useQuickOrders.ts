@@ -4,15 +4,15 @@ import { apiErrorMessage } from '../domain/sharedStateFlow.mjs';
 import type { QuickOrderRequest } from '../types';
 
 interface QuickOrderApi {
-  quickOrderSubmit(text: string, customer: string): Promise<QuickOrderRequest>;
-  quickOrderHistory(customer: string, options: { limit: number; offset: number }): Promise<{
+  quickOrderSubmit(text: string, customer: string, salesEmployee?: string): Promise<QuickOrderRequest>;
+  quickOrderHistory(customer: string | undefined, options: { limit: number; offset: number }, salesEmployee?: string): Promise<{
     requests: QuickOrderRequest[]; has_more: boolean; next_offset: number | null;
   }>;
-  quickOrderDetail(request: string, customer: string): Promise<QuickOrderRequest>;
+  quickOrderDetail(request: string, customer: string | undefined, salesEmployee?: string): Promise<QuickOrderRequest>;
 }
 
-export function useQuickOrders({ api, customer, contextKey, enabled, active, onError }: {
-  api: QuickOrderApi; customer: string; contextKey: string; enabled: boolean; active: boolean;
+export function useQuickOrders({ api, customer, salesEmployee, contextKey, enabled, active, onError }: {
+  api: QuickOrderApi; customer: string; salesEmployee?: string; contextKey: string; enabled: boolean; active: boolean;
   onError: (error: unknown) => void;
 }) {
   const [text, setText] = useState('');
@@ -26,7 +26,10 @@ export function useQuickOrders({ api, customer, contextKey, enabled, active, onE
   const [submittedReference, setSubmittedReference] = useState('');
   const [stateContext, setStateContext] = useState(contextKey);
   const currentContext = useRef(contextKey);
+  const contextRevision = useRef(0);
+  if (currentContext.current !== contextKey) contextRevision.current++;
   currentContext.current = contextKey;
+  const revision = contextRevision.current;
   const errorHandler = useRef(onError);
   errorHandler.current = onError;
   const nextOffset = useRef(0);
@@ -35,8 +38,8 @@ export function useQuickOrders({ api, customer, contextKey, enabled, active, onE
   const historyInFlight = useRef(false);
   const submitInFlight = useRef(false);
   const submitter = useMemo(() => createQuickOrderSubmitter(
-    (value: string) => api.quickOrderSubmit(value, customer),
-  ), [api, customer, contextKey]);
+    (value: string) => api.quickOrderSubmit(value, customer, salesEmployee),
+  ), [api, customer, salesEmployee, contextKey]);
 
   useEffect(() => {
     setStateContext(contextKey);
@@ -61,34 +64,34 @@ export function useQuickOrders({ api, customer, contextKey, enabled, active, onE
     setLoading(true); setError('');
     try {
       const offset = more ? nextOffset.current : 0;
-      const page = await api.quickOrderHistory(customer, { limit: 20, offset });
-      if (currentContext.current !== contextKey || requestId !== historyRequestId.current) return;
+      const page = await api.quickOrderHistory(salesEmployee ? undefined : customer, { limit: 20, offset }, salesEmployee);
+      if ((currentContext.current !== contextKey || contextRevision.current !== revision) || requestId !== historyRequestId.current) return;
       setRequests((current) => more
         ? [...current, ...page.requests.filter((row) => !current.some((entry) => entry.name === row.name))]
         : page.requests);
       nextOffset.current = page.next_offset ?? offset + page.requests.length;
       setHasMore(page.has_more);
     } catch (failure) {
-      if (currentContext.current === contextKey && requestId === historyRequestId.current) reportError(failure);
+      if ((currentContext.current === contextKey && contextRevision.current === revision) && requestId === historyRequestId.current) reportError(failure);
     } finally {
-      if (currentContext.current === contextKey && requestId === historyRequestId.current) {
+      if ((currentContext.current === contextKey && contextRevision.current === revision) && requestId === historyRequestId.current) {
         historyInFlight.current = false;
         setLoading(false);
       }
     }
-  }, [api, customer, contextKey, enabled, reportError]);
+  }, [api, customer, salesEmployee, contextKey, revision, enabled, reportError]);
 
   useEffect(() => {
     if (active && enabled) void loadHistory();
   }, [active, enabled, loadHistory]);
 
   async function submit() {
-    if (!enabled || submitInFlight.current) return;
+    if (!enabled || submitInFlight.current || !customer) return;
     submitInFlight.current = true;
     setSubmitting(true); setError(''); setSubmittedReference('');
     try {
       const request = await submitter(text) as QuickOrderRequest | null;
-      if (!request || currentContext.current !== contextKey) return;
+      if (!request || (currentContext.current !== contextKey || contextRevision.current !== revision)) return;
       // Ignore a history request started before this submission was accepted.
       historyRequestId.current++;
       historyInFlight.current = false;
@@ -101,9 +104,9 @@ export function useQuickOrders({ api, customer, contextKey, enabled, active, onE
       void loadHistory();
       return request;
     } catch (failure) {
-      if (currentContext.current === contextKey) reportError(failure);
+      if ((currentContext.current === contextKey && contextRevision.current === revision)) reportError(failure);
     } finally {
-      if (currentContext.current === contextKey) {
+      if ((currentContext.current === contextKey && contextRevision.current === revision)) {
         submitInFlight.current = false;
         setSubmitting(false);
       }
@@ -115,12 +118,12 @@ export function useQuickOrders({ api, customer, contextKey, enabled, active, onE
     const requestId = ++detailRequestId.current;
     setDetail(null); setDetailLoading(true); setError('');
     try {
-      const row = await api.quickOrderDetail(request, customer);
-      if (currentContext.current === contextKey && requestId === detailRequestId.current) setDetail(row);
+      const row = await api.quickOrderDetail(request, salesEmployee ? undefined : customer, salesEmployee);
+      if ((currentContext.current === contextKey && contextRevision.current === revision) && requestId === detailRequestId.current) setDetail(row);
     } catch (failure) {
-      if (currentContext.current === contextKey && requestId === detailRequestId.current) reportError(failure);
+      if ((currentContext.current === contextKey && contextRevision.current === revision) && requestId === detailRequestId.current) reportError(failure);
     } finally {
-      if (currentContext.current === contextKey && requestId === detailRequestId.current) setDetailLoading(false);
+      if ((currentContext.current === contextKey && contextRevision.current === revision) && requestId === detailRequestId.current) setDetailLoading(false);
     }
   }
 

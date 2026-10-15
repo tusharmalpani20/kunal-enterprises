@@ -5,7 +5,7 @@ import { type DateTimePickerEvent } from '@react-native-community/datetimepicker
 import { usePathname, useRouter } from 'expo-router';
 
 import { createMobileApi } from '../api/mobileApi';
-import { canUseQuickOrders, loadQuickOrderLinkedOrder } from '../domain/quickOrderFlow.mjs';
+import { canUseQuickOrders, quickOrderHeading, loadQuickOrderLinkedOrder } from '../domain/quickOrderFlow.mjs';
 import { useQuickOrders } from './useQuickOrders';
 import { useCataloguePagination } from './useCataloguePagination';
 import {
@@ -161,6 +161,8 @@ function useOrderFlowState() {
   const [reference, setReference] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<OrderSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRequestId = useRef(0);
+  const historyInFlight = useRef(false);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
@@ -172,13 +174,24 @@ function useOrderFlowState() {
   const hasActiveModeSession = canUseProtectedMobileApi({ mode, session });
   const protectedCallReady = !session?.accessToken || callAccessToken === session.accessToken;
   const catalogLoading = groupsLoading || itemsLoading;
-  const quickOrderContextKey = `${mode}:${session?.identity || ''}:${session?.accessToken || ''}`;
-  const quickOrdersEnabled = canUseQuickOrders({ mode, session }) && protectedCallReady;
+  const quickOrderContextKey = `${mode}:${session?.identity || ''}:${session?.accessToken || ''}:${mode === 'Sales Employee' ? selectedCustomer?.customer || '' : ''}`;
+  useEffect(() => {
+    historyRequestId.current++;
+    historyInFlight.current = false;
+    setHistoryRows([]);
+    setHistoryHasMore(false);
+    setHistoryLoading(false);
+    setOrderDetail(null);
+  }, [quickOrderContextKey]);
+  const quickOrderAccessEnabled = canUseQuickOrders({ mode, session }) && protectedCallReady;
+  const quickOrdersEnabled = quickOrderAccessEnabled && (mode === 'Customer' || Boolean(selectedCustomer?.customer));
+  const quickOrderTitle = quickOrderHeading(mode, selectedCustomer);
   const quickOrders = useQuickOrders({
     api,
-    customer: session?.identity || '',
+    customer: activeCustomer(),
+    salesEmployee: mode === 'Sales Employee' ? activeSalesEmployeeIdentity() : undefined,
     contextKey: quickOrderContextKey,
-    enabled: quickOrdersEnabled,
+    enabled: quickOrderAccessEnabled,
     active: step === 'quickOrder',
     onError(error) {
       const failure = classifyApiFailure(error);
@@ -197,7 +210,7 @@ function useOrderFlowState() {
   }
 
   function showQuickOrderDetail(request: string) {
-    if (!quickOrdersEnabled) return;
+    if (!quickOrderAccessEnabled) return;
     setStep('quickOrderDetail');
     void quickOrders.loadDetail(request);
   }
@@ -215,7 +228,7 @@ function useOrderFlowState() {
 
   async function showQuickOrderLinkedOrder() {
     const request = quickOrders.detail;
-    if (!request?.order || !quickOrdersEnabled) return;
+    if (!request?.order || !quickOrderAccessEnabled) return;
     const revision = linkedNavigation.current.revision;
     const navigationRevision = navigationChangeRevision.current;
     if (linkedOrderInFlight.current === revision) return;
@@ -227,7 +240,9 @@ function useOrderFlowState() {
     setLinkedLoadingRevision(revision);
     try {
       const detail = await loadQuickOrderLinkedOrder({ order: request.order,
-        customer: session?.identity || '', loadOrder: api.orderDetail, isCurrent });
+        customer: mode === 'Customer' ? activeCustomerIdentity() : request.customer,
+        salesEmployee: mode === 'Sales Employee' ? activeSalesEmployeeIdentity() : undefined,
+        loadOrder: api.orderDetail, isCurrent });
       if (!detail || !isCurrent()) return;
       setOrderDetail(detail);
       setStep('detail');
@@ -1116,54 +1131,78 @@ function useOrderFlowState() {
     setStep('customer');
   }
 
+  function historyRequestGuard(requestIds = historyRequestId) {
+    const id = ++requestIds.current;
+    const scope = linkedNavigation.current.revision;
+    const navigation = navigationChangeRevision.current;
+    return () => requestIds.current === id && linkedNavigation.current.revision === scope
+      && navigationChangeRevision.current === navigation;
+  }
+
   async function showHistory() {
     if (!hasActiveModeSession) {
       setSystemState({ kind: 'validation_error', message: 'Verify OTP before loading account data.' });
       return;
     }
+    const isCurrent = historyRequestGuard();
+    const requestId = historyRequestId.current;
+    historyInFlight.current = true;
     try {
       setHistoryLoading(true);
       const rows = await fetchHistoryPage(0);
+      if (!isCurrent()) return;
       setHistoryRows(rows.slice(0, HISTORY_PAGE_SIZE));
       setHistoryHasMore(rows.length > HISTORY_PAGE_SIZE);
       setStep('history');
     } catch (error) {
+      if (!isCurrent()) return;
       const failure = classifyApiFailure(error);
       setSystemState(failure);
       if (failure.kind === 'expired_session') {
-        await logout();
         setStep('auth');
+        await logout();
       }
     } finally {
-      setHistoryLoading(false);
+      if (historyRequestId.current === requestId) {
+        historyInFlight.current = false;
+        setHistoryLoading(false);
+      }
     }
   }
 
   async function loadMoreHistory() {
-    if (!hasActiveModeSession || historyLoading || !historyHasMore) {
+    if (!hasActiveModeSession || historyInFlight.current || historyLoading || !historyHasMore) {
       return;
     }
+    const isCurrent = historyRequestGuard();
+    const requestId = historyRequestId.current;
+    historyInFlight.current = true;
     try {
       setHistoryLoading(true);
       const rows = await fetchHistoryPage(historyRows.length);
+      if (!isCurrent()) return;
       setHistoryRows((current) => [...current, ...rows.slice(0, HISTORY_PAGE_SIZE)]);
       setHistoryHasMore(rows.length > HISTORY_PAGE_SIZE);
     } catch (error) {
+      if (!isCurrent()) return;
       const failure = classifyApiFailure(error);
       setSystemState(failure);
       if (failure.kind === 'expired_session') {
-        await logout();
         setStep('auth');
+        await logout();
       }
     } finally {
-      setHistoryLoading(false);
+      if (historyRequestId.current === requestId) {
+        historyInFlight.current = false;
+        setHistoryLoading(false);
+      }
     }
   }
 
   function fetchHistoryPage(offset: number) {
     const options = { limit: HISTORY_PAGE_SIZE + 1, offset };
     return mode === 'Sales Employee'
-      ? api.orderHistory(undefined, activeSalesEmployeeIdentity(), options)
+      ? api.orderHistory(undefined, activeSalesEmployeeIdentity(), { ...options, includeQuickOrders: true })
       : api.orderHistory(activeCustomerIdentity(), undefined, { ...options, includeQuickOrders: true });
   }
 
@@ -1208,22 +1247,24 @@ function useOrderFlowState() {
   }
 
   async function showOrderDetail(order: OrderSummary) {
+    const isCurrent = historyRequestGuard(linkedOrderRequestId);
     try {
-      setOrderDetail(
-        await api.orderDetail(
-          order.name,
-          mode === 'Sales Employee'
-            ? { salesEmployee: activeSalesEmployeeIdentity() }
-            : { customer: activeCustomerIdentity() },
-        ),
+      const detail = await api.orderDetail(
+        order.name,
+        mode === 'Sales Employee'
+          ? { salesEmployee: activeSalesEmployeeIdentity() }
+          : { customer: activeCustomerIdentity() },
       );
+      if (!isCurrent()) return;
+      setOrderDetail(detail);
       setStep('detail');
     } catch (error) {
+      if (!isCurrent()) return;
       const failure = classifyApiFailure(error);
       setSystemState(failure);
       if (failure.kind === 'expired_session') {
-        await logout();
         setStep('auth');
+        await logout();
       }
     }
   }
@@ -1325,7 +1366,7 @@ function useOrderFlowState() {
 
   return {
     // state
-    quickOrders, quickOrdersEnabled, quickOrderLinkedLoading, showQuickOrder, showQuickOrderDetail, showQuickOrderLinkedOrder,
+    quickOrders, quickOrdersEnabled, quickOrderAccessEnabled, quickOrderTitle, quickOrderContextKey, quickOrderLinkedLoading, showQuickOrder, showQuickOrderDetail, showQuickOrderLinkedOrder,
     mode, setMode,
     step, setStep,
     groups,

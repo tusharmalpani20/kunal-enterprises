@@ -10,7 +10,13 @@ export function quickOrderTextForSubmit(value) {
 }
 
 export function canUseQuickOrders({ mode, session }) {
-  return mode === 'Customer' && session?.identityType === 'Customer' && Boolean(session.identity && session.accessToken);
+  return ['Customer', 'Sales Employee'].includes(mode) && session?.identityType === mode && Boolean(session.identity && session.accessToken);
+}
+
+export function quickOrderHeading(mode, customer) {
+  if (mode !== 'Sales Employee') return 'Quick Order';
+  const name = customer?.business_legal_name || customer?.customer_name || customer?.customer;
+  return name ? `Quick Order for ${name}` : 'Quick Order';
 }
 
 // Keep concurrent taps from creating multiple requests, including before React updates the button.
@@ -30,9 +36,9 @@ export function createQuickOrderSubmitter(submit) {
   };
 }
 
-export async function loadQuickOrderLinkedOrder({ order, customer, loadOrder, isCurrent }) {
+export async function loadQuickOrderLinkedOrder({ order, customer, salesEmployee, loadOrder, isCurrent }) {
   try {
-    const detail = await loadOrder(order, { customer });
+    const detail = await loadOrder(order, { customer, ...(salesEmployee ? { salesEmployee } : {}) });
     return isCurrent() ? detail : null;
   } catch (error) {
     // Errors from an account or screen that has been left must not log out or navigate the new one.
