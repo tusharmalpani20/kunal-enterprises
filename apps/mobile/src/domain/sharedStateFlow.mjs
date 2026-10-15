@@ -10,7 +10,7 @@ export function requestStateFromTiming({ isLoading, elapsedMs }) {
 
 export function classifyApiFailure(error) {
   const message = apiErrorMessage(error);
-  if (/network request failed|failed to fetch|offline|data.*undefined|undefined.*data|timeout|couldn'?t connect/i.test(message)) {
+  if (/unable to reach the server|network request failed|failed to fetch|offline|data.*undefined|undefined.*data|timeout|couldn'?t connect/i.test(message)) {
     return { kind: 'no_network', message };
   }
   if (message === 'Invalid or inactive token' || message === 'Error verifying token') {
