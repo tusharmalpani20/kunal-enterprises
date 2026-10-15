@@ -10,16 +10,16 @@ const appVersionSource = readFileSync(new URL('../src/constants/appVersion.ts', 
 const androidGradle = readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8');
 const iosInfoPlist = readFileSync(new URL('../ios/KunalEnterprises/Info.plist', import.meta.url), 'utf8');
 
-test('mobile app metadata is version 0.1.2 with incremented build numbers', () => {
-  assert.equal(packageJson.version, '0.1.2');
-  assert.match(appVersionSource, /APP_VERSION = '0\.1\.2'/);
-  assert.match(androidGradle, /versionName "0\.1\.2"/);
-  assert.match(androidGradle, /versionCode 3\b/);
-  assert.equal(appConfig.expo.version, '0.1.2');
-  assert.equal(appConfig.expo.android.versionCode, 3);
-  assert.equal(appConfig.expo.ios.buildNumber, '3');
-  assert.match(iosInfoPlist, /<key>CFBundleShortVersionString<\/key>\s*<string>0\.1\.2<\/string>/);
-  assert.match(iosInfoPlist, /<key>CFBundleVersion<\/key>\s*<string>3<\/string>/);
+test('mobile app metadata is version 0.1.3 with incremented build numbers', () => {
+  assert.equal(packageJson.version, '0.1.3');
+  assert.match(appVersionSource, /APP_VERSION = '0\.1\.3'/);
+  assert.match(androidGradle, /versionName "0\.1\.3"/);
+  assert.match(androidGradle, /versionCode 4\b/);
+  assert.equal(appConfig.expo.version, '0.1.3');
+  assert.equal(appConfig.expo.android.versionCode, 4);
+  assert.equal(appConfig.expo.ios.buildNumber, '4');
+  assert.match(iosInfoPlist, /<key>CFBundleShortVersionString<\/key>\s*<string>0\.1\.3<\/string>/);
+  assert.match(iosInfoPlist, /<key>CFBundleVersion<\/key>\s*<string>4<\/string>/);
 });
 
 test('Android uses system-bar-safe non-edge-to-edge configuration', () => {
