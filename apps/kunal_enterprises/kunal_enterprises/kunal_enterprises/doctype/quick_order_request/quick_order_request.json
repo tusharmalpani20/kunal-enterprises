@@ -7,14 +7,29 @@
  "engine": "InnoDB",
  "track_changes": 1,
  "field_order": [
-  "customer",
+  "request_details_section",
   "order_source",
+  "confirmation_datetime",
+  "request_details_column",
+  "status",
+  "customer_details_section",
+  "customer",
+  "customer_name",
+  "customer_business_name",
+  "customer_details_column",
+  "customer_code",
+  "customer_mobile_number",
+  "customer_gstin",
+  "sales_employee_details_section",
   "sales_employee",
   "sales_employee_name",
-  "status",
-  "confirmation_datetime",
+  "sales_employee_details_column",
+  "sales_employee_code",
+  "sales_employee_mobile_number",
+  "order_request_section",
   "text",
   "text_display",
+  "review_details_section",
   "review_started_at",
   "reviewed_by",
   "rejection_reason",
@@ -23,6 +38,44 @@
   "portal_reference_number"
  ],
  "fields": [
+  {
+   "fieldname": "request_details_section",
+   "fieldtype": "Section Break",
+   "label": "Request Details"
+  },
+  {
+   "fieldname": "order_source",
+   "fieldtype": "Select",
+   "label": "Order Source",
+   "options": "Customer\nSales Employee",
+   "default": "Customer",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "confirmation_datetime",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "request_details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending Review\nIn Review\nConverted to Order\nRejected",
+   "default": "Pending Review",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "customer_details_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Details"
+  },
   {
    "fieldname": "customer",
    "fieldtype": "Link",
@@ -33,13 +86,49 @@
    "in_list_view": 1
   },
   {
-   "fieldname": "order_source",
-   "fieldtype": "Select",
-   "label": "Order Source",
-   "options": "Customer\nSales Employee",
-   "default": "Customer",
-   "read_only": 1,
-   "reqd": 1
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "fetch_from": "customer.customer_name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_business_name",
+   "fieldtype": "Data",
+   "label": "Business Name",
+   "fetch_from": "customer.business_legal_name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer_code",
+   "fieldtype": "Data",
+   "label": "Party Code",
+   "fetch_from": "customer.client_code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_mobile_number",
+   "fieldtype": "Data",
+   "label": "Customer Mobile Number",
+   "fetch_from": "customer.mobile_number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_gstin",
+   "fieldtype": "Data",
+   "label": "GSTIN",
+   "fetch_from": "customer.gstin",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_employee_details_section",
+   "fieldtype": "Section Break",
+   "label": "Sales Employee Details",
+   "depends_on": "eval:!!doc.sales_employee"
   },
   {
    "fieldname": "sales_employee",
@@ -56,19 +145,27 @@
    "read_only": 1
   },
   {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "Pending Review\nIn Review\nConverted to Order\nRejected",
-   "default": "Pending Review",
-   "read_only": 1,
-   "in_list_view": 1
+   "fieldname": "sales_employee_details_column",
+   "fieldtype": "Column Break"
   },
   {
-   "fieldname": "confirmation_datetime",
-   "fieldtype": "Datetime",
-   "label": "Submitted On",
+   "fieldname": "sales_employee_code",
+   "fieldtype": "Data",
+   "label": "Employee Code",
+   "fetch_from": "sales_employee.employee_code",
    "read_only": 1
+  },
+  {
+   "fieldname": "sales_employee_mobile_number",
+   "fieldtype": "Data",
+   "label": "Sales Employee Mobile Number",
+   "fetch_from": "sales_employee.mobile_number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "order_request_section",
+   "fieldtype": "Section Break",
+   "label": "Order Request"
   },
   {
    "fieldname": "text",
@@ -83,6 +180,11 @@
    "fieldname": "text_display",
    "fieldtype": "HTML",
    "label": "Quick Order Text"
+  },
+  {
+   "fieldname": "review_details_section",
+   "fieldtype": "Section Break",
+   "label": "Review and Order"
   },
   {
    "fieldname": "review_started_at",
