@@ -564,13 +564,15 @@ Auth-Token: Bearer <access_token>
 
 Customer history is scoped by `customer` and includes both self-placed orders and orders placed by Sales Employees for that Customer.
 
-For the customer mobile combined feed, add `include_quick_orders=1`. This requires
-a matching Customer token and returns Orders plus unconverted Quick Order Requests
+For the mobile combined feed, add `include_quick_orders=1`. This requires
+a matching Customer or Sales Employee token and returns Orders plus unconverted Quick Order Requests
 in `data.orders`, using shared `limit` and `offset`. Entries have `entry_type`
 (`order` or `quick_order`); converted Orders retain `quick_order_request` and
 their source request is omitted to avoid duplication. `has_more` and `next_offset`
-describe the combined feed. Authenticated customer Order details include
-`quick_order_text` from the matching converted request for the Order Note tab.
+describe the combined feed. Employee feeds include only their own requests/orders
+for currently allowed active customers; `customer` may be omitted. Authenticated
+Customer and Sales Employee Order details include `quick_order_text` from the
+matching converted request for the Order Note tab, subject to access checks.
 
 Sales Employee history can be requested without a Customer filter:
 
@@ -1054,15 +1056,20 @@ Reconciliation runs from synced `Tally Voucher` records.
 
 ## Quick Order Requests
 
-Customer-token-only endpoints under `kunal_enterprises.api.quick_orders`:
+Customer or Sales Employee token endpoints under `kunal_enterprises.api.quick_orders`:
 
-- `submit` (POST): `text` (1–5,000 nonblank characters), optional `customer`
-  must match token identity. Returns request detail.
-- `history` (GET): optional `customer`, `limit`, `offset`; returns `requests`,
-  `has_more`, and `next_offset`.
-- `detail` (GET): `request`, optional `customer`; returns only the token
-  Customer's own request, including status, original text, rejection reason,
-  and resulting `order`/`portal_reference_number` when converted.
+- `submit` (POST): `text` (1–5,000 nonblank characters). For a Customer token,
+  optional `customer` must match token identity. A Sales Employee token requires an
+  explicit allowed active `customer`; optional `sales_employee` must match the
+  token. Source and employee attribution are derived server-side. Returns detail.
+- `history` (GET): optional `customer`, `sales_employee`, `limit`, `offset`; returns
+  `requests`, `has_more`, and `next_offset`. Customers see requests for themselves.
+  Employees see only their own requests for currently allowed active customers;
+  omit `customer` to include all of those customers.
+- `detail` (GET): `request`, optional `customer` and `sales_employee`; returns an
+  authorized request including its customer, source, employee, status, original
+  text, rejection reason and resulting `order`/`portal_reference_number` when
+  converted. Employee reads require ownership and current customer access.
 
 Portal endpoints require Owner, Admin, or Order Coordinator:
 

@@ -120,7 +120,7 @@ _Avoid_: App user
 - "Approved", "portal access", and "app access" can be confused. Resolved: admins can see/edit signup records in the portal; **Customer App Access** is only allowed when **Client Code** is present and access is approved.
 - "Unique mobile number" applies across both Customers and sales employees, not only within one table.
 
-Quick Order: customers can submit free-form text for portal review; no customer
+Quick Order: customers and Sales Employees can submit free-form text for portal review; employees select an allowed customer and retain attribution on conversion. No mobile
 editing/cancellation in this version. Order Coordinator profile includes Godown
 Allocator, and Owner/Admin profiles include Coordinator. Requests are manually
 converted to linked normal Orders using existing placement logic; status flow

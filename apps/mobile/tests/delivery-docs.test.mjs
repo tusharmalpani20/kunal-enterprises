@@ -230,7 +230,7 @@ test('backend API documentation covers Goal 2 request response and scheduler sco
 		'not trusted as proof of authorization',
 		'current Frappe session user',
 		'for_value = branch',
-		'Branch Employee Mark Processing',
+		'Branch Mark Processing',
 		'Cancel Order',
 		'Partially Close Order',
 		'Resolve Manual Review',
