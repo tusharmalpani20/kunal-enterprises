@@ -51,15 +51,13 @@ def submit(customer, allocations, sales_employee=None, sales_employee_note=None,
 def history(customer=None, sales_employee=None, limit=20, offset=0, headers=None, include_quick_orders=0):
 	try:
 		if cint(include_quick_orders):
-			from kunal_enterprises.api.quick_orders import _customer_identity
+			from kunal_enterprises.api.quick_orders import _mobile_identity
 
-			customer, error = _customer_identity(customer, headers)
+			identity, error = _mobile_identity(customer, headers, sales_employee, allow_all_customers=True)
 			if error:
 				return error
-			if sales_employee:
-				frappe.throw("Unified Order history is only available to Customers", frappe.PermissionError)
-			_validate_order_history_access(customer)
-			return _unified_customer_history(customer, limit, offset)
+			_validate_order_history_access(identity["customer"], identity["sales_employee"])
+			return _unified_customer_history(identity["customer"], limit, offset, identity["sales_employee"])
 		token_error = _validate_order_token(customer, sales_employee, headers, "Order history")
 		if token_error:
 			return token_error
@@ -107,11 +105,13 @@ def detail(order, customer=None, sales_employee=None, headers=None):
 			return token_error
 		order_doc = frappe.get_doc("Order", order)
 		_validate_order_detail_access(order_doc, customer, sales_employee)
+		if sales_employee and order_doc.quick_order_request:
+			resolve_product_access(order_doc.customer, sales_employee)
 		data = _serialize_order_detail(order_doc, customer, sales_employee)
-		if customer and not sales_employee and _resolve_headers(headers) is not None:
+		if (customer or sales_employee) and _resolve_headers(headers) is not None:
 			data["quick_order_text"] = frappe.db.get_value("Quick Order Request", {
 				"name": order_doc.quick_order_request, "order": order_doc.name,
-				"customer": customer, "status": "Converted to Order",
+				"customer": order_doc.customer, "status": "Converted to Order",
 			}, "text") if order_doc.quick_order_request else None
 		return create_success_response("Order detail", data)
 	except Exception as error:
@@ -259,24 +259,32 @@ def _coerce_history_offset(offset):
 	return max(0, value)
 
 
-def _unified_customer_history(customer, limit, offset):
+def _unified_customer_history(customer, limit, offset, sales_employee=None):
 	limit, offset = _coerce_history_limit(limit), _coerce_history_offset(offset)
 	# Taking the first shared window from each source contains every possible merged-page row.
 	window = offset + limit + 1
-	orders = frappe.get_all("Order", filters={"customer": customer},
+	filters = {"customer": customer} if customer else {}
+	if sales_employee:
+		from kunal_enterprises.api.quick_orders import _employee_customer_names
+		filters["sales_employee"] = sales_employee
+		candidates = frappe.get_all("Order", filters=filters, pluck="customer")
+		candidates += frappe.get_all("Quick Order Request", filters=filters, pluck="customer")
+		filters["customer"] = ("in", _employee_customer_names(sales_employee, candidates))
+	orders = frappe.get_all("Order", filters=filters,
 		fields=["name", "portal_reference_number", "order_source", "customer", "sales_employee",
 			"status", "confirmation_datetime", "total_item_count", "total_quantity",
 			"godown_assignment_pending", "quick_order_request"],
 		order_by="confirmation_datetime desc, name desc", limit_page_length=window)
 	requests = frappe.get_all("Quick Order Request",
-		filters={"customer": customer, "status": ("!=", "Converted to Order")},
-		fields=["name", "customer", "status", "confirmation_datetime", "text"],
+		filters={**filters, "status": ("!=", "Converted to Order")},
+		fields=["name", "customer", "order_source", "sales_employee", "status", "confirmation_datetime", "text"],
 		order_by="confirmation_datetime desc, name desc", limit_page_length=window)
 	entries = [_serialize_order_summary(order) for order in orders]
 	entries.extend({
 		"entry_type": "quick_order", "name": row.name, "request": row.name,
 		"quick_order_request": row.name, "portal_reference_number": row.name,
-		"order_source": "Quick Order", "customer": row.customer, "status": row.status,
+		"order_source": row.order_source or "Customer", "sales_employee": row.sales_employee,
+		"customer": row.customer, "customer_name": frappe.db.get_value("Customer", row.customer, "customer_name"), "status": row.status,
 		"display_status": row.status,
 		"confirmation_datetime": str(row.confirmation_datetime) if row.confirmation_datetime else None,
 		"text": row.text,

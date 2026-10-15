@@ -18,7 +18,7 @@ class QuickOrderRequest(Document):
 
 		if self.is_new():
 			if not self.flags.in_quick_order_customer_submit:
-				frappe.throw("Quick Order Requests must be submitted by a Customer", frappe.PermissionError)
+				frappe.throw("Quick Order Requests must be submitted through the mobile API", frappe.PermissionError)
 			if not isinstance(self.text, str):
 				frappe.throw("Quick Order text must be a string")
 			self.text = self.text.strip()
@@ -26,6 +26,8 @@ class QuickOrderRequest(Document):
 				frappe.throw(f"Quick Order text must contain between 1 and {MAX_TEXT_LENGTH} characters")
 			if self.status != "Pending Review" or self.items or self.order:
 				frappe.throw("New Quick Order Requests must be pending and cannot contain an order")
+			if self.order_source not in {"Customer", "Sales Employee"} or bool(self.sales_employee) != (self.order_source == "Sales Employee"):
+				frappe.throw("Quick Order source and Sales Employee must match")
 			self.confirmation_datetime = now_datetime()
 			return
 
@@ -33,9 +35,9 @@ class QuickOrderRequest(Document):
 		previous = self.get_doc_before_save()
 		if not previous:
 			frappe.throw("Quick Order Request history is unavailable")
-		for field in ("customer", "text"):
+		for field in ("customer", "text", "order_source", "sales_employee"):
 			if self.get(field) != previous.get(field):
-				frappe.throw("Original Quick Order text and Customer identity cannot be changed")
+				frappe.throw("Original Quick Order text and source identity cannot be changed")
 		if not _same_datetime(self.confirmation_datetime, previous.confirmation_datetime):
 			frappe.throw("Original Quick Order confirmation time cannot be changed")
 		if self.status != previous.status and not self.flags.in_quick_order_transition:
@@ -72,7 +74,7 @@ class QuickOrderRequest(Document):
 		if self.status == "In Review":
 			from kunal_enterprises.api.product_groups import item_is_allowed, resolve_product_access
 
-			access = resolve_product_access(self.customer)
+			access = resolve_product_access(self.customer, self.sales_employee)
 			for row in self.items:
 				if not row.item or not math.isfinite(row.quantity or 0) or row.quantity <= 0:
 					frappe.throw("Every selected item requires a finite positive quantity")

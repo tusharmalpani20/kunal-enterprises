@@ -283,3 +283,58 @@ class TestQuickOrders(FrappeTestCase):
 		self.assertFalse(history(self.customer.name, include_quick_orders=1, headers={})['success'])
 		with patch.object(quick_orders, 'verify_token', return_value=(True, {'identity_type': 'Sales Employee', 'identity': 'employee'})):
 			self.assertFalse(history(self.customer.name, sales_employee='employee', include_quick_orders=1)['success'])
+
+	def test_submit_serialization_failure_rolls_back_new_request(self):
+		before = frappe.db.count('Quick Order Request', {'customer': self.customer.name})
+		with patch.object(quick_orders, '_serialize', side_effect=RuntimeError('Customer lookup failed')):
+			response = quick_orders.submit('new request', headers=self.headers)
+		self.assertFalse(response['success'])
+		self.assertEqual(frappe.db.count('Quick Order Request', {'customer': self.customer.name}), before)
+
+	def test_conversion_serialization_failure_rolls_back_created_order_and_links(self):
+		doc = self._review()
+		preexisting = submit_order(self.customer.name, [{'item': self.item.name, 'quantity': 1}])
+		before = frappe.db.count('Order', {'customer': self.customer.name})
+		with patch.object(quick_orders, '_serialize', side_effect=RuntimeError('Customer lookup failed')):
+			response = quick_orders.convert(doc.name)
+		self.assertFalse(response['success'])
+		doc.reload()
+		self.assertEqual(doc.status, 'In Review')
+		self.assertFalse(doc.order)
+		self.assertFalse(doc.portal_reference_number)
+		self.assertEqual(frappe.db.count('Order', {'customer': self.customer.name}), before)
+		self.assertTrue(frappe.db.exists('Order', preexisting.name))
+		self.assertFalse(frappe.db.exists('Order', {'quick_order_request': doc.name}))
+
+	def test_review_response_failure_restores_pending_review_attribution(self):
+		doc = self._request()
+		with patch.object(quick_orders, 'create_success_response', side_effect=RuntimeError('Response construction failed')):
+			response = quick_orders.start_review(doc.name)
+		self.assertFalse(response['success'])
+		doc.reload()
+		self.assertEqual(doc.status, 'Pending Review')
+		self.assertFalse(doc.reviewed_by)
+		self.assertFalse(doc.review_started_at)
+
+	def test_rejection_serialization_failure_restores_request(self):
+		doc = self._request()
+		with patch.object(quick_orders, '_serialize', side_effect=RuntimeError('Customer lookup failed')):
+			response = quick_orders.reject(doc.name, 'Unavailable')
+		self.assertFalse(response['success'])
+		doc.reload()
+		self.assertEqual(doc.status, 'Pending Review')
+		self.assertFalse(doc.rejection_reason)
+		self.assertFalse(doc.reviewed_by)
+
+	def test_repeat_conversion_serialization_failure_preserves_existing_order(self):
+		doc = self._review()
+		self.assertTrue(quick_orders.convert(doc.name)['success'])
+		doc.reload()
+		before = frappe.db.count('Order', {'customer': self.customer.name})
+		with patch.object(quick_orders, '_serialize', side_effect=RuntimeError('Customer lookup failed')):
+			response = quick_orders.convert(doc.name)
+		self.assertFalse(response['success'])
+		doc.reload()
+		self.assertEqual(doc.status, 'Converted to Order')
+		self.assertTrue(frappe.db.exists('Order', doc.order))
+		self.assertEqual(frappe.db.count('Order', {'customer': self.customer.name}), before)

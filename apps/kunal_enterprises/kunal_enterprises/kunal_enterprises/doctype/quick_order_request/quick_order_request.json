@@ -8,6 +8,9 @@
  "track_changes": 1,
  "field_order": [
   "customer",
+  "order_source",
+  "sales_employee",
+  "sales_employee_name",
   "status",
   "confirmation_datetime",
   "text",
@@ -28,6 +31,29 @@
    "reqd": 1,
    "read_only": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "order_source",
+   "fieldtype": "Select",
+   "label": "Order Source",
+   "options": "Customer\nSales Employee",
+   "default": "Customer",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "sales_employee",
+   "fieldtype": "Link",
+   "options": "Sales Employee",
+   "label": "Sales Employee",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_employee_name",
+   "fieldtype": "Data",
+   "label": "Sales Employee Name",
+   "fetch_from": "sales_employee.sales_employee_name",
+   "read_only": 1
   },
   {
    "fieldname": "status",
