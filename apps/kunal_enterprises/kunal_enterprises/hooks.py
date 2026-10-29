@@ -55,7 +55,7 @@ add_to_apps_screen = [
 		"name": "kunal_enterprises",
 		"logo": "/assets/kunal_enterprises/images/kunal_enterprises_logo.svg",
 		"title": "Kunal Enterprises",
-		"route": "/kunal_enterprises",
+		"route": "/app/operation",
 		"has_permission": "kunal_enterprises.api.permission.has_app_permission"
 	}
 ]
