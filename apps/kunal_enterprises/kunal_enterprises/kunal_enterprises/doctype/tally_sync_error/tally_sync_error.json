@@ -65,7 +65,8 @@
   {
    "fieldname": "resolved_at",
    "fieldtype": "Datetime",
-   "label": "Resolved At"
+   "label": "Resolved At",
+   "read_only": 1
   },
   {
    "fieldname": "resolution_note",
