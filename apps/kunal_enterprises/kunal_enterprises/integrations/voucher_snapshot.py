@@ -11,7 +11,10 @@ from frappe.utils import get_datetime, now_datetime
 
 from kunal_enterprises.integrations.voucher_contract import validate_snapshot
 from kunal_enterprises.integrations.order_details import order_candidates
-from kunal_enterprises.integrations.reconciliation_settings import RECONCILIATION_LOCK_SECONDS
+from kunal_enterprises.integrations.reconciliation_settings import (
+	RECONCILIATION_LOCK_SECONDS,
+	VOUCHER_CHECKPOINT_ORDER,
+)
 
 
 HELD_REFRESH_BATCH_SIZE = 500
@@ -84,7 +87,7 @@ def apply_snapshot(state, payloads):
 			"Tally Sync Run",
 			{"source_table": "trn_voucher", "sync_type": "Vouchers", "status": "Completed"},
 			["source_refreshed_at", "source_metadata"],
-			order_by="source_refreshed_at desc",
+			order_by=VOUCHER_CHECKPOINT_ORDER,
 			as_dict=True,
 		)
 		if (

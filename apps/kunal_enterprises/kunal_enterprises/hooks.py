@@ -31,6 +31,7 @@ fixtures = [
 ]
 
 scheduler_events = {
+	"daily_long": ["kunal_enterprises.cron.sync_history.cleanup_sync_history"],
 	"cron": {
 		"*/5 * * * *": [
 			"kunal_enterprises.integrations.tally_postgres.enqueue_import_all",
