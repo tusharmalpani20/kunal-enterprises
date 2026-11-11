@@ -1,0 +1,56 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake Warehouse",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "row_key",
+  "original_text",
+  "godown",
+  "source_message",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "row_key",
+   "fieldtype": "Data",
+   "label": "Row ID",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "original_text",
+   "fieldtype": "Small Text",
+   "label": "Original Warehouse Text",
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "godown",
+   "fieldtype": "Link",
+   "label": "Selected Warehouse",
+   "options": "Tally Godown",
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "source_message",
+   "fieldtype": "Link",
+   "label": "Source Message",
+   "options": "WhatsApp Message"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Review Notes",
+   "in_list_view": 1,
+   "columns": 2
+  }
+ ],
+ "permissions": [],
+ "actions": [],
+ "links": [],
+ "states": [],
+ "istable": 1
+}

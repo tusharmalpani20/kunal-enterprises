@@ -1,0 +1,326 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake Request",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "request_section",
+  "request_type",
+  "request_column",
+  "status",
+  "order",
+  "sender_section",
+  "customer",
+  "customer_name",
+  "sender_column",
+  "sales_employee",
+  "sales_employee_name",
+  "interpretation_section",
+  "estimated_interpretation",
+  "unresolved_questions",
+  "interpretation_display",
+  "interpretation_notes",
+  "items_section",
+  "items",
+  "delivery_section",
+  "delivery_address",
+  "delivery_column",
+  "delivery_contact_name",
+  "delivery_contact_number",
+  "review_section",
+  "review_notes",
+  "references_section",
+  "attachments",
+  "details_section",
+  "source",
+  "whatsapp_account",
+  "sender_number",
+  "sender_name",
+  "details_column",
+  "first_received_at",
+  "last_received_at",
+  "source_messages",
+  "conversation_display",
+  "warehouses",
+  "allocations",
+  "layout_simplified"
+ ],
+ "fields": [
+  {
+   "fieldname": "request_section",
+   "fieldtype": "Section Break",
+   "label": "Request"
+  },
+  {
+   "fieldname": "request_type",
+   "fieldtype": "Select",
+   "label": "Request Type",
+   "options": "Order\nStock Inquiry\nPrice Inquiry\nMixed\nUnclear",
+   "default": "Unclear",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "request_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending Review\nIn Review\nAwaiting Confirmation\nResolved\nConverted to Order\nDismissed",
+   "default": "Pending Review",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "order",
+   "fieldtype": "Link",
+   "label": "Converted Order",
+   "options": "Order",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "sender_section",
+   "fieldtype": "Section Break",
+   "label": "Customer and Salesperson"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sender_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sales_employee",
+   "fieldtype": "Link",
+   "label": "Salesperson",
+   "options": "Sales Employee"
+  },
+  {
+   "fieldname": "sales_employee_name",
+   "fieldtype": "Data",
+   "label": "Salesperson Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "interpretation_section",
+   "fieldtype": "Section Break",
+   "label": "Interpretation"
+  },
+  {
+   "fieldname": "estimated_interpretation",
+   "fieldtype": "Small Text",
+   "label": "Estimated Interpretation",
+   "read_only": 1,
+   "description": "AI suggestions will appear here in a later step. Final selections are recorded separately below.",
+   "hidden": 1
+  },
+  {
+   "fieldname": "unresolved_questions",
+   "fieldtype": "Small Text",
+   "label": "Unresolved Questions",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "interpretation_display",
+   "fieldtype": "HTML",
+   "label": "Estimated Interpretation"
+  },
+  {
+   "fieldname": "interpretation_notes",
+   "fieldtype": "Small Text",
+   "label": "Interpretation Notes"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Order Intake Item",
+   "description": "Select an item, quantity and dispatch warehouse on each row. Leave uncertain values blank. Use separate rows when dispatching from different warehouses."
+  },
+  {
+   "fieldname": "delivery_section",
+   "fieldtype": "Section Break",
+   "label": "Delivery"
+  },
+  {
+   "fieldname": "delivery_address",
+   "fieldtype": "Small Text",
+   "label": "Delivery Address"
+  },
+  {
+   "fieldname": "delivery_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "delivery_contact_name",
+   "fieldtype": "Data",
+   "label": "Delivery Contact"
+  },
+  {
+   "fieldname": "delivery_contact_number",
+   "fieldtype": "Data",
+   "label": "Delivery Contact Number"
+  },
+  {
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "review_notes",
+   "fieldtype": "Small Text",
+   "label": "General Notes"
+  },
+  {
+   "fieldname": "references_section",
+   "fieldtype": "Section Break",
+   "label": "Attachments and References"
+  },
+  {
+   "fieldname": "attachments",
+   "fieldtype": "Table",
+   "label": "Attachments, Links and Locations",
+   "options": "Order Intake Attachment"
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details",
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:0"
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "WhatsApp",
+   "default": "WhatsApp",
+   "reqd": 1,
+   "in_list_view": 1,
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "whatsapp_account",
+   "fieldtype": "Link",
+   "label": "WhatsApp Account",
+   "options": "WhatsApp Account"
+  },
+  {
+   "fieldname": "sender_number",
+   "fieldtype": "Data",
+   "label": "Sender Number / Identity",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sender_name",
+   "fieldtype": "Data",
+   "label": "Sender Name"
+  },
+  {
+   "fieldname": "details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "first_received_at",
+   "fieldtype": "Datetime",
+   "label": "First Received At"
+  },
+  {
+   "fieldname": "last_received_at",
+   "fieldtype": "Datetime",
+   "label": "Last Received At"
+  },
+  {
+   "fieldname": "source_messages",
+   "fieldtype": "Table",
+   "label": "Source Messages",
+   "options": "Order Intake Source Message"
+  },
+  {
+   "fieldname": "conversation_display",
+   "fieldtype": "HTML",
+   "label": "Original Conversation",
+   "hidden": 1
+  },
+  {
+   "fieldname": "warehouses",
+   "fieldtype": "Table",
+   "label": "Warehouses",
+   "options": "Order Intake Warehouse",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "allocations",
+   "fieldtype": "Table",
+   "label": "Item and Warehouse Allocations",
+   "options": "Order Intake Allocation",
+   "description": "Use Add Allocation to select an item row and warehouse row independently. Row references survive reordering.",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "layout_simplified",
+   "fieldtype": "Check",
+   "label": "Legacy Layout Migrated",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "default": "0"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "Owner",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "select": 1
+  },
+  {
+   "role": "Admin",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "select": 1
+  },
+  {
+   "role": "Order Coordinator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "select": 1
+  }
+ ],
+ "actions": [],
+ "links": [],
+ "states": [],
+ "autoname": "KE-OIR-.#####",
+ "naming_rule": "Expression",
+ "track_changes": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "sender_name",
+ "search_fields": "sender_number,sender_name,customer"
+}

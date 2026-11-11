@@ -1,0 +1,201 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake Settings",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "provider_section",
+  "provider",
+  "api_key",
+  "provider_column",
+  "grouping_model",
+  "extraction_model",
+  "reasoning_effort",
+  "default_country_calling_code",
+  "limits_section",
+  "preparation_enabled",
+  "preparation_last_tick",
+  "processing_enabled",
+  "interval_minutes",
+  "lookback_minutes",
+  "pdf_page_limit",
+  "limits_column",
+  "request_timeout_seconds",
+  "transport_retries",
+  "output_retries",
+  "max_requests_per_job",
+  "max_input_tokens",
+  "max_output_tokens",
+  "deferred_retry_minutes"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_section",
+   "fieldtype": "Section Break",
+   "label": "AI Provider"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "OpenAI\nOpenRouter",
+   "default": "OpenAI",
+   "reqd": 1
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "description": "AI provider key. This is separate from the Meta WhatsApp access token."
+  },
+  {
+   "fieldname": "provider_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "grouping_model",
+   "fieldtype": "Data",
+   "label": "Grouping Model",
+   "default": "gpt-6-luna",
+   "reqd": 1
+  },
+  {
+   "fieldname": "extraction_model",
+   "fieldtype": "Data",
+   "label": "Extraction Model",
+   "default": "gpt-6-luna",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reasoning_effort",
+   "fieldtype": "Select",
+   "label": "Reasoning Effort",
+   "options": "none\nlow\nmedium\nhigh\nxhigh\nmax",
+   "default": "medium",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_country_calling_code",
+   "fieldtype": "Data",
+   "label": "Default Country Calling Code",
+   "description": "Country prefix used to match 10-digit national phone numbers. Defaults to +91 (India); saved customer and salesperson numbers are unchanged.",
+   "default": "+91"
+  },
+  {
+   "fieldname": "limits_section",
+   "fieldtype": "Section Break",
+   "label": "Processing Limits"
+  },
+  {
+   "fieldname": "processing_enabled",
+   "fieldtype": "Check",
+   "label": "Enable AI Processing",
+   "default": "0",
+   "read_only": 1,
+   "description": "Message capture remains active. Automated grouping and extraction are not available yet."
+  },
+  {
+   "fieldname": "interval_minutes",
+   "fieldtype": "Int",
+   "label": "Scheduler Interval (Minutes)",
+   "default": "5",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lookback_minutes",
+   "fieldtype": "Int",
+   "label": "Unresolved Context Window (Minutes)",
+   "default": "120",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pdf_page_limit",
+   "fieldtype": "Int",
+   "label": "Automatic PDF Page Limit",
+   "default": "10",
+   "reqd": 1
+  },
+  {
+   "fieldname": "limits_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "request_timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Provider Request Timeout (Seconds)",
+   "default": "60",
+   "reqd": 1
+  },
+  {
+   "fieldname": "transport_retries",
+   "fieldtype": "Int",
+   "label": "Short Provider Retries",
+   "default": "2"
+  },
+  {
+   "fieldname": "output_retries",
+   "fieldtype": "Int",
+   "label": "Output Correction Retries",
+   "default": "2"
+  },
+  {
+   "fieldname": "max_requests_per_job",
+   "fieldtype": "Int",
+   "label": "Maximum Model Requests per Job",
+   "default": "10",
+   "reqd": 1
+  },
+  {
+   "fieldname": "max_input_tokens",
+   "fieldtype": "Int",
+   "label": "Maximum Input Tokens per Model Request",
+   "default": "20000",
+   "reqd": 1
+  },
+  {
+   "fieldname": "max_output_tokens",
+   "fieldtype": "Int",
+   "label": "Maximum Output Tokens per Model Request",
+   "default": "4000",
+   "reqd": 1
+  },
+  {
+   "fieldname": "deferred_retry_minutes",
+   "fieldtype": "Data",
+   "label": "Deferred Retry Delays (Minutes)",
+   "default": "5,15,60",
+   "reqd": 1
+  },
+  {
+   "fieldname": "preparation_enabled",
+   "label": "Enable Scheduled Context Preparation",
+   "fieldtype": "Check",
+   "default": "0",
+   "description": "Prepares message context only; does not call AI or create order drafts."
+  },
+  {
+   "fieldname": "preparation_last_tick",
+   "label": "Last Preparation Tick",
+   "fieldtype": "Datetime",
+   "read_only": 1,
+   "hidden": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "Owner",
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "Admin",
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "actions": [],
+ "links": [],
+ "states": [],
+ "issingle": 1,
+ "track_changes": 0
+}

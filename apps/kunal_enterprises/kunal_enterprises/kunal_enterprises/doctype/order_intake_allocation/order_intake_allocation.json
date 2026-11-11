@@ -1,0 +1,63 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake Allocation",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "item_row_key",
+  "item_description",
+  "warehouse_row_key",
+  "warehouse_description",
+  "quantity",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_row_key",
+   "fieldtype": "Data",
+   "label": "Item Row ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "item_description",
+   "fieldtype": "Data",
+   "label": "Item Row",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "warehouse_row_key",
+   "fieldtype": "Data",
+   "label": "Warehouse Row ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "warehouse_description",
+   "fieldtype": "Data",
+   "label": "Warehouse Row",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "quantity",
+   "fieldtype": "Float",
+   "label": "Allocated Quantity",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Review Notes"
+  }
+ ],
+ "permissions": [],
+ "actions": [],
+ "links": [],
+ "states": [],
+ "istable": 1
+}

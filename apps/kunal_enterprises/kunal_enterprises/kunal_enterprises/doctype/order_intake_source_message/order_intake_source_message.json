@@ -1,0 +1,33 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake Source Message",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "message",
+  "association_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "message",
+   "fieldtype": "Link",
+   "label": "WhatsApp Message",
+   "options": "WhatsApp Message",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 4
+  },
+  {
+   "fieldname": "association_note",
+   "fieldtype": "Small Text",
+   "label": "Relevant Text / Association Note",
+   "in_list_view": 1,
+   "columns": 6
+  }
+ ],
+ "permissions": [],
+ "actions": [],
+ "links": [],
+ "states": [],
+ "istable": 1
+}

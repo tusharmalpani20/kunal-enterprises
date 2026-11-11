@@ -1,0 +1,97 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake Attachment",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "reference_type",
+  "label",
+  "file",
+  "external_url",
+  "latitude",
+  "longitude",
+  "location_address",
+  "page_count",
+  "review_status",
+  "source_message",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "reference_type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "File\nExternal Link\nLocation",
+   "default": "File",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "file",
+   "fieldtype": "Attach",
+   "label": "File",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "external_url",
+   "fieldtype": "Small Text",
+   "label": "External URL",
+   "description": "Stored only. The application does not open or fetch this URL."
+  },
+  {
+   "fieldname": "latitude",
+   "fieldtype": "Float",
+   "label": "Latitude",
+   "precision": "8"
+  },
+  {
+   "fieldname": "longitude",
+   "fieldtype": "Float",
+   "label": "Longitude",
+   "precision": "8"
+  },
+  {
+   "fieldname": "location_address",
+   "fieldtype": "Small Text",
+   "label": "Location Address"
+  },
+  {
+   "fieldname": "page_count",
+   "fieldtype": "Int",
+   "label": "PDF Page Count"
+  },
+  {
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "label": "Review Status",
+   "options": "Not Reviewed\nNeeds Manual Review\nReviewed",
+   "default": "Not Reviewed",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "source_message",
+   "fieldtype": "Link",
+   "label": "Source Message",
+   "options": "WhatsApp Message"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Review Notes"
+  }
+ ],
+ "permissions": [],
+ "actions": [],
+ "links": [],
+ "states": [],
+ "istable": 1
+}
