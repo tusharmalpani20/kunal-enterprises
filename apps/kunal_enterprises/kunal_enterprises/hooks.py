@@ -41,6 +41,7 @@ fixtures = [
 scheduler_events = {
 	"daily_long": ["kunal_enterprises.cron.sync_history.cleanup_sync_history"],
 	"cron": {
+		"* * * * *": ["kunal_enterprises.integrations.order_intake_queue.tick"],
 		"*/5 * * * *": [
 			"kunal_enterprises.integrations.tally_postgres.enqueue_import_all",
 		],
@@ -212,6 +213,7 @@ doc_events = {
 		"before_validate": [
 			"kunal_enterprises.permission_guards.whatsapp.guard_intake_fields",
 			"kunal_enterprises.integrations.order_intake_capture.capture_message_hook",
+			"kunal_enterprises.integrations.order_intake_queue.invalidate_changed_message",
 		],
 	},
 	"Order": {

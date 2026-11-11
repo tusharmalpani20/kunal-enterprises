@@ -30,11 +30,23 @@ def custom_fields():
 		("intake_raw_payload", "Original Incoming Payload", "Code", "JSON"),
 		("intake_legacy_evidence", "Preserved Earlier Intake Evidence", "Code", "JSON"),
 		("intake_event_key", "Intake Event Key", "Data", None),
+		("intake_manual_context", "Manually Recovered Context", "Check", None),
 		("intake_media_state", "Attachment Download", "Select", "Pending\nQueued\nDownloaded\nFailed"),
 		("intake_media_note", "Attachment Download Note", "Small Text", None),
 		("intake_media_job_token", "Attachment Job Token", "Data", None),
 		("intake_media_queued_at", "Attachment Queued At", "Datetime", None),
 		("intake_media_attempts", "Attachment Attempts", "Int", None),
+		("intake_prepare_state", "Context Preparation", "Select", "Pending\nQueued\nContext Ready\nRetry\nNeeds Attention"),
+		("intake_prepare_note", "Preparation Note", "Small Text", None),
+		("intake_prepared_at", "Context Prepared At", "Datetime", None),
+		("intake_context_anchor", "Context Details On Message", "Link", "WhatsApp Message"),
+		("intake_context_ids", "Prepared Context References", "Code", "JSON"),
+		("intake_attempts", "Preparation Attempts", "Int", None),
+		("intake_batch_size", "Claimed Message Count", "Int", None),
+		("intake_retry_at", "Next Preparation Retry", "Datetime", None),
+		("intake_lease_until", "Preparation Lease Until", "Datetime", None),
+		("intake_job_token", "Preparation Job Token", "Data", None),
+		("intake_context_digest", "Context Digest", "Data", None),
 	]
 	for name, label, kind, options in definitions:
 		field = dict(fieldname=name, label=label, fieldtype=kind, read_only=1, no_copy=1,
@@ -64,6 +76,8 @@ def setup():
 	if not frappe.db.exists("DocType", "WhatsApp Message"):
 		return
 	create_custom_fields(custom_fields(), update=True)
+	frappe.db.add_index("WhatsApp Message", ["type", "intake_prepare_state", "intake_received_at"], "order_intake_dispatch")
+	frappe.db.add_index("WhatsApp Message", ["whatsapp_account", "intake_prepare_state"], "order_intake_account_jobs")
 	from kunal_enterprises.permission_guards.whatsapp import setup as setup_permissions
 	setup_permissions()
 	if frappe.db.exists("DocType", "Order Intake Settings"):
