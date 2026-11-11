@@ -10,6 +10,20 @@ from kunal_enterprises.patches.private_whatsapp_attachments import execute as pr
 
 
 class TestOrderIntakeSecurity(FrappeTestCase):
+	def test_collapsed_intake_section_does_not_contain_original_message_fields(self):
+		meta = frappe.get_meta("WhatsApp Message", cached=False)
+		fields = [field.fieldname for field in meta.fields]
+		boundary = fields.index("intake_details")
+		original = frappe.get_doc("DocType", "WhatsApp Message")
+		for field in original.fields:
+			self.assertLess(fields.index(field.fieldname), boundary, field.fieldname)
+		section = meta.get_field("intake_details")
+		self.assertTrue(section.collapsible)
+		self.assertEqual(section.depends_on, 'eval:doc.type == "Incoming"')
+		for field in meta.fields[boundary + 1:]:
+			if field.fieldname.startswith("intake_"):
+				self.assertNotIn(field.fieldtype, ("Section Break", "Tab Break"))
+
 	def setUp(self):
 		frappe.set_user("Administrator")
 		self.account = frappe.get_doc({"doctype": "WhatsApp Account", "account_name": "Security test " + uuid4().hex,

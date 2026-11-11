@@ -4,8 +4,9 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 
 def custom_fields():
+	# Append after the final original field so collapsing intake cannot hide message content.
 	fields = [dict(fieldname="intake_details", label="Intake Details", fieldtype="Section Break",
-		collapsible=1, depends_on='eval:doc.type == "Incoming"', insert_after="product_catalog_json")]
+		collapsible=1, depends_on='eval:doc.type == "Incoming"', insert_after="reference_name")]
 	definitions = [
 		("intake_status", "Intake Status", "Select", "New\nNeeds Attention\nDuplicate"),
 		("intake_attention", "Needs Attention", "Small Text", None),
