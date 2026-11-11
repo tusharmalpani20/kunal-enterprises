@@ -10,6 +10,14 @@ KUNAL_ROLES = ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Al
 
 fixtures = [
 	{
+		"dt": "Property Setter",
+		"filters": [["doc_type", "=", "WhatsApp Account"], ["field_name", "in", ["token", "webhook_verify_token"]], ["property", "=", "permlevel"]],
+	},
+	{
+		"dt": "Custom Field",
+		"filters": [["dt", "in", ["WhatsApp Message", "WhatsApp Account"]], ["fieldname", "like", "intake_%"]],
+	},
+	{
 		"dt": "Role",
 		"filters": [["role_name", "in", KUNAL_ROLES]],
 	},
@@ -20,8 +28,8 @@ fixtures = [
 	{
 		"dt": "Custom DocPerm",
 		"filters": [
-			["parent", "in", ["User", "Role", "Role Profile", "Mobile OTP"]],
-			["role", "in", ["Owner", "Admin", "Administrator"]],
+			["parent", "in", ["User", "Role", "Role Profile", "Mobile OTP", "WhatsApp Message", "WhatsApp Account", "WhatsApp Settings"]],
+			["role", "in", ["Owner", "Admin", "Administrator", "Order Coordinator", "System Manager"]],
 		],
 	},
 	{
@@ -89,9 +97,11 @@ website_context = {
 # include js in doctype views
 doctype_js = {
 	"User": "public/js/user.js",
+	"WhatsApp Message": "public/js/order_intake_message.js",
+	"WhatsApp Account": "public/js/whatsapp_account_permissions.js",
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_list_js = {"WhatsApp Message": "public/js/order_intake_message_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -132,7 +142,8 @@ boot_session = ["kunal_enterprises.desk_navigation.limit_workspaces"]
 # ------------
 
 # before_install = "kunal_enterprises.install.before_install"
-# after_install = "kunal_enterprises.install.after_install"
+after_install = "kunal_enterprises.integrations.order_intake_schema.setup"
+after_migrate = "kunal_enterprises.integrations.order_intake_schema.setup"
 
 # Uninstallation
 # ------------
@@ -186,15 +197,23 @@ has_permission = {
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+	"WhatsApp Message": "kunal_enterprises.permission_guards.whatsapp.KunalWhatsAppMessage",
+	"WhatsApp Account": "kunal_enterprises.permission_guards.whatsapp.KunalWhatsAppAccount",
+	"Bulk WhatsApp Message": "kunal_enterprises.permission_guards.whatsapp.KunalBulkWhatsAppMessage",
+}
 
 # Document Events
 # ---------------
 # Hook on document methods and events
 
 doc_events = {
+	"WhatsApp Message": {
+		"before_validate": [
+			"kunal_enterprises.permission_guards.whatsapp.guard_intake_fields",
+			"kunal_enterprises.integrations.order_intake_capture.capture_message_hook",
+		],
+	},
 	"Order": {
 		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_order",
 		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_order",
@@ -277,6 +296,8 @@ doc_events = {
 # ------------------------------
 #
 override_whitelisted_methods = {
+	"frappe_whatsapp.utils.bulk_messaging.retry_failed": "kunal_enterprises.permission_guards.whatsapp.retry_failed",
+	"frappe_whatsapp.utils.webhook.webhook": "kunal_enterprises.integrations.order_intake_webhook.webhook",
 	"frappe.core.doctype.user.user.get_all_roles": "kunal_enterprises.permission_guards.owner_admin.get_all_roles",
 	"frappe.core.doctype.user.user.get_roles": "kunal_enterprises.permission_guards.owner_admin.get_roles",
 	"frappe.core.doctype.user.user.get_role_profile": "kunal_enterprises.permission_guards.owner_admin.get_role_profile",

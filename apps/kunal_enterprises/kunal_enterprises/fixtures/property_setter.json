@@ -1,0 +1,34 @@
+[
+ {
+  "default_value": null,
+  "doc_type": "WhatsApp Account",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "token",
+  "is_system_generated": 1,
+  "modified": "2026-11-11 23:35:31.667688",
+  "module": null,
+  "name": "WhatsApp Account-token-permlevel",
+  "property": "permlevel",
+  "property_type": "Int",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "WhatsApp Account",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "webhook_verify_token",
+  "is_system_generated": 1,
+  "modified": "2026-11-11 23:35:31.686995",
+  "module": null,
+  "name": "WhatsApp Account-webhook_verify_token-permlevel",
+  "property": "permlevel",
+  "property_type": "Int",
+  "row_name": null,
+  "value": "1"
+ }
+]
