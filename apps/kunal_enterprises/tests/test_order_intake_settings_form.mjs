@@ -26,7 +26,7 @@ test("preview requires account and sender and makes a read-only GET", async () =
 	const f = form();
 	f.buttons.get("Preview Sender Context")();
 	assert.equal(f.prompts.length, 1);
-	assert.deepEqual(Array.from(f.prompts[0].fields, field => [field.fieldname, field.reqd]), [["whatsapp_account", 1], ["sender", 1]]);
+	assert.deepEqual(Array.from(f.prompts[0].fields.filter(field => field.reqd), field => [field.fieldname, field.reqd]), [["whatsapp_account", 1], ["sender", 1]]);
 	await f.prompts[0].callback({whatsapp_account: "TEST WA", sender: "919000000049"});
 	assert.equal(f.calls[0].type, "GET");
 	assert.equal(f.calls[0].method, "kunal_enterprises.api.order_intake_queue.preview");

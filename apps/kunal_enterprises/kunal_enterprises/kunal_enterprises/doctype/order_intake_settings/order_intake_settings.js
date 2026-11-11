@@ -1,9 +1,17 @@
 frappe.ui.form.on("Order Intake Settings", {
 	refresh(frm) {
 		frm.set_intro("");
+		const explanations = {
+			preview: __("See which messages and related requests would be included for this sender. Nothing is changed."),
+			prepare_now: __("Prepare this sender's pending messages now, including recent unresolved messages. Automatic scheduling stays unchanged; this does not create an order."),
+			retry_selected: __("Retry only the messages you select, including older messages or messages needing attention. Original received times are kept, and active jobs are not replaced."),
+		};
 		const prompt = (method, label, retry = false) => {
 			let dialog;
 			const fields = [
+			{fieldname: "action_help", fieldtype: "HTML", options:
+				'<div class="alert alert-info"><strong>' + frappe.utils.escape_html(__("What this does")) + '</strong><p class="mb-0">' +
+				frappe.utils.escape_html(explanations[method]) + '</p></div>'},
 			{fieldname: "whatsapp_account", fieldtype: "Link", options: "WhatsApp Account", label: __("Receiving WhatsApp Account"), reqd: 1},
 			{fieldname: "sender", fieldtype: "Data", label: __("Sender Number / Identity"), reqd: 1},
 		];
