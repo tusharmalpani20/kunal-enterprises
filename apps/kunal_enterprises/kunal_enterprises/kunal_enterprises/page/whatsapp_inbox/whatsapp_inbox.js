@@ -80,6 +80,7 @@ class WhatsAppInbox {
 		this.active = false;
 		this.accountVersion = 0;
 		this.refreshVersion = 0;
+		this.pollVersion = 0;
 		this.changedMessages = new Set();
 		this.listVersion = 0;
 		this.chatVersion = 0;
@@ -90,7 +91,7 @@ class WhatsAppInbox {
 			this.scheduleRefresh();
 		};
 		this.onReconnect = () => {if (this.active) {this.subscribe(); this.scheduleRefresh();}};
-		this.onFocus = () => {if (this.active && document.visibilityState !== "hidden") this.scheduleRefresh();};
+		this.onFocus = () => {if (!this.active)return; this.schedulePolling(); if (document.visibilityState !== "hidden") this.scheduleRefresh();};
 	}
 	async call(action, args = {}) {
 		const response = await frappe.call({method: "kunal_enterprises.api.whatsapp_inbox." + action, type: "GET", args, silent: true});
@@ -99,11 +100,13 @@ class WhatsAppInbox {
 	async show() {
 		if (this.active) return;
 		this.active = true;
-		frappe.realtime.on("whatsapp_inbox_changed", this.onEvent);
-		frappe.realtime.socket?.on("connect", this.onReconnect);
+		this.accountsLoading = true;
+		frappe.realtime?.on?.("whatsapp_inbox_changed", this.onEvent);
+		frappe.realtime?.socket?.on("connect", this.onReconnect);
 		window.addEventListener("online", this.onReconnect);
 		window.addEventListener("focus", this.onFocus);
 		document.addEventListener("visibilitychange", this.onFocus);
+		this.schedulePolling();
 		try {if (frappe.require) await frappe.require("/assets/kunal_enterprises/js/whatsapp_inbox_maps.js");} catch (_) {/* Location fallback remains available if the optional map asset fails. */}
 		if (this.active) await this.loadAccounts();
 	}
@@ -118,9 +121,10 @@ class WhatsAppInbox {
 		this.chatVersion++;
 		clearTimeout(this.refreshTimer);
 		clearTimeout(this.searchTimer);
+		clearTimeout(this.pollTimer); this.pollTimer=null; this.pollVersion++;
 		this.unsubscribe();
-		frappe.realtime.off("whatsapp_inbox_changed", this.onEvent);
-		frappe.realtime.socket?.off("connect", this.onReconnect);
+		frappe.realtime?.off?.("whatsapp_inbox_changed", this.onEvent);
+		frappe.realtime?.socket?.off("connect", this.onReconnect);
 		window.removeEventListener("online", this.onReconnect);
 		window.removeEventListener("focus", this.onFocus);
 		document.removeEventListener("visibilitychange", this.onFocus);
@@ -128,10 +132,10 @@ class WhatsAppInbox {
 	subscribe() {
 		// Direct room emission avoids Desk's global subscription throttle and
 		// re-joins the guarded document room on a fresh Socket.IO connection.
-		if (this.active && this.account) frappe.realtime.emit("doc_subscribe", "WhatsApp Account", this.account);
+		if (this.active && this.account && frappe.realtime?.socket) frappe.realtime.emit("doc_subscribe", "WhatsApp Account", this.account);
 	}
 	unsubscribe() {
-		if (this.account) frappe.realtime.emit("doc_unsubscribe", "WhatsApp Account", this.account);
+		if (this.account && frappe.realtime?.socket) frappe.realtime.emit("doc_unsubscribe", "WhatsApp Account", this.account);
 	}
 	async loadAccounts() {
 		const version = ++this.accountVersion;
@@ -200,6 +204,20 @@ class WhatsAppInbox {
 		this.$root.find(".wa-layout").removeClass("wa-chat-open");
 		this.renderChat();
 	}
+	// Realtime remains the fast path. This bounded recovery poll also covers
+	// disconnected sockets and local development's alternate site/port routing.
+	schedulePolling() {
+		clearTimeout(this.pollTimer); this.pollTimer=null;
+		const version=++this.pollVersion;
+		if(!this.active || document.visibilityState==="hidden")return;
+		this.pollTimer=setTimeout(async()=>{
+			this.pollTimer=null;
+			try {
+				if(this.active && document.visibilityState!=="hidden" && this.account && !this.accountsLoading && !this.refreshing && !this.listLoading && !this.chatLoading)await this.refresh();
+			} finally {if(version===this.pollVersion)this.schedulePolling();}
+		},15000);
+	}
+
 	scheduleRefresh() {
 		if (!this.active || !this.account) return;
 		clearTimeout(this.refreshTimer);

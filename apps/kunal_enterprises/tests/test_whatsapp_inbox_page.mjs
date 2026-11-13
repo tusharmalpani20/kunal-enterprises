@@ -8,7 +8,7 @@ const account={name:'ACCOUNT-A',label:'Business A'};
 const conversation={sender:'919000000001',display_name:'Customer A',last_received_at:'2026-11-13 10:00:00',preview:'An order',identity:{status:'Matched',matches:[{doctype:'Customer',label:'Customer A'}]}};
 const page=(messages=[],extra={})=>({account:account.name,sender:conversation.sender,sender_profile_name:'Customer A',sender_identity:conversation.identity,messages,has_more:false,next_cursor:null,newest_cursor:'CUR-1',...extra});
 const message=(name,text=name)=>({name,text,received_at:'2026-11-13 10:00:00',warnings:[]});
-function setup(response,extraFrappe={}) {
+function setup(response,extraFrappe={},extraContext={}) {
   const calls=[],emits=[],handlers=new Map(),listeners=new Map(),html={},dialogs=[];let history;
   const list={scrollTop:0};
   const root={appendTo(){return this;},on(event,selector,callback){handlers.set(selector,callback);return this;},html(value){html.root=value;return this;},find(selector){return{
@@ -21,8 +21,8 @@ function setup(response,extraFrappe={}) {
   const context={__:value=>value,$:()=>root,window:events,document:{...events,visibilityState:'visible'},setTimeout,clearTimeout,
     frappe:{pages:{'whatsapp-inbox':{}},utils:{escape_html:escape},datetime:{get_today:()=> '2026-11-13'},ui:{make_app_page(){return{main:{}};},Dialog:class{constructor(options){Object.assign(this,options);dialogs.push(this);}show(){}hide(){this.hidden=true;}}},realtime,
       ...extraFrappe,async call(value){calls.push(value);const action=value.method.split('.').pop();const result=response?await response(action,value.args):action==='accounts'?{accounts:[account]}:action==='conversations'?{account:account.name,conversations:[conversation],has_more:false}:page([message('M1')]);return{message:result};}}};
-  vm.createContext(context);vm.runInContext(source+';this.Inbox=WhatsAppInbox;',context);const inbox=new context.Inbox({});
-  return{inbox,calls,emits,listeners,html,handlers,list,dialogs,get history(){return history;}};
+  Object.assign(context,extraContext);vm.createContext(context);vm.runInContext(source+';this.Inbox=WhatsAppInbox;',context);const inbox=new context.Inbox({});
+  return{inbox,calls,emits,listeners,html,handlers,list,dialogs,context,get history(){return history;}};
 }
 
 test('multiple accounts require an explicit choice before any conversations or messages are read',async()=>{
@@ -238,4 +238,29 @@ test('a refresh finishing after hide cannot clear a newer lifecycle refresh guar
  const current=flow.inbox.refresh();assert.equal(flow.inbox.refreshing,true);
  pending[0]();await old;assert.equal(flow.inbox.refreshing,true);
  pending[1]();await current;assert.equal(flow.inbox.refreshing,false);flow.inbox.hide();
+});
+
+
+function pollingFixture() {
+ let id=0;const timers=new Map();
+ const flow=setup(undefined,{}, {setTimeout(callback,delay){timers.set(++id,{callback,delay});return id;},clearTimeout(timer){timers.delete(timer);}});
+ return{...flow,timers,async tick(){const entry=[...timers].find(([,timer])=>timer.delay===15000);assert.ok(entry,'one recovery timer exists');timers.delete(entry[0]);await entry[1].callback();}};
+}
+
+test('visible recovery polls update without a socket and keep one timer across repeated show/focus',async()=>{
+ const flow=pollingFixture();flow.context.frappe.realtime.socket=undefined;await flow.inbox.show();await flow.inbox.show();
+ assert.equal(flow.timers.size,1);const before=flow.calls.length;await flow.tick();assert.equal(flow.calls.length,before+1);assert.equal(flow.timers.size,1);
+ flow.listeners.get('focus')();assert.equal([...flow.timers.values()].filter(timer=>timer.delay===15000).length,1);
+ flow.inbox.hide();assert.equal(flow.timers.size,0);
+});
+
+test('hidden pages cancel recovery polling and resume a single timer when visible',async()=>{
+ const flow=pollingFixture();await flow.inbox.show();flow.context.document.visibilityState='hidden';flow.listeners.get('visibilitychange')();assert.equal(flow.timers.size,0);
+ flow.context.document.visibilityState='visible';flow.listeners.get('visibilitychange')();assert.equal([...flow.timers.values()].filter(timer=>timer.delay===15000).length,1);
+ flow.inbox.hide();assert.equal(flow.timers.size,0);
+});
+
+test('recovery polling skips in-flight requests and cannot re-arm after hide',async()=>{
+ const flow=pollingFixture();await flow.inbox.show();const before=flow.calls.length;flow.inbox.listLoading=true;await flow.tick();assert.equal(flow.calls.length,before);flow.inbox.listLoading=false;
+ let finish;flow.inbox.refresh=()=>new Promise(resolve=>{finish=resolve;});const polling=flow.tick();flow.inbox.hide();finish();await polling;assert.equal(flow.timers.size,0);
 });
