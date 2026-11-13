@@ -24,6 +24,7 @@ WORKSPACE_METADATA = {
 }
 
 OPERATION_SHORTCUTS = {
+	"WhatsApp Inbox": {"type": "Page", "link_to": "whatsapp-inbox", "doc_view": "", "stats_filter": None},
 	"Quick Order Requests": {"link_to": "Quick Order Request", "stats_filter": None},
 	"Pending Quick Orders": {
 		"link_to": "Quick Order Request",
@@ -286,9 +287,9 @@ class TestWorkspaceNavigation(FrappeTestCase):
 
 		for label, expected in expected_shortcuts.items():
 			shortcut = shortcuts[label]
-			self.assertEqual(shortcut["type"], "DocType")
+			self.assertEqual(shortcut["type"], expected.get("type", "DocType"))
 			self.assertEqual(shortcut["link_to"], expected["link_to"])
-			self.assertEqual(shortcut["doc_view"], "List")
+			self.assertEqual(shortcut["doc_view"], expected.get("doc_view", "List"))
 			self.assertNotIn(shortcut["link_to"], FORBIDDEN_WORKSPACE_TARGETS)
 			self.assertNotIn(shortcut["label"], FORBIDDEN_WORKSPACE_TARGETS)
 			self.assertEqual(self._parse_stats_filter(shortcut.get("stats_filter")), expected["stats_filter"])

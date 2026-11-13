@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "name": "whatsapp-inbox",
+ "page_name": "whatsapp-inbox",
+ "title": "WhatsApp Inbox",
+ "module": "Kunal Enterprises",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "Owner"},
+  {"role": "Admin"},
+  {"role": "Order Coordinator"},
+  {"role": "System Manager"}
+ ]
+}
