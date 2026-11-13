@@ -436,3 +436,9 @@
 .wa-inbox .wa-history-status:empty {display:none}
 
 .wa-inbox .wa-preview img {height:auto}
+
+.wa-inbox .wa-empty-status {height:100%}
+.wa-inbox .wa-empty-chats {display:flex;min-height:240px;height:100%;padding:32px 24px;box-sizing:border-box;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--wa-muted)}
+.wa-inbox .wa-empty-chats svg {width:150px;height:120px;margin-bottom:20px;color:#6a9d92;flex-shrink:0}
+.wa-inbox .wa-empty-chats strong {font-size:14px;font-weight:500;color:var(--text-color)}
+.wa-inbox .wa-empty-chats p {max-width:230px;margin:8px 0 0;font-size:12px;line-height:1.6}
