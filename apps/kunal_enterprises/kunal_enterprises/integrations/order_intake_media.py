@@ -8,6 +8,8 @@ import frappe
 import requests
 from frappe.utils import add_to_date, cint, get_datetime, now_datetime
 
+from kunal_enterprises.integrations.whatsapp_inbox import message_changed
+
 DT = "WhatsApp Message"
 MEDIA_TYPES = {"image", "audio", "video", "document", "sticker"}
 TIMEOUT = (5, 30)
@@ -26,6 +28,7 @@ def queue_download(name, manual=False):
 		private = frappe.db.get_value("File", {"file_url": doc.attach, "is_private": 1}, "name")
 		if private:
 			frappe.db.set_value(DT, name, {"intake_media_state": "Downloaded", "intake_media_note": ""}, update_modified=False)
+			message_changed(name)
 			return dict(state="Downloaded")
 	now = now_datetime()
 	if doc.get("intake_media_state") == "Queued" and doc.get("intake_media_queued_at") and get_datetime(doc.intake_media_queued_at) > add_to_date(now, minutes=-LEASE_MINUTES, as_datetime=True):
@@ -66,6 +69,7 @@ def _fail(name, token, note):
 			reasons.append(MEDIA_ATTENTION)
 		frappe.db.set_value(DT, name, dict(intake_media_state="Failed", intake_media_job_token=None,
 			intake_media_note=note, intake_status="Needs Attention", intake_attention="\n".join(reasons)), update_modified=False)
+		message_changed(name)
 
 
 def _media_url(url):
@@ -137,6 +141,7 @@ def download(name, token):
 		if current.get("intake_prepare_state") == "Context Ready":
 			values.update(intake_prepare_state="Pending", intake_prepare_note="A downloaded attachment awaits context preparation.")
 		frappe.db.set_value(DT, name, values, update_modified=False)
+		message_changed(name)
 		return dict(state="Downloaded")
 	except Exception:
 		# Never store provider responses, request exceptions or credentials.

@@ -215,6 +215,8 @@ doc_events = {
 			"kunal_enterprises.integrations.order_intake_capture.capture_message_hook",
 			"kunal_enterprises.integrations.order_intake_queue.invalidate_changed_message",
 		],
+		"on_update": "kunal_enterprises.integrations.whatsapp_inbox.changed",
+		"on_trash": "kunal_enterprises.integrations.whatsapp_inbox.changed",
 	},
 	"Order": {
 		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_order",

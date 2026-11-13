@@ -77,6 +77,8 @@ def setup():
 	if not frappe.db.exists("DocType", "WhatsApp Message"):
 		return
 	create_custom_fields(custom_fields(), update=True)
+	# Account-scoped incoming history uses stable creation/name pagination.
+	frappe.db.add_index("WhatsApp Message", ["type", "whatsapp_account", "creation", "name"], "whatsapp_inbox_history")
 	frappe.db.add_index("WhatsApp Message", ["type", "intake_prepare_state", "intake_received_at"], "order_intake_dispatch")
 	frappe.db.add_index("WhatsApp Message", ["whatsapp_account", "intake_prepare_state"], "order_intake_account_jobs")
 	from kunal_enterprises.permission_guards.whatsapp import setup as setup_permissions
