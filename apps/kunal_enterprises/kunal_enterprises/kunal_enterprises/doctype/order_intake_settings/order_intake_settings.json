@@ -4,6 +4,9 @@
  "module": "Kunal Enterprises",
  "engine": "InnoDB",
  "field_order": [
+  "company_section",
+  "company_name",
+  "company_aliases",
   "provider_section",
   "provider",
   "api_key",
@@ -26,9 +29,29 @@
   "max_requests_per_job",
   "max_input_tokens",
   "max_output_tokens",
-  "deferred_retry_minutes"
+  "deferred_retry_minutes",
+  "logging_section",
+  "log_payload_retention_days",
+  "pricing"
  ],
  "fields": [
+  {
+   "fieldname": "company_section",
+   "fieldtype": "Section Break",
+   "label": "Company Context"
+  },
+  {
+   "fieldname": "company_name",
+   "fieldtype": "Data",
+   "label": "Your Company Name",
+   "description": "The business receiving these requests. Its name in a heading or signature should not be mistaken for the customer."
+  },
+  {
+   "fieldname": "company_aliases",
+   "fieldtype": "Small Text",
+   "label": "Other Company Names",
+   "description": "One alternative spelling per line. Warehouse context comes automatically from active Tally Godown records."
+  },
   {
    "fieldname": "provider_section",
    "fieldtype": "Section Break",
@@ -91,8 +114,8 @@
    "fieldtype": "Check",
    "label": "Enable AI Processing",
    "default": "0",
-   "read_only": 1,
-   "description": "Message capture remains active. Automated grouping and extraction are not available yet."
+   "read_only": 0,
+   "description": "Automatically creates editable drafts from prepared sender contexts. Does not create actual Orders. Manual processing is available separately."
   },
   {
    "fieldname": "interval_minutes",
@@ -179,6 +202,25 @@
    "fieldtype": "Datetime",
    "read_only": 1,
    "hidden": 1
+  },
+  {
+   "fieldname": "logging_section",
+   "fieldtype": "Section Break",
+   "label": "AI Run Logs"
+  },
+  {
+   "fieldname": "log_payload_retention_days",
+   "fieldtype": "Int",
+   "label": "Log Payload Retention Days",
+   "default": 30,
+   "description": "Full inputs/outputs are retained for this many days. Numeric usage and cost summaries remain."
+  },
+  {
+   "fieldname": "pricing",
+   "fieldtype": "Table",
+   "label": "Pricing",
+   "options": "Order Intake AI Pricing",
+   "description": "Verified USD rates per million tokens. Unconfigured rates produce an unknown estimate, not a zero cost."
   }
  ],
  "permissions": [

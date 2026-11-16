@@ -1,0 +1,104 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake AI Pricing",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "provider",
+  "model",
+  "input_per_million",
+  "cached_input_per_million",
+  "output_per_million",
+  "cache_write_per_million",
+  "rates_confirmed",
+  "cached_rate_confirmed",
+  "cache_write_rate_confirmed",
+  "max_context_tokens",
+  "service_tier",
+  "source_url",
+  "verified_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "OpenAI\nOpenRouter",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "input_per_million",
+   "fieldtype": "Float",
+   "label": "Input Per Million",
+   "precision": "9",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cached_input_per_million",
+   "fieldtype": "Float",
+   "label": "Cached Input Per Million",
+   "precision": "9"
+  },
+  {
+   "fieldname": "output_per_million",
+   "fieldtype": "Float",
+   "label": "Output Per Million",
+   "precision": "9",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cache_write_per_million",
+   "fieldtype": "Float",
+   "label": "Cache Write Per Million",
+   "precision": "9"
+  },
+  {
+   "fieldname": "rates_confirmed",
+   "fieldtype": "Check",
+   "label": "Rates Confirmed",
+   "description": "Enable only after entering verified USD rates. Zero is valid only when explicitly confirmed."
+  },
+  {
+   "fieldname": "cached_rate_confirmed",
+   "fieldtype": "Check",
+   "label": "Cached Rate Confirmed"
+  },
+  {
+   "fieldname": "cache_write_rate_confirmed",
+   "fieldtype": "Check",
+   "label": "Cache Write Rate Confirmed"
+  },
+  {
+   "fieldname": "max_context_tokens",
+   "fieldtype": "Int",
+   "label": "Max Context Tokens",
+   "default": 272000
+  },
+  {
+   "fieldname": "service_tier",
+   "fieldtype": "Data",
+   "label": "Service Tier",
+   "default": "default"
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Small Text",
+   "label": "Source Url"
+  },
+  {
+   "fieldname": "verified_at",
+   "fieldtype": "Date",
+   "label": "Verified At"
+  }
+ ],
+ "istable": 1,
+ "track_changes": 0
+}

@@ -1,0 +1,375 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake AI Run",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "summary_section",
+  "status",
+  "started_at",
+  "finished_at",
+  "duration_seconds",
+  "model_column",
+  "provider",
+  "grouping_model",
+  "extraction_model",
+  "reasoning_effort",
+  "usage_section",
+  "wire_attempts",
+  "usage_known_calls",
+  "unknown_usage_calls",
+  "input_tokens",
+  "output_tokens",
+  "cached_input_tokens",
+  "cache_write_tokens",
+  "reasoning_tokens",
+  "cost_column",
+  "cost_complete",
+  "estimated_cost_usd",
+  "cost_known_calls",
+  "unknown_cost_calls",
+  "provider_cost_known_calls",
+  "provider_cost_usd",
+  "created_request_count",
+  "updated_request_count",
+  "error_note",
+  "context_section",
+  "anchor_message",
+  "whatsapp_account",
+  "sender",
+  "actor",
+  "run_key",
+  "context_digest",
+  "source_messages",
+  "request_ids",
+  "calls_section",
+  "calls",
+  "payload_section",
+  "input_snapshot",
+  "stages_json",
+  "result_json",
+  "payloads_purged_at",
+  "currency"
+ ],
+ "fields": [
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Run summary",
+   "collapsible": 0
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "label": "Status",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "duration_seconds",
+   "fieldtype": "Float",
+   "label": "Duration (seconds)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "grouping_model",
+   "fieldtype": "Data",
+   "label": "Grouping Model",
+   "read_only": 1
+  },
+  {
+   "fieldname": "extraction_model",
+   "fieldtype": "Data",
+   "label": "Extraction Model",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reasoning_effort",
+   "fieldtype": "Data",
+   "label": "Reasoning Effort",
+   "read_only": 1
+  },
+  {
+   "fieldname": "wire_attempts",
+   "fieldtype": "Int",
+   "label": "Provider calls",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "usage_known_calls",
+   "fieldtype": "Int",
+   "label": "Calls with reported usage",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unknown_usage_calls",
+   "fieldtype": "Int",
+   "label": "Calls with missing usage",
+   "read_only": 1
+  },
+  {
+   "fieldname": "input_tokens",
+   "fieldtype": "Int",
+   "label": "Input Tokens",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "output_tokens",
+   "fieldtype": "Int",
+   "label": "Output Tokens",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "cached_input_tokens",
+   "fieldtype": "Int",
+   "label": "Cached Input Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cache_write_tokens",
+   "fieldtype": "Int",
+   "label": "Cache Write Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reasoning_tokens",
+   "fieldtype": "Int",
+   "label": "Reasoning Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_complete",
+   "fieldtype": "Check",
+   "label": "All calls priced",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_cost_usd",
+   "fieldtype": "Currency",
+   "label": "Estimated cost (USD)",
+   "precision": "9",
+   "in_list_view": 1,
+   "read_only": 1,
+   "options": "currency",
+   "description": "Known estimated USD subtotal. Check unknown-cost calls before treating this as complete."
+  },
+  {
+   "fieldname": "cost_known_calls",
+   "fieldtype": "Int",
+   "label": "Calls with cost estimates",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unknown_cost_calls",
+   "fieldtype": "Int",
+   "label": "Calls with missing estimates",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_cost_known_calls",
+   "fieldtype": "Int",
+   "label": "Calls with provider-reported cost",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_cost_usd",
+   "fieldtype": "Currency",
+   "label": "Provider-reported cost (USD)",
+   "precision": "9",
+   "read_only": 1,
+   "options": "currency",
+   "description": "Known provider-reported USD subtotal; unavailable when provider-cost-known calls is zero. Does not include credit purchase or payment fees."
+  },
+  {
+   "fieldname": "created_request_count",
+   "fieldtype": "Int",
+   "label": "Created Request Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "updated_request_count",
+   "fieldtype": "Int",
+   "label": "Updated Request Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_note",
+   "fieldtype": "Small Text",
+   "label": "Error Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "context_section",
+   "fieldtype": "Section Break",
+   "label": "Related records",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "anchor_message",
+   "fieldtype": "Data",
+   "label": "Anchor Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "whatsapp_account",
+   "fieldtype": "Data",
+   "label": "Whatsapp Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sender",
+   "fieldtype": "Small Text",
+   "label": "Sender",
+   "read_only": 1
+  },
+  {
+   "fieldname": "actor",
+   "fieldtype": "Data",
+   "label": "Actor",
+   "read_only": 1
+  },
+  {
+   "fieldname": "run_key",
+   "fieldtype": "Data",
+   "label": "Run Key",
+   "unique": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "context_digest",
+   "fieldtype": "Data",
+   "label": "Context Digest",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_messages",
+   "fieldtype": "Code",
+   "label": "Source Messages",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "request_ids",
+   "fieldtype": "Code",
+   "label": "Request Ids",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "calls_section",
+   "fieldtype": "Section Break",
+   "label": "Model calls",
+   "collapsible": 0
+  },
+  {
+   "fieldname": "calls",
+   "fieldtype": "Table",
+   "label": "Calls",
+   "options": "Order Intake AI Call",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payload_section",
+   "fieldtype": "Section Break",
+   "label": "Full input and stage results",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "input_snapshot",
+   "fieldtype": "Code",
+   "label": "Input Snapshot",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stages_json",
+   "fieldtype": "Code",
+   "label": "Stages Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_json",
+   "fieldtype": "Code",
+   "label": "Result Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payloads_purged_at",
+   "fieldtype": "Datetime",
+   "label": "Payloads Purged At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency",
+   "hidden": 1,
+   "read_only": 1,
+   "default": "USD"
+  },
+  {
+   "fieldname": "model_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "usage_section",
+   "fieldtype": "Section Break",
+   "label": "Usage and cost"
+  },
+  {
+   "fieldname": "cost_column",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "istable": 0,
+ "track_changes": 0,
+ "autoname": "hash",
+ "sort_field": "started_at",
+ "sort_order": "DESC",
+ "permissions": [
+  {
+   "role": "Owner",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Admin",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "search_fields": "anchor_message,whatsapp_account,sender"
+}

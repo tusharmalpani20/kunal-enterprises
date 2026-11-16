@@ -5,6 +5,7 @@ frappe.ui.form.on("Order Intake Settings", {
 			preview: __("See which messages and related requests would be included for this sender. Nothing is changed."),
 			prepare_now: __("Prepare this sender's pending messages now, including recent unresolved messages. Automatic scheduling stays unchanged; this does not create an order."),
 			retry_selected: __("Retry only the messages you select, including older messages or messages needing attention. Original received times are kept, and active jobs are not replaced."),
+			process_sender: __("Send this sender's prepared messages and supported attachments to the configured AI provider to create editable drafts or propose updates. Prepare Sender Context first. This manual run leaves automatic scheduling unchanged and does not create a final order."),
 		};
 		const prompt = (method, label, retry = false) => {
 			let dialog;
@@ -27,7 +28,8 @@ frappe.ui.form.on("Order Intake Settings", {
 			dialog = frappe.prompt(fields, async values => {
 				const args = {...values};
 				if (retry) args.messages = (values.messages || []).filter(row => row.message).map(row => row.message);
-				const {message} = await frappe.call({method: "kunal_enterprises.api.order_intake_queue." + method,
+				const api = method === "process_sender" ? "order_intake_ai" : "order_intake_queue";
+				const {message} = await frappe.call({method: "kunal_enterprises.api." + api + "." + method,
 					args, type: method === "preview" ? "GET" : "POST", freeze: true});
 				const escape = value => frappe.utils.escape_html(String(value || ""));
 				const context = message.context;
@@ -55,6 +57,28 @@ frappe.ui.form.on("Order Intake Settings", {
 		frm.add_custom_button(__("Preview Sender Context"), () => prompt("preview", "Preview Sender Context"));
 		frm.add_custom_button(__("Prepare Sender Context"), () => prompt("prepare_now", "Prepare Sender Context"));
 		frm.add_custom_button(__("Retry Selected Context"), () => prompt("retry_selected", "Retry Selected Context", true));
+		frm.add_custom_button(__("Create Sender Drafts"), () => prompt("process_sender", "Create Sender Drafts"));
+		if (frappe.session?.user === "Administrator" || frappe.user?.has_role?.(["Owner", "Admin", "System Manager"])) {
+			frm.add_custom_button(__("AI run logs"), () => frappe.set_route("List", "Order Intake AI Run"));
+			frm.add_custom_button(__("AI usage summary"), async () => {
+				const {message: usage} = await frappe.call({method: "kunal_enterprises.api.order_intake_ai_logs.summary", type: "GET"});
+				const escape = value => frappe.utils.escape_html(String(value ?? ""));
+				const cost = (value, known) => known ? "$" + Number(value || 0).toFixed(9) : __("Not available");
+				const rows = [
+					[__("Runs"), usage.runs || 0], [__("Model calls, including retries"), usage.wire_attempts || 0],
+					[__("Known input tokens"), usage.input_tokens || 0], [__("Known output tokens"), usage.output_tokens || 0],
+					[__("Cached input tokens (included in input)"), usage.cached_input_tokens || 0], [__("Cache-write tokens (included in input)"), usage.cache_write_tokens || 0],
+					[__("Reasoning tokens (included in output)"), usage.reasoning_tokens || 0],
+					[__("Known estimated spend (USD)"), cost(usage.known_estimated_spend_usd, usage.cost_known_calls)],
+					[__("Average fully priced run (USD)"), cost(usage.average_complete_run_cost_usd, usage.complete_cost_runs)],
+					[__("Known spend per created request (USD, shared basis)"), cost(usage.known_spend_per_created_request_usd, usage.requests_created && usage.cost_known_calls)],
+					[__("Created intake requests"), usage.requests_created || 0],
+					[__("Calls with unknown usage"), usage.unknown_usage_calls || 0], [__("Calls with unknown estimated cost"), usage.unknown_cost_calls || 0],
+				];
+				frappe.msgprint({title: __("AI usage — last 30 days"), message:
+					'<table class="table">' + rows.map(([label, value]) => '<tr><th>' + escape(label) + '</th><td>' + escape(value) + '</td></tr>').join("") + '</table><p>' + escape(usage.note) + '</p>'});
+			});
+		}
 	},
 	provider(frm) {
 		// Only adjust the known default; never silently replace a custom model.

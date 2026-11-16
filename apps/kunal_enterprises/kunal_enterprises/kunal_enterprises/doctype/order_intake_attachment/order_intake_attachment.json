@@ -11,6 +11,8 @@
   "latitude",
   "longitude",
   "location_address",
+  "contact_name",
+  "contact_number",
   "page_count",
   "review_status",
   "source_message",
@@ -21,7 +23,7 @@
    "fieldname": "reference_type",
    "fieldtype": "Select",
    "label": "Type",
-   "options": "File\nExternal Link\nLocation",
+   "options": "File\nExternal Link\nLocation\nContact",
    "default": "File",
    "in_list_view": 1,
    "columns": 2
@@ -87,6 +89,18 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Review Notes"
+  },
+  {
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "label": "Contact Name",
+   "depends_on": "eval:doc.reference_type == 'Contact'"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Data",
+   "label": "Contact Number",
+   "depends_on": "eval:doc.reference_type == 'Contact'"
   }
  ],
  "permissions": [],

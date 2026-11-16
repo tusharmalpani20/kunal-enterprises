@@ -15,13 +15,10 @@
   "sender_column",
   "sales_employee",
   "sales_employee_name",
-  "interpretation_section",
-  "estimated_interpretation",
-  "unresolved_questions",
-  "interpretation_display",
-  "interpretation_notes",
   "items_section",
   "items",
+  "messages_section",
+  "conversation_display",
   "delivery_section",
   "delivery_address",
   "delivery_column",
@@ -29,8 +26,14 @@
   "delivery_contact_number",
   "review_section",
   "review_notes",
+  "correction_reason",
   "references_section",
   "attachments",
+  "interpretation_section",
+  "estimated_interpretation",
+  "unresolved_questions",
+  "interpretation_display",
+  "interpretation_notes",
   "details_section",
   "source",
   "whatsapp_account",
@@ -40,10 +43,17 @@
   "first_received_at",
   "last_received_at",
   "source_messages",
-  "conversation_display",
   "warehouses",
   "allocations",
-  "layout_simplified"
+  "layout_simplified",
+  "proposed_updates",
+  "customer_text",
+  "salesperson_text",
+  "matching_json",
+  "manual_match_fields",
+  "reviewed_by",
+  "processed_at",
+  "ai_initial_values"
  ],
  "fields": [
   {
@@ -118,7 +128,8 @@
   {
    "fieldname": "interpretation_section",
    "fieldtype": "Section Break",
-   "label": "Interpretation"
+   "label": "Message Details",
+   "collapsible": 1
   },
   {
    "fieldname": "estimated_interpretation",
@@ -143,7 +154,7 @@
   {
    "fieldname": "interpretation_notes",
    "fieldtype": "Small Text",
-   "label": "Interpretation Notes"
+   "label": "Additional Notes"
   },
   {
    "fieldname": "items_section",
@@ -155,7 +166,12 @@
    "fieldtype": "Table",
    "label": "Items",
    "options": "Order Intake Item",
-   "description": "Select an item, quantity and dispatch warehouse on each row. Leave uncertain values blank. Use separate rows when dispatching from different warehouses."
+   "description": "Check the item, quantity and dispatch warehouse."
+  },
+  {
+   "fieldname": "messages_section",
+   "fieldtype": "Section Break",
+   "label": "Messages"
   },
   {
    "fieldname": "delivery_section",
@@ -260,8 +276,8 @@
   {
    "fieldname": "conversation_display",
    "fieldtype": "HTML",
-   "label": "Original Conversation",
-   "hidden": 1
+   "label": "Messages",
+   "read_only": 1
   },
   {
    "fieldname": "warehouses",
@@ -288,6 +304,77 @@
    "read_only": 1,
    "no_copy": 1,
    "default": "0"
+  },
+  {
+   "fieldname": "proposed_updates",
+   "fieldtype": "Code",
+   "label": "Proposed Updates",
+   "options": "JSON",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "customer_text",
+   "label": "Original Customer Wording",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "salesperson_text",
+   "label": "Original Salesperson Wording",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "matching_json",
+   "label": "Matching Evidence",
+   "fieldtype": "Code",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "JSON"
+  },
+  {
+   "fieldname": "manual_match_fields",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Manual Match Protections",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "reviewed_by",
+   "label": "Processed By",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "User"
+  },
+  {
+   "fieldname": "processed_at",
+   "label": "Processed At",
+   "fieldtype": "Datetime",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "correction_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason for Corrections",
+   "description": "Optional: explain changes to the request type, customer or other details. For a particular item or warehouse, add a reason in that item row."
+  },
+  {
+   "fieldname": "ai_initial_values",
+   "fieldtype": "Long Text",
+   "label": "Initial AI Suggestions",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "permissions": [

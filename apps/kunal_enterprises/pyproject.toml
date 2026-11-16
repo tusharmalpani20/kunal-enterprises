@@ -11,6 +11,9 @@ dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
     "openpyxl>=3.1.0",
     "xlrd>=2.0.1",
+    "pydantic-ai-slim[openai,openrouter]>=1.107.10,<2",
+    "pypdf>=6.12,<7",
+    "tiktoken>=0.14,<1",
 ]
 
 [build-system]

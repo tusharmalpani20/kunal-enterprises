@@ -48,6 +48,16 @@ def custom_fields():
 		("intake_lease_until", "Preparation Lease Until", "Datetime", None),
 		("intake_job_token", "Preparation Job Token", "Data", None),
 		("intake_context_digest", "Context Digest", "Data", None),
+		("intake_ai_state", "AI Processing", "Select", "Pending\nQueued\nRetry\nDrafted\nUnresolved\nNeeds Attention"),
+		("intake_ai_note", "AI Processing Note", "Small Text", None),
+		("intake_ai_token", "AI Job Token", "Data", None),
+		("intake_ai_digest", "AI Input Digest", "Data", None),
+		("intake_ai_prepared_digest", "AI Prepared Context Version", "Data", None),
+		("intake_ai_attempts", "AI Attempts", "Int", None),
+		("intake_ai_retry_at", "Next AI Retry", "Datetime", None),
+		("intake_ai_lease_until", "AI Lease Until", "Datetime", None),
+		("intake_ai_result", "AI Draft References", "Code", "JSON"),
+		("intake_ai_coverage", "AI Message Coverage", "Code", "JSON"),
 	]
 	for name, label, kind, options in definitions:
 		field = dict(fieldname=name, label=label, fieldtype=kind, read_only=1, no_copy=1,
@@ -58,9 +68,11 @@ def custom_fields():
 			field.update(default="New", in_standard_filter=1)
 		if name == "intake_media_state":
 			field["default"] = "Pending"
+		if name == "intake_ai_state":
+			field.update(default="Pending", in_standard_filter=1)
 		if name == "intake_prepare_state":
 			field.update(default="Pending", in_standard_filter=1)
-		if name in {"intake_job_token", "intake_context_digest", "intake_media_job_token"}:
+		if name in {"intake_job_token", "intake_context_digest", "intake_media_job_token", "intake_ai_token", "intake_ai_digest", "intake_ai_prepared_digest"}:
 			field["hidden"] = 1
 		if name == "intake_event_key":
 			field.update(unique=1, hidden=1)
@@ -74,11 +86,18 @@ def custom_fields():
 
 def setup():
 	"""Reapplied on install/migrate so a second server gets the same extension."""
+	if frappe.db.exists("DocType", "Order Intake Match Evidence"):
+		frappe.db.add_index("Order Intake Match Evidence", ["kind", "normalized_key", "whatsapp_account", "sender"], "order_intake_learned_scope")
+		frappe.db.add_index("Order Intake Match Evidence", ["whatsapp_account", "sender", "active", "creation"], "order_intake_recent_learning")
+	if frappe.db.exists("DocType", "Order Intake AI Run"):
+		frappe.db.add_index("Order Intake AI Run", ["payloads_purged_at", "started_at"], "order_intake_log_expiry")
+		frappe.db.add_index("Order Intake AI Run", ["status", "started_at"], "order_intake_log_recovery")
 	if not frappe.db.exists("DocType", "WhatsApp Message"):
 		return
 	create_custom_fields(custom_fields(), update=True)
 	# Account-scoped incoming history uses stable creation/name pagination.
 	frappe.db.add_index("WhatsApp Message", ["type", "whatsapp_account", "creation", "name"], "whatsapp_inbox_history")
+	frappe.db.add_index("WhatsApp Message", ["intake_ai_state", "intake_ai_retry_at"], "order_intake_ai_dispatch")
 	frappe.db.add_index("WhatsApp Message", ["type", "intake_prepare_state", "intake_received_at"], "order_intake_dispatch")
 	frappe.db.add_index("WhatsApp Message", ["whatsapp_account", "intake_prepare_state"], "order_intake_account_jobs")
 	from kunal_enterprises.permission_guards.whatsapp import setup as setup_permissions

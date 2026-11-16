@@ -1,0 +1,239 @@
+{
+ "doctype": "DocType",
+ "name": "Order Intake AI Call",
+ "module": "Kunal Enterprises",
+ "engine": "InnoDB",
+ "field_order": [
+  "stage",
+  "sequence",
+  "provider",
+  "model",
+  "reasoning_effort",
+  "state",
+  "started_at",
+  "finished_at",
+  "duration_seconds",
+  "http_status",
+  "provider_request_id",
+  "usage_known",
+  "input_tokens",
+  "output_tokens",
+  "cached_input_tokens",
+  "cache_write_tokens",
+  "reasoning_tokens",
+  "usage_json",
+  "pricing_json",
+  "cost_known",
+  "estimated_cost_usd",
+  "provider_cost_known",
+  "provider_cost_usd",
+  "payload_section",
+  "semantic_input",
+  "request_json",
+  "response_json",
+  "parsed_response",
+  "validation_json",
+  "error_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "stage",
+   "fieldtype": "Data",
+   "label": "Stage",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "label": "Sequence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider",
+   "read_only": 1
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reasoning_effort",
+   "fieldtype": "Data",
+   "label": "Reasoning Effort",
+   "read_only": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "duration_seconds",
+   "fieldtype": "Float",
+   "label": "Duration Seconds",
+   "read_only": 1
+  },
+  {
+   "fieldname": "http_status",
+   "fieldtype": "Int",
+   "label": "Http Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_request_id",
+   "fieldtype": "Data",
+   "label": "Provider Request Id",
+   "read_only": 1
+  },
+  {
+   "fieldname": "usage_known",
+   "fieldtype": "Check",
+   "label": "Usage Known",
+   "read_only": 1
+  },
+  {
+   "fieldname": "input_tokens",
+   "fieldtype": "Int",
+   "label": "Input Tokens",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "output_tokens",
+   "fieldtype": "Int",
+   "label": "Output Tokens",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cached_input_tokens",
+   "fieldtype": "Int",
+   "label": "Cached Input Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cache_write_tokens",
+   "fieldtype": "Int",
+   "label": "Cache Write Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reasoning_tokens",
+   "fieldtype": "Int",
+   "label": "Reasoning Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "usage_json",
+   "fieldtype": "Code",
+   "label": "Usage Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pricing_json",
+   "fieldtype": "Code",
+   "label": "Pricing Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_known",
+   "fieldtype": "Check",
+   "label": "Cost Known",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_cost_usd",
+   "fieldtype": "Currency",
+   "label": "Estimated Cost Usd",
+   "precision": "9",
+   "read_only": 1,
+   "in_list_view": 1,
+   "options": "currency"
+  },
+  {
+   "fieldname": "provider_cost_known",
+   "fieldtype": "Check",
+   "label": "Provider Cost Known",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_cost_usd",
+   "fieldtype": "Currency",
+   "label": "Provider Cost Usd",
+   "precision": "9",
+   "read_only": 1,
+   "options": "currency"
+  },
+  {
+   "fieldname": "payload_section",
+   "fieldtype": "Section Break",
+   "label": "Full inputs and outputs",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "semantic_input",
+   "fieldtype": "Code",
+   "label": "Semantic Input",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "request_json",
+   "fieldtype": "Code",
+   "label": "Request Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "response_json",
+   "fieldtype": "Code",
+   "label": "Response Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "parsed_response",
+   "fieldtype": "Code",
+   "label": "Parsed Response",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "validation_json",
+   "fieldtype": "Code",
+   "label": "Validation Json",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_note",
+   "fieldtype": "Small Text",
+   "label": "Error Note",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "track_changes": 0
+}

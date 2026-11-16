@@ -9,6 +9,7 @@
   "item",
   "item_name",
   "quantity",
+  "quantity_unknown",
   "unit",
   "godown",
   "warehouse_text",
@@ -56,11 +57,19 @@
    "columns": 1
   },
   {
+   "fieldname": "quantity_unknown",
+   "fieldtype": "Check",
+   "label": "Quantity needs confirmation",
+   "default": "0",
+   "hidden": 1
+  },
+  {
    "fieldname": "unit",
    "fieldtype": "Data",
    "label": "Unit",
    "in_list_view": 1,
-   "columns": 1
+   "columns": 1,
+   "description": "Label from the message. The quantity is used as entered; no unit conversion is applied."
   },
   {
    "fieldname": "godown",
@@ -108,5 +117,6 @@
  "actions": [],
  "links": [],
  "states": [],
- "istable": 1
+ "istable": 1,
+ "editable_grid": 1
 }
