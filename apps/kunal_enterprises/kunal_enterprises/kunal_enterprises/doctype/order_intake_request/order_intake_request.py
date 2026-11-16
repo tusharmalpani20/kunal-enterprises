@@ -1,5 +1,6 @@
 """Editable intake structure; automation and final Order conversion are separate steps."""
 import math
+import json
 from uuid import uuid4
 
 import frappe
@@ -10,11 +11,30 @@ from kunal_enterprises.api.quick_orders import _require_reviewer
 
 
 class OrderIntakeRequest(Document):
+	def onload(self):
+		# Float storage normalizes None to zero. Keep the semantic distinction in
+		# the flag and send a blank editor value without changing stored evidence.
+		for row in self.items:
+			if row.get('quantity_unknown'):
+				row.quantity = None
+
 	def validate(self):
 		_require_reviewer()
-		# Read-only Desk fields alone do not protect against forged REST writes.
-		if self.status == "Converted to Order" or self.order:
-			frappe.throw("Order conversion is not available in Step 1")
+		before = None if self.is_new() else self.get_doc_before_save()
+		# Older open browser forms may omit this newly added hidden field. Keep
+		# the server baseline; an omitted value must never erase it on save.
+		if before and before.get("ai_initial_values") and not self.get("ai_initial_values"):
+			self.ai_initial_values = before.ai_initial_values
+		if self._validate_processing_boundary(before):
+			return
+		if not frappe.flags.intake_ai_write and (self.get("ai_initial_values") or None) != (before.get("ai_initial_values") or None if before else None):
+			frappe.throw("Initial AI suggestions are managed by the system", frappe.PermissionError)
+		if not frappe.flags.intake_ai_write and (self.proposed_updates or None) != (before.proposed_updates or None if before else None):
+			frappe.throw("AI proposed updates are managed by the system", frappe.PermissionError)
+		if not frappe.flags.intake_matching_write and (self.matching_json or None) != (before.matching_json or None if before else None):
+			frappe.throw("Matching evidence is managed by the system", frappe.PermissionError)
+		if (self.manual_match_fields or None) != (before.manual_match_fields or None if before else None):
+			frappe.throw("Manual match protections are managed by the system", frappe.PermissionError)
 		if self.first_received_at and self.last_received_at:
 			if get_datetime(self.last_received_at) < get_datetime(self.first_received_at):
 				frappe.throw("Last received time cannot precede first received time")
@@ -23,12 +43,68 @@ class OrderIntakeRequest(Document):
 		self._validate_legacy_evidence()
 		self._simplify_legacy_layout()
 		self._validate_items()
+		self._protect_manual_matches(before)
 		self._validate_attachments()
 		self._validate_sources()
+		if before and self.matching_json and not frappe.flags.intake_matching_write:
+			from kunal_enterprises.integrations.order_intake_match_requests import matching_context
+			if matching_context(self) != matching_context(before):
+				self.matching_json = None
+				for row in self.items:
+					row.match_score = 0
+
+	def _validate_processing_boundary(self, before):
+		conversion = bool(self.flags.in_order_intake_conversion)
+		transition = conversion or bool(self.flags.in_order_intake_transition)
+		if before and before.status == 'Converted to Order':
+			# Preserve the exact reviewed evidence and selections after conversion.
+			# Standard metadata/timeline changes are not business-field changes.
+			def payload(doc):
+				return {field.fieldname: doc.get(field.fieldname) for field in doc.meta.fields
+					if field.fieldtype not in ('Section Break', 'Column Break', 'Tab Break', 'HTML', 'Button')
+					and field.fieldtype != 'Table'} | {
+					field.fieldname: [{key: value for key, value in row.as_dict().items()
+						if key not in ('modified', 'modified_by', 'creation', 'owner', '__unsaved')} for row in doc.get(field.fieldname)]
+					for field in doc.meta.fields if field.fieldtype == 'Table'}
+			if payload(self) != payload(before):
+				frappe.throw('Converted intake requests are read-only. Create a new request for later changes.')
+			return True
+		old_order = before.order if before else None
+		if (self.order or None) != (old_order or None) or self.status == 'Converted to Order':
+			if not conversion or not self.order or self.status != 'Converted to Order':
+				frappe.throw('Order links and conversion status are managed by Create Order.')
+			order = frappe.get_doc('Order', self.order)
+			if order.order_intake_request != self.name or order.customer != self.customer:
+				frappe.throw('The Order must be created from this intake request and customer.')
+		for field in ('reviewed_by', 'processed_at'):
+			if (self.get(field) or None) != (before.get(field) or None if before else None) and not transition:
+				frappe.throw('Processing audit fields are managed by the system.', frappe.PermissionError)
+		return False
+
+	def on_trash(self):
+		if self.status == 'Converted to Order' or self.order:
+			frappe.throw('Converted intake requests must be retained with their Order and evidence.')
+
+	def _protect_manual_matches(self, before):
+		if not before or frappe.flags.intake_matching_write:
+			return
+		protected = set(frappe.parse_json(before.manual_match_fields or '[]'))
+		for field in ('customer', 'sales_employee'):
+			if (self.get(field) or '') != (before.get(field) or ''):
+				protected.add(field)
+		old = {row.row_key: row for row in before.items}
+		for row in self.items:
+			if row.row_key in old:
+				for field in ('item', 'godown'):
+					if (row.get(field) or '') != (old[row.row_key].get(field) or ''):
+						protected.add(f'{field}:{row.row_key}')
+		valid = {'customer', 'sales_employee'} | {f'{field}:{row.row_key}' for row in self.items for field in ('item', 'godown')}
+		self.manual_match_fields = json.dumps(sorted(protected & valid)) if protected else None
 
 	def _validate_items(self):
 		previous = None if self.is_new() else self.get_doc_before_save()
 		old_keys = {row.name: row.row_key for row in previous.items} if previous else {}
+		old_rows = {row.name: row for row in previous.items} if previous else {}
 		seen = set()
 		for row in self.items:
 			if row.name in old_keys and row.row_key != old_keys[row.name]:
@@ -38,7 +114,17 @@ class OrderIntakeRequest(Document):
 			if row.row_key in seen:
 				frappe.throw("Item row IDs must be unique within the request")
 			seen.add(row.row_key)
+			old = old_rows.get(row.name)
+			if old and not frappe.flags.intake_matching_write and (row.item != old.item or row.original_text != old.original_text):
+				# The old score describes the old suggestion, not a new manual choice.
+				row.match_score = 0
 			row.item_name = frappe.db.get_value("Tally Item", row.item, "item_name") if row.item else ""
+			# API reviewers may provide a quantity without knowing the UI flag.
+			# Explicit UI zero clears it through the child-field handler; unchanged
+			# stored zero remains unknown and cannot become an actual Order.
+			if (old and old.get('quantity_unknown') and row.quantity not in (None, '')
+				and row.quantity != old.quantity and not frappe.flags.intake_ai_write):
+				row.quantity_unknown = 0
 			_validate_quantity(row.quantity)
 			if not math.isfinite(row.match_score or 0) or not 0 <= (row.match_score or 0) <= 100:
 				frappe.throw("Suggested match score must be between 0 and 100")
