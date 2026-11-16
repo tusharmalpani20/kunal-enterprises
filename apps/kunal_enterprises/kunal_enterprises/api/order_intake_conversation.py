@@ -21,7 +21,7 @@ def _file_evidence(doc, sources, lock=False):
 		return []
 	file = frappe.qb.DocType('File')
 	query = frappe.qb.from_(file).select(file.name, file.file_url, file.content_hash, file.modified,
-		file.is_private, file.file_size, file.attached_to_doctype, file.attached_to_name
+		file.is_private, file.file_size, file.file_name, file.file_type, file.attached_to_doctype, file.attached_to_name
 	).where(file.file_url.isin(urls)).orderby(file.name)
 	if lock:
 		query = query.for_update()
@@ -108,17 +108,69 @@ def _sender_identity(number):
 	return dict(status='Matched' if len(matches) == 1 else 'Ambiguous' if matches else 'Unknown', matches=matches)
 
 
+def _display_content(source):
+	"""Reuse inbox caption cleanup; contact cards expose only bounded names/phones."""
+	kind = source.get('intake_original_type') or source.get('content_type')
+	if kind in {'contacts', 'contact'}:
+		from kunal_enterprises.integrations.order_intake_contacts import contacts_from_source, contact_text
+		contacts, warning = contacts_from_source(source)
+		return contact_text(contacts) or 'Contact shared', contacts, warning
+	from kunal_enterprises.api.whatsapp_inbox import _display_text
+	return _display_text(source), [], None
+
+
 def _message(source, doc, source_names, provider_names):
 	ref = source.get('reply_to_message_id')
 	reply_to = ref if ref in source_names else provider_names.get(ref)
 	file = _file_reference(source.get('attach'), doc, {source.name}) if source.get('attach') else None
 	media_type = source.get('intake_original_type') or source.content_type
+	text, contacts, contact_warning = _display_content(source)
+	if file and file.get('available') and (not file.get('file_type') or file['file_type'] == 'application/octet-stream'):
+		file['file_type'] = source.get('intake_media_mime') or ''
 	warnings = list(dict.fromkeys(line for text in (source.get('intake_attention'), source.get('intake_media_note')) for line in (text or '').splitlines() if line))
+	if contact_warning and contact_warning not in warnings:
+		warnings.append(contact_warning)
 	if media_type in {'image', 'document', 'audio', 'video', 'sticker'} and not file:
 		warnings.append('Media is not available locally yet; review or retry its download from the original message.')
-	return dict(name=source.name, text=source.message or '', sender=source.get('from'), sender_name=source.profile_name or '',
+	return dict(name=source.name, text=text, contacts=contacts, sender=source.get('from'), sender_name=source.profile_name or '',
 		received_at=str(source.get('intake_received_at') or source.creation), content_type=media_type,
 		reply_to=reply_to, attachment=file, location=_location(source), warnings=warnings)
+
+
+def _revision(doc, sources, lock=False):
+	rendered_fields = ('name', 'modified', 'message', 'attach', 'reply_to_message_id', 'message_id', 'from',
+		'profile_name', 'content_type', 'intake_original_type', 'intake_received_at', 'creation', 'intake_has_location',
+		'intake_latitude', 'intake_longitude', 'intake_location_address', 'intake_location_name', 'intake_attention',
+		'intake_media_note', 'intake_media_state', 'intake_media_mime', 'intake_raw_payload')
+	# Internal capture/download updates deliberately keep modified unchanged.
+	# Hash the evidence itself so a multi-page review cannot mix revisions.
+	return hashlib.sha256(json.dumps([str(doc.modified),
+		[{field: source.get(field) for field in rendered_fields} for source in sorted(sources, key=lambda s: s.name)],
+		_file_evidence(doc, sources, lock=lock)],
+		default=str, sort_keys=True).encode()).hexdigest()
+
+
+@frappe.whitelist(methods=['GET'])
+def preview(request, name, revision, expected_modified):
+	"""A local thumbnail of one currently linked, permission-checked source.
+
+	The saved request determines account/sender; an arbitrary message from the
+	same chat is not sufficient. Lock the reviewed evidence while the existing
+	bounded preview service reads it, so unlink/replacement cannot race this view.
+	"""
+	if not isinstance(request, str) or not request.strip() or not isinstance(name, str) or not name or len(name) > 140:
+		frappe.throw('Choose a saved request and linked message.')
+	if not isinstance(revision, str) or not revision or not isinstance(expected_modified, str) or not expected_modified:
+		frappe.throw('Refresh the Messages section before loading previews.')
+	doc, sources = _authorized(request, lock=True)
+	if str(doc.modified) != expected_modified or _revision(doc, sources, lock=True) != revision:
+		frappe.throw('Messages changed. Refresh the Messages section.', frappe.TimestampMismatchError)
+	if name not in {source.name for source in sources}:
+		frappe.throw('Message is not linked to this request.', frappe.PermissionError)
+	# This service also rechecks account/message/File access and ownership,
+	# derives thumbnails locally, and never downloads external media.
+	from kunal_enterprises.integrations.whatsapp_inbox_previews import get_preview
+	return get_preview(doc.whatsapp_account, doc.sender_number, name)
 
 
 @frappe.whitelist(methods=['GET'])
@@ -139,16 +191,7 @@ def _messages(request, cursor=None, limit=50, revision=None, expected_modified=N
 	doc, sources = _authorized(request, lock=lock)
 	if expected_modified and str(expected_modified) != str(doc.modified):
 		frappe.throw('The request changed. Reload it before viewing messages.', frappe.TimestampMismatchError)
-	rendered_fields = ('name', 'modified', 'message', 'attach', 'reply_to_message_id', 'message_id', 'from',
-		'profile_name', 'content_type', 'intake_original_type', 'intake_received_at', 'creation', 'intake_has_location',
-		'intake_latitude', 'intake_longitude', 'intake_location_address', 'intake_location_name', 'intake_attention',
-		'intake_media_note', 'intake_media_state')
-	# Internal capture/download updates deliberately keep modified unchanged.
-	# Hash the evidence itself so a multi-page review cannot mix revisions.
-	current_revision = hashlib.sha256(json.dumps([str(doc.modified),
-		[{field: source.get(field) for field in rendered_fields} for source in sorted(sources, key=lambda s: s.name)],
-		_file_evidence(doc, sources, lock=lock)],
-		default=str, sort_keys=True).encode()).hexdigest()
+	current_revision = _revision(doc, sources, lock=lock)
 	if (cursor and not revision) or (revision and revision != current_revision):
 		frappe.throw('Messages changed. Refresh the Messages section.', frappe.TimestampMismatchError)
 	sources.sort(key=lambda source: (get_datetime(source.get('intake_received_at') or source.creation), source.name))
@@ -171,15 +214,25 @@ def _messages(request, cursor=None, limit=50, revision=None, expected_modified=N
 	for row in doc.attachments:
 		item = dict(name=row.name, reference_type=row.reference_type, label=row.label or '', source_message=row.source_message,
 			review_status=row.review_status or 'Not Reviewed', notes=row.notes or '', page_count=row.page_count or None,
+			contact_name=row.contact_name or '', contact_number=row.contact_number or '',
 			external_url=row.external_url or '', latitude=row.latitude, longitude=row.longitude, location_address=row.location_address or '')
 		if row.reference_type == 'File':
 			item['attachment'] = _file_reference(row.file, doc, {row.source_message} if row.source_message else names)
 			item['manual_review'] = not row.page_count or row.page_count > pdf_limit or row.review_status == 'Needs Manual Review'
 		references.append(item)
+	formatted = [_message(source, doc, names, provider_names) for source in page]
+	by_name = {source.name: source for source in sources}
+	for item in formatted:
+		# A quote may refer to another page, but never to an unlinked source.
+		target = by_name.get(item.get('reply_to'))
+		if target:
+			attachment = _file_reference(target.get('attach'), doc, {target.name}) if target.get('attach') else {}
+			item['reply_context'] = dict(text=_display_content(target)[0][:240],
+				file_name=attachment.get('file_name') or '', sender_name=target.profile_name or '')
 	return dict(request=doc.name, modified=str(doc.modified), revision=current_revision, total_linked=len(sources),
 		sender_number=doc.sender_number or '', sender_name=doc.sender_name or '',
 		sender_profile_name=next((source.profile_name for source in reversed(sources) if source.profile_name), ''),
 		sender_identity=_sender_identity(doc.sender_number),
-		messages=[_message(source, doc, names, provider_names) for source in page], references=references,
+		messages=formatted, references=references,
 		has_more=len(sources_page) > len(page), next_cursor=page[0].name if page and len(sources_page) > len(page) else None,
 		pdf_page_limit=pdf_limit)

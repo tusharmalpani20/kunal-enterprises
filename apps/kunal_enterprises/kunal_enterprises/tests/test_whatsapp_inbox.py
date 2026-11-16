@@ -265,6 +265,17 @@ class TestWhatsAppInbox(FrappeTestCase):
 		self.assertEqual(text,'Test Contact · +91 9000000000')
 		self.assertNotIn('provider-private-id',text)
 
+	def test_captured_contacts_use_plain_names_and_wa_id_only_numbers_in_chat_and_preview(self):
+		cards = [dict(name=dict(formatted_name='A&B Glass'), phones=[dict(wa_id='919998887776')], vcard='PRIVATE VCARD')]
+		source = self.source('A&amp;B Glass · 919998887776')
+		frappe.db.set_value('WhatsApp Message', source.name, dict(content_type='contact', intake_original_type='contacts',
+			intake_raw_payload=frappe.as_json(dict(message=dict(contacts=cards)))))
+		result = api.messages(self.account.name, self.number)['messages'][0]
+		self.assertEqual(result['text'], 'A&B Glass · 919998887776')
+		self.assertEqual(result['contacts'][0]['phones'][0]['phone'], '919998887776')
+		self.assertEqual(api.conversations(self.account.name)['conversations'][0]['preview'], 'A&B Glass · 919998887776')
+		self.assertNotIn('PRIVATE VCARD', str(result))
+
 	def test_attachment_type_uses_captured_mime_when_file_extension_is_missing(self):
 		source=self.source('Image caption')
 		path=Path(frappe.get_site_path('private','files','inbox-'+uuid4().hex));path.write_bytes(b'Synthetic image')

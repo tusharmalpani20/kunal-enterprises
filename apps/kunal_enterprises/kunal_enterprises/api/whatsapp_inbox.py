@@ -142,7 +142,7 @@ def conversations(account, search='', sender_type='All', cursor=None, limit=30):
 		profile = (row.chat_profile or '').strip()
 		label = identity['matches'][0]['label'] if identity['status'] == 'Matched' else profile or row.sender or 'Unknown sender'
 		media = row.intake_original_type or row.content_type
-		preview = ' '.join(_display_text(row).split())[:160] or {'document':'Document', 'image':'Image', 'audio':'Voice message', 'video':'Video', 'location':'Location', 'sticker':'Sticker'}.get(media, 'Message')
+		preview = ' '.join(_display_text(source).split())[:160] or {'document':'Document', 'image':'Image', 'audio':'Voice message', 'video':'Video', 'location':'Location', 'sticker':'Sticker'}.get(media, 'Message')
 		from kunal_enterprises.api.whatsapp_inbox_relationships import reaction_data
 		reaction = reaction_data(source)
 		if reaction:
@@ -220,7 +220,6 @@ def _format_messages(sources):
 	for source in sources:
 		item = _message(source, SimpleNamespace(name=None), names, provider_names)
 		item['creation'] = str(source.creation)
-		item['text'] = _display_text(source)
 		if item.get('attachment') and item['attachment'].get('available'):
 			if not item['attachment'].get('file_type') or item['attachment']['file_type'] == 'application/octet-stream':
 				item['attachment']['file_type'] = source.get('intake_media_mime') or source.content_type
@@ -236,12 +235,17 @@ def _display_text(source):
 	"""Hide provider media envelopes while preserving actual captions and text."""
 	raw = str(source.get('message') or '')
 	kind = str(source.get('intake_original_type') or source.get('content_type') or '').lower()
+	if kind in {'contacts', 'contact'}:
+		from kunal_enterprises.integrations.order_intake_contacts import contacts_from_source, contact_text
+		contacts, _ = contacts_from_source(source)
+		if contacts:
+			return contact_text(contacts)
 	if kind not in {'image', 'document', 'audio', 'video', 'sticker', 'location', 'contacts', 'contact'}:
 		return raw
 	try:
 		payload = json.loads(unescape(raw))
 	except (ValueError, TypeError):
-		return raw
+		return unescape(raw) if kind in {'contacts', 'contact'} else raw
 	# Some upstream versions store the provider envelope rather than just the
 	# media object. Only traverse known WhatsApp envelope structures.
 	value = payload
@@ -272,15 +276,9 @@ def _display_text(source):
 	if wrapped:
 		value = value[kind]
 	if kind in {'contacts', 'contact'}:
-		contacts = value if isinstance(value, list) else [value]
-		labels = []
-		for contact in contacts:
-			if not isinstance(contact, dict) or not isinstance(contact.get('name'), dict):
-				continue
-			name = contact['name'].get('formatted_name') or ' '.join(str(contact['name'].get(key) or '') for key in ('first_name', 'last_name')).strip()
-			phones = [str(row['phone']) for row in contact.get('phones', []) if isinstance(row, dict) and row.get('phone')]
-			labels.append(' · '.join([str(name or 'Contact'), *phones]))
-		return '\n'.join(labels) if labels else ('Contact shared' if wrapped or isinstance(value, list) else raw)
+		from kunal_enterprises.integrations.order_intake_contacts import project_contacts, contact_text
+		contacts, _ = project_contacts(value if isinstance(value, list) else [value])
+		return contact_text(contacts) or 'Contact shared'
 	if not isinstance(value, dict):
 		return raw
 	if isinstance(value.get('caption'), str):

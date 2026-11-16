@@ -116,6 +116,10 @@ def get_preview(account, sender, name):
                 width, height = image.size
             return dict(available=True, url=reference[0]["url"], width=width, height=height, kind=kind)
         content, width, height = _render(data, kind)
+        if content == data:
+            # Small PNGs may already be the exact thumbnail. A second File
+            # deduplicated onto the source URL would alter its evidence fence.
+            return dict(available=True, url=owned[0]["url"], width=width, height=height, kind=kind)
         frappe.db.savepoint(savepoint)
         created = frappe.get_doc(dict(doctype="File", file_name=cache_name + ".png", is_private=1,
             attached_to_doctype="WhatsApp Message", attached_to_name=source.name, content=content))

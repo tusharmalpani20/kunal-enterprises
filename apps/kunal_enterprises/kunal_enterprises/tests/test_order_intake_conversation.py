@@ -1,4 +1,6 @@
 """Request-scoped conversation evidence, private files and stable review pages."""
+import json
+from html import escape
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -48,6 +50,7 @@ class TestOrderIntakeConversation(FrappeTestCase):
 		by_name={row['name']:row for row in result['messages']}
 		self.assertEqual(by_name[first.name]['text'],first.message)
 		self.assertEqual(by_name[second.name]['reply_to'],first.name)
+		self.assertEqual(by_name[second.name]['reply_context']['text'], first.message[:240])
 		self.assertEqual(by_name[second.name]['location']['latitude'],0)
 		self.assertNotIn('private-provider-secret',str(result))
 		self.assertEqual(by_name[second.name]['warnings'],['Needs review'])
@@ -187,3 +190,56 @@ class TestOrderIntakeConversation(FrappeTestCase):
 		for kwargs in ({'request':{}},{'request':''},{'request':doc.name,'cursor':{}},{'request':doc.name,'revision':[]}):
 			with self.assertRaises(frappe.ValidationError):
 				messages(**kwargs)
+
+	def test_contacts_are_plain_projected_data_and_raw_only_changes_fence_review(self):
+		cards = [dict(name=dict(formatted_name='A&B Glass'), phones=[dict(wa_id='919998887776')], vcard='PRIVATE VCARD')]
+		for legacy in (False, True):
+			source = self.source(escape(json.dumps(cards)) if legacy else 'A&amp;B Glass · 919998887776')
+			values = dict(content_type='contact', intake_original_type='contacts')
+			if not legacy:
+				values['intake_raw_payload'] = json.dumps(dict(message=dict(contacts=cards)))
+			frappe.db.set_value('WhatsApp Message', source.name, values, update_modified=False)
+			doc = self.request([source]); initial = messages(doc.name)
+			item = initial['messages'][0]
+			self.assertEqual(item['text'], 'A&B Glass · 919998887776')
+			self.assertEqual(item['contacts'], [dict(name='A&B Glass', phones=[dict(phone='919998887776', wa_id='919998887776')])])
+			self.assertNotIn('PRIVATE VCARD', str(initial))
+			frappe.db.set_value('WhatsApp Message', source.name, 'intake_raw_payload',
+				json.dumps(dict(message=dict(contacts=[dict(name=dict(formatted_name='Changed name'), phones=[])]))), update_modified=False)
+			with self.assertRaises(frappe.TimestampMismatchError):
+				messages(doc.name, revision=initial['revision'])
+
+	def test_reply_quote_uses_linked_older_page_and_never_unlinked_message(self):
+		first = self.source('Original product wording', profile_name='Sender name')
+		second = self.source('Two sheets', reply_to_message_id=first.message_id)
+		frappe.db.set_value('WhatsApp Message', first.name, 'intake_received_at', datetime(2026, 1, 1), update_modified=False)
+		frappe.db.set_value('WhatsApp Message', second.name, 'intake_received_at', datetime(2026, 1, 2), update_modified=False)
+		doc = self.request([first, second]); result = messages(doc.name, limit=1)
+		self.assertEqual(result['messages'][0]['reply_context'],
+			dict(text='Original product wording', file_name='', sender_name='Sender name'))
+		other = self.source('Unlinked private text')
+		frappe.db.set_value('WhatsApp Message', second.name, 'reply_to_message_id', other.message_id, update_modified=False)
+		result = messages(doc.name, limit=1)
+		self.assertNotIn('Unlinked private text', str(result))
+		self.assertIsNone(result['messages'][0]['reply_to'])
+
+	def test_media_envelope_is_cleaned_and_mime_changes_invalidate_review(self):
+		source = self.source(json.dumps(dict(id='provider-media-id', mime_type='application/pdf', sha256='private-hash', caption='Drawing for order')))
+		file = self.private_file(source.name)
+		frappe.db.set_value('WhatsApp Message', source.name, dict(attach=file.file_url, intake_original_type='document',
+			intake_media_mime='application/pdf'), update_modified=False)
+		doc = self.request([source]); initial = messages(doc.name)
+		self.assertEqual(initial['messages'][0]['text'], 'Drawing for order')
+		self.assertEqual(initial['messages'][0]['attachment']['file_type'], 'application/pdf')
+		self.assertNotIn('private-hash', str(initial))
+		frappe.db.set_value('WhatsApp Message', source.name, 'intake_media_mime', 'image/png', update_modified=False)
+		with self.assertRaises(frappe.TimestampMismatchError):
+			messages(doc.name, revision=initial['revision'])
+
+	def test_file_name_and_type_changes_with_unchanged_modified_invalidate_review(self):
+		source = self.source(); file = self.private_file(source.name)
+		frappe.db.set_value('WhatsApp Message', source.name, 'attach', file.file_url, update_modified=False)
+		doc = self.request([source]); initial = messages(doc.name)
+		frappe.db.set_value('File', file.name, dict(file_name='renamed.png', file_type='PNG'), update_modified=False)
+		with self.assertRaises(frappe.TimestampMismatchError):
+			messages(doc.name, revision=initial['revision'])

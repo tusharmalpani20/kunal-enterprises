@@ -1,7 +1,9 @@
 /* Read-only location previews. Only visible chat rows mount map tiles. */
 window.KunalWhatsAppMap = {
  mount(element, location) {
-  const latitude=Number(location?.latitude), longitude=Number(location?.longitude);
+  const numeric=value=>typeof value==='number' || (typeof value==='string' && value.trim()!=='');
+  if(!numeric(location?.latitude) || !numeric(location?.longitude))return ()=>{};
+  const latitude=Number(location.latitude), longitude=Number(location.longitude);
   if(location?.latitude == null || location?.longitude == null || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude)>90 || Math.abs(longitude)>180)return ()=>{};
   let removed=false, map=null;
   const canvas=document.createElement('div');
@@ -14,7 +16,7 @@ window.KunalWhatsAppMap = {
   if(!document.getElementById('wa-leaflet-css')){
    const css=document.createElement('link');css.id='wa-leaflet-css';css.rel='stylesheet';css.href='/assets/frappe/js/lib/leaflet/leaflet.css';document.head.append(css);
   }
-  const ready=window.L?Promise.resolve():frappe.require('libs.bundle.js');
+  const ready=Promise.resolve().then(()=>window.L?undefined:frappe.require('libs.bundle.js'));
   ready.then(()=>{
    if(removed || !element.isConnected || !window.L)return;
    const defaults=frappe.utils.map_defaults;
