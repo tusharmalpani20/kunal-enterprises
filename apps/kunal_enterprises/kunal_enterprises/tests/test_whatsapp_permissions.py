@@ -90,7 +90,7 @@ class TestWhatsAppPermissions(FrappeTestCase):
 	def test_coordinator_cannot_invoke_integration_write_actions(self):
 		self.as_role("Order Coordinator")
 		with patch.object(WhatsAppAccount, "subscribe_app", side_effect=AssertionError("Must not call Meta")), \
-			patch.object(WhatsAppMessage, "send_read_receipt", side_effect=AssertionError("Must not call Meta")):
+			patch("kunal_enterprises.permission_guards.whatsapp.make_post_request", side_effect=AssertionError("Must not call Meta")):
 			with self.assertRaises(frappe.PermissionError):
 				frappe.get_doc("WhatsApp Account", self.account.name).subscribe_app()
 			with self.assertRaises(frappe.PermissionError):
@@ -100,9 +100,9 @@ class TestWhatsAppPermissions(FrappeTestCase):
 		for role in ("Owner", "Admin"):
 			self.as_role(role)
 			with patch.object(WhatsAppAccount, "subscribe_app", return_value={"success": True}) as subscribe, \
-				patch.object(WhatsAppMessage, "send_read_receipt", return_value={"success": True}) as read_receipt:
+				patch("kunal_enterprises.permission_guards.whatsapp.make_post_request", return_value={"success": True}) as read_receipt:
 				self.assertEqual(frappe.get_doc("WhatsApp Account", self.account.name).subscribe_app(), {"success": True})
-				self.assertEqual(frappe.get_doc("WhatsApp Message", self.message.name).send_read_receipt(), {"success": True})
+				self.assertTrue(frappe.get_doc("WhatsApp Message", self.message.name).send_read_receipt())
 				subscribe.assert_called_once()
 				read_receipt.assert_called_once()
 
@@ -121,3 +121,35 @@ class TestWhatsAppPermissions(FrappeTestCase):
 			for original, current in zip(rows, after):
 				for permission in ("permlevel", "read", "write", "create", "delete", "select"):
 					self.assertEqual(current.get(permission), original.get(permission), (doctype, permission))
+
+	def test_read_receipt_uses_persisted_identity_and_preserves_concurrent_media_updates(self):
+		self.as_role('Owner')
+		browser = frappe.get_doc(frappe.parse_json(self.message.as_json()))
+		browser.whatsapp_account = 'forged-browser-account'
+		browser.message_id = 'forged-browser-message-id'
+		browser.intake_status = 'Duplicate'
+		def sent(url, **kwargs):
+			self.assertIn('/' + self.account.phone_id + '/messages', url)
+			self.assertEqual(frappe.parse_json(kwargs['data'])['message_id'], self.message.message_id)
+			# Simulate a download finishing while Meta responds.
+			frappe.db.set_value('WhatsApp Message', self.message.name,
+				dict(intake_media_state='Downloaded', intake_media_note='Completed', attach='/private/files/completed.pdf'), update_modified=False)
+			return {'success': True}
+		with patch('kunal_enterprises.permission_guards.whatsapp.make_post_request', side_effect=sent) as network:
+			self.assertTrue(browser.send_read_receipt())
+			network.assert_called_once()
+		stored = frappe.get_doc('WhatsApp Message', self.message.name)
+		self.assertEqual(stored.status, 'marked as read')
+		self.assertEqual(stored.intake_media_state, 'Downloaded')
+		self.assertEqual(stored.attach, '/private/files/completed.pdf')
+		self.assertNotEqual(stored.intake_status, 'Duplicate')
+		self.assertEqual(browser.message_id, self.message.message_id)
+
+	def test_read_receipt_dispatch_requires_post(self):
+		from frappe.handler import is_valid_http_method
+		fn = frappe.get_doc('WhatsApp Message', self.message.name).send_read_receipt.__func__
+		with patch.object(frappe.local, 'request', frappe._dict(method='GET'), create=True):
+			with self.assertRaises(frappe.PermissionError):
+				is_valid_http_method(fn)
+		with patch.object(frappe.local, 'request', frappe._dict(method='POST'), create=True):
+			is_valid_http_method(fn)

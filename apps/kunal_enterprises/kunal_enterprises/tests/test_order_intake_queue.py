@@ -314,3 +314,61 @@ class TestOrderIntakeQueue(FrappeTestCase):
 		second.reload()
 		self.assertEqual(second.intake_context_anchor, second.name)
 		self.assertEqual(frappe.parse_json(second.intake_context_ids)["message_ids"], [second.name])
+
+	def linked_request(self, source, status='Pending Review'):
+		doc = frappe.get_doc(dict(doctype='Order Intake Request',whatsapp_account=self.account.name,
+			sender_number=self.sender,source_messages=[dict(message=source.name)])).insert()
+		if status!='Pending Review':
+			frappe.db.set_value('Order Intake Request',doc.name,'status',status)
+		return doc
+
+	def test_completed_open_request_sources_are_summaries_not_repeated_raw_work(self):
+		old=self.source(minutes=-5);self.dispatch(inline=True)
+		request=self.linked_request(old)
+		frappe.db.set_value('WhatsApp Message',old.name,dict(intake_ai_state='Drafted',intake_ai_coverage=frappe.as_json(dict(requests=[request.name],unresolved=False))))
+		fresh=self.source()
+		rows=queue._chat_rows(self.account.name,self.sender,self.now,queue.settings())
+		self.assertEqual([row.name for row in rows],[fresh.name])
+		self.dispatch(inline=True);fresh.reload()
+		context=frappe.parse_json(fresh.intake_context_ids)
+		self.assertEqual(context['message_ids'],[fresh.name])
+		self.assertIn(request.name,[row['name'] for row in context['open_requests']])
+		self.assertEqual(old.reload().intake_context_anchor,old.name)
+
+	def test_closed_sources_with_stale_unresolved_flags_do_not_return_as_new_work(self):
+		old=self.source(minutes=-5);self.dispatch(inline=True)
+		request=self.linked_request(old,'Converted to Order')
+		frappe.db.set_value('WhatsApp Message',old.name,dict(intake_ai_state='Unresolved',intake_ai_coverage=frappe.as_json(dict(requests=[request.name],unresolved=True))))
+		fresh=self.source()
+		self.dispatch(inline=True);fresh.reload()
+		self.assertEqual(frappe.parse_json(fresh.intake_context_ids)['message_ids'],[fresh.name])
+		self.assertNotIn(request.name,[row['name'] for row in frappe.parse_json(fresh.intake_context_ids)['open_requests']])
+		self.assertTrue(frappe.db.exists('WhatsApp Message',old.name))
+
+	def test_explicit_reply_can_include_closed_history_without_reclaiming_it(self):
+		old=self.source(minutes=-5);self.dispatch(inline=True)
+		request=self.linked_request(old,'Converted to Order')
+		frappe.db.set_value('WhatsApp Message',old.name,dict(intake_ai_state='Drafted',intake_ai_coverage=frappe.as_json(dict(requests=[request.name],unresolved=False))))
+		fresh=self.source(reply_to_message_id=old.message_id)
+		self.dispatch(inline=True);fresh.reload()
+		context=frappe.parse_json(fresh.intake_context_ids)
+		self.assertEqual(context['message_ids'],[fresh.name])
+		self.assertEqual(context['reply_message_ids'],[old.name])
+		self.assertEqual(old.reload().intake_context_anchor,old.name)
+
+	def test_unresolved_open_sources_and_changed_closed_sources_are_not_lost(self):
+		old=self.source(minutes=-5);self.dispatch(inline=True)
+		request=self.linked_request(old)
+		frappe.db.set_value('WhatsApp Message',old.name,dict(intake_ai_coverage=frappe.as_json(dict(requests=[request.name],unresolved=True))))
+		self.assertIn(old.name,[row.name for row in queue._chat_rows(self.account.name,self.sender,self.now,queue.settings())])
+		frappe.db.set_value('Order Intake Request',request.name,'status','Resolved')
+		frappe.db.set_value('WhatsApp Message',old.name,'intake_prepare_state','Pending')
+		self.assertIn(old.name,[row.name for row in queue._chat_rows(self.account.name,self.sender,self.now,queue.settings())])
+
+	def test_explicit_manual_recovery_can_select_already_covered_evidence(self):
+		old=self.source();self.dispatch(inline=True)
+		request=self.linked_request(old)
+		frappe.db.set_value('WhatsApp Message',old.name,dict(intake_ai_coverage=frappe.as_json(dict(requests=[request.name],unresolved=False))))
+		result=queue.recover_selected(self.account.name,self.sender,[old.name],now=self.now)
+		self.assertEqual(result['state'],'Context Ready')
+		self.assertEqual(result['context']['message_ids'],[old.name])

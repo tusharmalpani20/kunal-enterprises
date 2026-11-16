@@ -54,10 +54,25 @@ def _due(row, now):
 	return not state or state == "Pending" or (state == "Retry" and (not row.intake_retry_at or get_datetime(row.intake_retry_at) <= now))
 
 
+def pending_source_sql(table="`tabWhatsApp Message`"):
+	"""Normal work excludes already covered evidence and terminal request history.
+
+	An actual changed-source Pending/Retry state remains new work. Explicit
+	manual recovery and reply-context lookup intentionally bypass this predicate.
+	"""
+	association = f"EXISTS (SELECT 1 FROM `tabOrder Intake Source Message` s WHERE s.message={table}.name AND s.parenttype='Order Intake Request')"
+	terminal = f"EXISTS (SELECT 1 FROM `tabOrder Intake Source Message` s JOIN `tabOrder Intake Request` r ON r.name=s.parent WHERE s.message={table}.name AND s.parenttype='Order Intake Request' AND r.status IN ('Converted to Order','Resolved','Dismissed'))"
+	open_request = f"EXISTS (SELECT 1 FROM `tabOrder Intake Source Message` s JOIN `tabOrder Intake Request` r ON r.name=s.parent WHERE s.message={table}.name AND s.parenttype='Order Intake Request' AND r.status IN ('Pending Review','In Review','Awaiting Confirmation'))"
+	# Invalid/legacy coverage is unresolved evidence, never a reason to omit it.
+	coverage = f"COALESCE({table}.intake_ai_coverage,'')"
+	covered = f"(CASE WHEN JSON_VALID({coverage}) THEN COALESCE(JSON_EXTRACT({coverage},'$.unresolved')=false,0) AND COALESCE(JSON_LENGTH(JSON_EXTRACT({coverage},'$.requests')),0)>0 ELSE 0 END)"
+	return f"(COALESCE({table}.intake_prepare_state,'') IN ('','Pending','Retry') OR ((NOT {terminal} OR {open_request}) AND (NOT {covered} OR NOT {association})))"
+
+
 def _chat_rows(account, sender, now, config):
 	return frappe.db.sql(f"""SELECT name, intake_prepare_state, intake_retry_at, intake_job_token,
 		intake_lease_until, intake_attempts, intake_received_at FROM `tabWhatsApp Message`
-		WHERE {BASE} AND whatsapp_account=%s AND intake_sender_key=%s AND intake_received_at >= %s
+		WHERE {BASE} AND {pending_source_sql()} AND whatsapp_account=%s AND intake_sender_key=%s AND intake_received_at >= %s
 		ORDER BY intake_received_at, name LIMIT %s""", (account, sender, _cutoff(config, now), MAX_MESSAGES + 1), as_dict=True)
 
 
@@ -110,7 +125,7 @@ def _expire_and_recover(now, config, account=None, sender=None):
 		if row.intake_job_token:
 			_fail(row.intake_job_token, "The preparation worker did not finish before its lease expired.", now)
 	old = frappe.db.sql(f"""SELECT name FROM `tabWhatsApp Message` WHERE {BASE}
-		AND intake_received_at < %s AND COALESCE(intake_prepare_state,'') NOT IN ('Queued','Needs Attention')
+		AND {pending_source_sql()} AND intake_received_at < %s AND COALESCE(intake_prepare_state,'') NOT IN ('Queued','Needs Attention')
 		AND NOT (intake_prepare_state='Context Ready' AND COALESCE(intake_manual_context,0)=1)
 		{scope} ORDER BY intake_received_at, name LIMIT %s""", (_cutoff(config, now), *args, MAX_MESSAGES), as_dict=True)
 	_set([row.name for row in old], dict(intake_prepare_state=TERMINAL, intake_status=TERMINAL,
@@ -118,7 +133,7 @@ def _expire_and_recover(now, config, account=None, sender=None):
 
 
 def candidate_chats(now, config, account=None, sender=None):
-	where, values = [BASE, "intake_received_at >= %s", "(COALESCE(intake_prepare_state,'') IN ('','Pending') OR (intake_prepare_state='Retry' AND (intake_retry_at IS NULL OR intake_retry_at <= %s)))"], [_cutoff(config, now), now]
+	where, values = [BASE, pending_source_sql(), "intake_received_at >= %s", "(COALESCE(intake_prepare_state,'') IN ('','Pending') OR (intake_prepare_state='Retry' AND (intake_retry_at IS NULL OR intake_retry_at <= %s)))"], [_cutoff(config, now), now]
 	if account:
 		where.append("whatsapp_account=%s")
 		values.append(account)
@@ -158,7 +173,7 @@ def _claim(account, sender, now, config, check_permissions=False):
 	if len(rows) > MAX_MESSAGES:
 		# Keep overflow chats manual, but advance through bounded unflagged rows
 		# so later messages do not hide behind the first already-flagged page.
-		remaining = frappe.db.sql(f"SELECT name FROM `tabWhatsApp Message` WHERE {BASE} AND whatsapp_account=%s AND intake_sender_key=%s AND intake_received_at >= %s AND COALESCE(intake_prepare_state,'') != 'Needs Attention' ORDER BY intake_received_at, name LIMIT %s FOR UPDATE", (account, sender, _cutoff(config, now), MAX_MESSAGES), as_dict=True)
+		remaining = frappe.db.sql(f"SELECT name FROM `tabWhatsApp Message` WHERE {BASE} AND {pending_source_sql()} AND whatsapp_account=%s AND intake_sender_key=%s AND intake_received_at >= %s AND COALESCE(intake_prepare_state,'') != 'Needs Attention' ORDER BY intake_received_at, name LIMIT %s FOR UPDATE", (account, sender, _cutoff(config, now), MAX_MESSAGES), as_dict=True)
 		_set([row.name for row in remaining], dict(intake_prepare_state=TERMINAL, intake_status=TERMINAL,
 			intake_prepare_note="This chat exceeds the automatic message limit; review the complete sender history."))
 		return None
@@ -287,12 +302,21 @@ def _open_requests(account, sender, source_ids):
 		WHERE r.whatsapp_account=%s AND s.message IN ({placeholders})
 		AND r.status IN ('Pending Review','In Review','Awaiting Confirmation') ORDER BY r.name LIMIT %s""",
 		(account, *source_ids, MAX_REFERENCES + 1), as_dict=True)
+	return _validated_open_requests(rows, account, sender)
+
+
+def _validated_open_requests(rows, account, sender):
 	# Parent validation normally enforces one chat; verify every source again
 	# in case an external import bypassed validation.
-	valid = []
+	valid, oversized = [], False
 	for row in rows[:MAX_REFERENCES]:
 		refs = frappe.get_all("Order Intake Source Message", filters={"parent": row.name, "parenttype": "Order Intake Request"}, pluck="message", limit_page_length=MAX_MESSAGES + 1)
-		if not refs or len(refs) > MAX_MESSAGES:
+		if len(refs) > MAX_MESSAGES:
+			# A long-lived request can outgrow one model context. Do not make it
+			# disappear from related-request discovery and risk a duplicate draft.
+			oversized = True
+			continue
+		if not refs:
 			continue
 		# Historical sources may not have intake metadata yet. Validate their
 		# original sender without silently importing them into the job queue.
@@ -301,7 +325,20 @@ def _open_requests(account, sender, source_ids):
 			and _sender_key(m.get("from")) == sender
 			and (not m.intake_sender_key or m.intake_sender_key == sender) for m in sources):
 			valid.append(dict(row))
-	return valid, len(rows) > MAX_REFERENCES
+	return valid, len(rows) > MAX_REFERENCES or oversized
+
+
+def recent_open_requests(account, sender, now=None):
+	"""Recent same-chat request summaries, never their raw historical bodies."""
+	now = get_datetime(now or now_datetime())
+	rows = frappe.db.sql("""SELECT r.name,r.status,r.request_type FROM `tabOrder Intake Request` r
+		WHERE r.whatsapp_account=%s AND r.status IN ('Pending Review','In Review','Awaiting Confirmation')
+		AND EXISTS (SELECT 1 FROM `tabOrder Intake Source Message` s JOIN `tabWhatsApp Message` m ON m.name=s.message
+		 WHERE s.parent=r.name AND s.parenttype='Order Intake Request' AND m.whatsapp_account=%s
+		 AND m.intake_sender_key=%s AND m.intake_received_at >= %s)
+		ORDER BY r.modified DESC,r.name LIMIT %s""",
+		(account,account,sender,_cutoff(settings(),now),MAX_REFERENCES+1),as_dict=True)
+	return _validated_open_requests(rows,account,sender)
 
 
 def build_context(rows, now=None):
@@ -322,13 +359,18 @@ def build_context(rows, now=None):
 		elif len(refs) != 1 or len(replies) >= MAX_REFERENCES:
 			warnings.append("Some reply references need manual review or exceed the context limit.")
 	manual = frappe.db.sql(f"""SELECT name FROM `tabWhatsApp Message` WHERE {BASE}
-		AND whatsapp_account=%s AND intake_sender_key=%s AND intake_prepare_state='Needs Attention'
+		AND {pending_source_sql()} AND whatsapp_account=%s AND intake_sender_key=%s AND intake_prepare_state='Needs Attention'
 		AND intake_received_at >= %s ORDER BY intake_received_at, name LIMIT %s""",
 		(account, sender, _cutoff(settings(), now), MAX_REFERENCES + 1), as_dict=True)
 	manual_ids = [row.name for row in manual[:MAX_REFERENCES] if row.name not in names]
 	if len(manual) > MAX_REFERENCES:
 		warnings.append("Additional unresolved manual-review messages exceed the context limit; review the sender history.")
-	requests, truncated = _open_requests(account, sender, names + manual_ids)
+	requests, truncated = _open_requests(account, sender, names + manual_ids + replies)
+	older, older_truncated = recent_open_requests(account,sender,now)
+	known = {request['name'] for request in requests}
+	requests.extend(request for request in older if request['name'] not in known)
+	truncated = truncated or older_truncated or len(requests)>MAX_REFERENCES
+	requests = requests[:MAX_REFERENCES]
 	if truncated:
 		warnings.append("Additional related requests exceed the context limit; review the sender history.")
 	return dict(whatsapp_account=account, sender=sender, message_ids=names, reply_message_ids=replies,

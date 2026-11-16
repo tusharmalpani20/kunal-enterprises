@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 from datetime import datetime, timezone
+from kunal_enterprises.integrations.order_intake_contacts import project_contacts, contact_text
 
 import frappe
 from frappe.utils import now_datetime, convert_utc_to_system_timezone
@@ -117,6 +118,8 @@ def raw_values(message, contacts):
 	kind = message.get("type") or "unknown"
 	body = message.get(kind) or {}
 	text = (body.get("body") if kind == "text" else body.get("caption")) if isinstance(body, dict) else None
+	if kind == "contacts":
+		text = contact_text(project_contacts(body)[0])
 	if text is None:
 		text = _json(body)
 	values = {"intake_original_type": kind}

@@ -11,6 +11,7 @@ import frappe
 from frappe_whatsapp.utils.webhook import webhook as upstream_webhook
 from kunal_enterprises.integrations.order_intake_capture import capture_saved_message, event_key, preserve_raw, raw_values
 from kunal_enterprises.integrations.order_intake_media import MEDIA_TYPES, queue_download
+from kunal_enterprises.integrations.order_intake_contacts import project_contacts
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
@@ -106,12 +107,15 @@ def _receive(original, entry, change, message, account, phone):
 	# Missing IDs still have an idempotent raw-payload identity, scoped to this phone.
 	key = event_key(phone, message_id or frappe.as_json(message))
 	name = _existing(account, message_id, key)
-	warning = None
+	# Contacts are lists in Meta payloads; the upstream generic parser expects
+	# a dictionary. Own this format here without altering the installed app.
+	direct = message.get("type") in MEDIA_TYPES or message.get("type") == "contacts"
+	warning = project_contacts(message.get("contacts"))[1] if message.get("type") == "contacts" else None
 	if not name:
 		point = "wa_parse_" + uuid4().hex[:12]
 		frappe.db.savepoint(point)
 		try:
-			if message.get("type") not in MEDIA_TYPES:
+			if not direct:
 				_parse(original, entry, change, message)
 			name = _existing(account, message_id, key)
 		except Exception as error:
@@ -124,7 +128,7 @@ def _receive(original, entry, change, message, account, phone):
 		finally:
 			frappe.db.release_savepoint(point)
 		if not name:
-			if message.get("type") not in MEDIA_TYPES:
+			if not direct:
 				warning = warning or "WhatsApp parser did not save this message; review original payload"
 			sender, profile, text, _ = raw_values(message, value.get("contacts") or [])
 			kind = message.get("type")
@@ -133,7 +137,8 @@ def _receive(original, entry, change, message, account, phone):
 			doc = frappe.get_doc({"doctype": "WhatsApp Message", "type": "Incoming", "whatsapp_account": account,
 				"from": sender, "profile_name": profile, "message": escape(text), "message_id": message_id,
 				"content_type": kind if kind in allowed else "text", "intake_event_key": key,
-				"reply_to_message_id": (message.get("context") or {}).get("id")})
+				"reply_to_message_id": (message.get("context") or {}).get("id"),
+				"is_reply": bool((message.get("context") or {}).get("id"))})
 			# Internal inserts may initialise protected intake metadata.
 			doc.flags.intake_service_write = True
 			# Unique key is enforced even for unsupported/missing-ID messages.

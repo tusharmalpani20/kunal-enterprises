@@ -1,5 +1,7 @@
 """Portable WhatsApp reviewer access and write checks for external actions."""
 import frappe
+from frappe.integrations.utils import make_post_request
+from frappe.utils import get_datetime
 from frappe.custom.doctype.property_setter.property_setter import make_property_setter
 from frappe.permissions import setup_custom_perms
 from frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_account.whatsapp_account import WhatsAppAccount
@@ -20,10 +22,24 @@ class KunalWhatsAppAccount(WhatsAppAccount):
 
 
 class KunalWhatsAppMessage(WhatsAppMessage):
-	@frappe.whitelist()
+	@frappe.whitelist(methods=['POST'])
 	def send_read_receipt(self):
-		self.check_permission("write")
-		return super().send_read_receipt()
+		# Document calls carry the browser's entire, possibly stale document.
+		# Use persisted identity for Meta and update only status after the call;
+		# never save old intake/media fields back over a completed download.
+		doc = frappe.get_doc('WhatsApp Message', self.name)
+		doc.check_permission('write')
+		if doc.type != 'Incoming' or not doc.message_id:
+			frappe.throw('Only saved incoming messages can be marked as read.')
+		account = frappe.get_doc('WhatsApp Account', doc.whatsapp_account)
+		response = make_post_request(f'{account.url}/{account.version}/{account.phone_id}/messages',
+			headers={'authorization': 'Bearer ' + account.get_password('token'), 'content-type': 'application/json'},
+			data=frappe.as_json(dict(messaging_product='whatsapp', status='read', message_id=doc.message_id)))
+		if response.get('success'):
+			frappe.db.set_value(doc.doctype, doc.name, 'status', 'marked as read')
+			self.reload()
+			return True
+		return False
 
 
 def _set_permission(doctype, role, level, grants):
@@ -63,6 +79,15 @@ def setup():
 		frappe.clear_cache(doctype="WhatsApp Account")
 
 
+def _evidence_value(field, value):
+	if value and field.fieldtype == 'Datetime':
+		try:
+			return get_datetime(value)
+		except (TypeError, ValueError, OverflowError):
+			pass  # Invalid input remains different and is rejected by the guard.
+	return value or None
+
+
 def guard_intake_fields(doc, method=None):
 	"""Read-only form fields are not a server-side integrity boundary in Frappe."""
 	if doc.flags.intake_service_write or doc.flags.intake_migrating or frappe.flags.in_migrate or frappe.flags.in_install:
@@ -78,7 +103,7 @@ def guard_intake_fields(doc, method=None):
 			continue
 		value = doc.get(field.fieldname)
 		if before:
-			changed = (value or None) != (before.get(field.fieldname) or None)
+			changed = _evidence_value(field, value) != _evidence_value(field, before.get(field.fieldname))
 		else:
 			changed = value not in (None, "", 0, False, field.default)
 		if changed:

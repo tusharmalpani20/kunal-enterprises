@@ -190,3 +190,35 @@ class TestOrderIntakeWebhook(FrappeTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			self.call(payload, self.save_source)
 		self.assertFalse(frappe.db.exists("WhatsApp Message", {"message_id": first["id"]}))
+
+	def test_contacts_bypass_upstream_list_parser_and_keep_numbers_and_reply(self):
+		message=self.message()
+		message.update(type='contacts',context=dict(id='ORDER-WIRE'),contacts=[dict(name=dict(formatted_name='Amol Sawrikar'),phones=[dict(phone='+91 99854 45566',wa_id='919985445566')],vcard='raw-card-only')])
+		def broken_parser():
+			return message['contacts'].get('contacts')  # Installed generic branch fails here.
+		self.assertEqual(self.call(self.payload([message]),broken_parser),0)
+		doc=self.receipt(message)
+		self.assertEqual(doc.content_type,'contact')
+		self.assertEqual(doc.reply_to_message_id,'ORDER-WIRE')
+		self.assertTrue(doc.is_reply)
+		self.assertIn('Amol Sawrikar',doc.message)
+		self.assertIn('+91 99854 45566',doc.message)
+		self.assertNotIn('vcard',doc.message)
+		self.assertIn('raw-card-only',doc.intake_raw_payload)
+		self.assertFalse(doc.intake_attention)
+		self.assertEqual(self.call(self.payload([message]),broken_parser),0)
+		self.assertEqual(frappe.db.count('WhatsApp Message',{'message_id':message['id']}),1)
+
+	def test_explicit_contact_display_repair_keeps_raw_evidence_and_other_warnings(self):
+		from kunal_enterprises.integrations.order_intake_contacts import repair_contact_message
+		message=self.message();message.update(type='contacts',contacts=[dict(name=dict(formatted_name='Person'),phones=[dict(phone='+91 90000 00001')])])
+		self.call(self.payload([message]),lambda:None)
+		doc=self.receipt(message);raw=doc.intake_raw_payload
+		frappe.db.set_value('WhatsApp Message',doc.name,dict(message='legacy JSON',intake_status='Needs Attention',intake_attention='WhatsApp parser could not save this message (AttributeError); review original payload\nOther warning'))
+		repair_contact_message(doc.name)
+		doc.reload()
+		self.assertEqual(doc.intake_raw_payload,raw)
+		self.assertEqual(doc.message,'Person · +91 90000 00001')
+		self.assertEqual(doc.intake_attention,'Other warning')
+		self.assertEqual(doc.intake_status,'Needs Attention')
+		self.assertEqual(doc.intake_prepare_state,'Pending')
