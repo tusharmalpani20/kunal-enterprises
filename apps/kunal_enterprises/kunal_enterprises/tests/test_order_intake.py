@@ -1,5 +1,6 @@
 """Incomplete drafts keep each item and its dispatch warehouse together."""
 import math
+from unittest.mock import patch
 from uuid import uuid4
 
 import frappe
@@ -25,6 +26,25 @@ class TestOrderIntake(FrappeTestCase):
 		self.assertFalse(doc.items[0].quantity)
 		self.assertFalse(doc.items[0].godown)
 		self.assertEqual(doc.status, "Pending Review")
+
+	def test_unknown_quantity_survives_storage_and_opens_blank_until_confirmed(self):
+		doc = self.draft(); row = doc.items[0]
+		row.quantity_unknown = 1; row.quantity = None; doc.save(); doc.reload()
+		self.assertEqual(row.quantity or 0, 0)
+		self.assertEqual(doc.items[0].quantity_unknown, 1)
+		doc.onload()
+		self.assertIsNone(doc.items[0].quantity)
+		self.assertEqual(frappe.db.get_value('Order Intake Item', doc.items[0].name, 'quantity'), 0)
+		doc.save(); doc.reload()  # A harmless Save does not confirm the storage zero.
+		self.assertEqual(doc.items[0].quantity_unknown, 1)
+		doc.items[0].quantity = 4; doc.save(); doc.reload(); doc.onload()
+		self.assertFalse(doc.items[0].quantity_unknown)
+		self.assertEqual(doc.items[0].quantity, 4)
+
+	def test_known_zero_is_not_reclassified_as_unknown(self):
+		doc = self.draft(); doc.items[0].quantity = 0; doc.save(); doc.reload(); doc.onload()
+		self.assertFalse(doc.items[0].quantity_unknown)
+		self.assertEqual(doc.items[0].quantity, 0)
 
 	def test_item_warehouse_relationship_survives_editing_and_reordering(self):
 		first = frappe.get_doc({"doctype": "Tally Godown", "godown_name": "Intake " + uuid4().hex, "is_active": 1}).insert()
@@ -140,14 +160,21 @@ class TestOrderIntake(FrappeTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			doc.save(ignore_permissions=True)
 
-	def test_settings_ranges_and_disabled_processing(self):
+	def test_settings_ranges_and_processing_requires_a_provider_key(self):
 		settings = frappe.get_doc("Order Intake Settings")
-		for field, value in (("pdf_page_limit", 0), ("lookback_minutes", 0), ("output_retries", -1),
-			("processing_enabled", 1)):
+		for field, value in (("pdf_page_limit", 0), ("lookback_minutes", 0), ("output_retries", -1)):
 			settings.reload()
 			settings.set(field, value)
 			with self.assertRaises(frappe.ValidationError):
 				settings.save()
+		settings.reload()
+		settings.processing_enabled = 1
+		with patch.object(type(settings), "get_password", return_value=None), self.assertRaises(frappe.ValidationError):
+			settings.save()
+		settings.reload()
+		settings.processing_enabled = 1
+		with patch.object(type(settings), "get_password", return_value="synthetic-key"):
+			settings.save()
 
 	def test_settings_are_restricted_and_password_is_not_versioned(self):
 		meta = frappe.get_meta("Order Intake Settings")

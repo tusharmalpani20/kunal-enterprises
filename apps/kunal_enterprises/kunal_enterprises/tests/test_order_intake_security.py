@@ -124,3 +124,14 @@ class TestOrderIntakeSecurity(FrappeTestCase):
 		doc.save()
 		self.assertEqual(doc.label, "Reviewed source")
 		self.assertEqual(doc.message_id, self.message.message_id)
+
+	def test_browser_roundtrip_can_save_status_but_cannot_change_capture_timestamp(self):
+		self.as_role('Owner')
+		doc = frappe.get_doc(frappe.parse_json(self.message.as_json()))
+		doc.status = 'marked as read'
+		doc.save()
+		self.assertEqual(frappe.db.get_value(doc.doctype, doc.name, 'status'), 'marked as read')
+		doc = frappe.get_doc(frappe.parse_json(doc.as_json()))
+		doc.intake_received_at = '2000-01-01 00:00:00'
+		with self.assertRaises(frappe.PermissionError):
+			doc.save()

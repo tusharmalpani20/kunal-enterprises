@@ -24,6 +24,12 @@ WORKSPACE_METADATA = {
 }
 
 OPERATION_SHORTCUTS = {
+	'All Intake Requests': {"link_to": "Order Intake Request", "stats_filter": None},
+	'Pending Intake Requests': {"link_to": "Order Intake Request", "stats_filter": [['Order Intake Request', 'status', '=', 'Pending Review', False]]},
+	'Intake In Review': {"link_to": "Order Intake Request", "stats_filter": [['Order Intake Request', 'status', '=', 'In Review', False]]},
+	'Awaiting Confirmation': {"link_to": "Order Intake Request", "stats_filter": [['Order Intake Request', 'status', '=', 'Awaiting Confirmation', False]]},
+	'Converted Intake Orders': {"link_to": "Order Intake Request", "stats_filter": [['Order Intake Request', 'status', '=', 'Converted to Order', False]]},
+	'Handled Inquiries': {"link_to": "Order Intake Request", "stats_filter": [['Order Intake Request', 'status', '=', 'Resolved', False], ['Order Intake Request', 'request_type', 'in', ['Stock Inquiry', 'Price Inquiry'], False]]},
 	"WhatsApp Inbox": {"type": "Page", "link_to": "whatsapp-inbox", "doc_view": "", "stats_filter": None},
 	"Quick Order Requests": {"link_to": "Quick Order Request", "stats_filter": None},
 	"Pending Quick Orders": {
