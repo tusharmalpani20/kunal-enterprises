@@ -1,9 +1,37 @@
 """Minimal reviewer-only master lookups for the Step 1 intake form."""
 import frappe
+import json
 from frappe.utils import cint
 
 from kunal_enterprises.api.quick_orders import _require_reviewer
 from kunal_enterprises.kunal_enterprises.doctype.order_intake_request.order_intake_request import _sender_key
+
+
+@frappe.whitelist(methods=["POST"])
+def review_update(request, proposal_index, expected_modified):
+	"""Acknowledge a suggestion without applying it or deleting its history."""
+	_require_reviewer()
+	doc = frappe.get_doc("Order Intake Request", request, for_update=True)
+	doc.check_permission("read")
+	doc.check_permission("write")
+	if str(doc.modified) != str(expected_modified):
+		frappe.throw("The request changed. Reload it before reviewing this update.", frappe.TimestampMismatchError)
+	if isinstance(proposal_index, bool) or not str(proposal_index).isdigit():
+		frappe.throw("Select a valid message update")
+	index = int(proposal_index)
+	updates = frappe.parse_json(doc.proposed_updates or "[]")
+	if not isinstance(updates, list) or index >= len(updates) or not isinstance(updates[index], dict):
+		frappe.throw("This message update is unavailable. Reload the request.")
+	if not updates[index].get("reviewed_at"):
+		updates[index].update(reviewed_at=str(frappe.utils.now_datetime()), reviewed_by=frappe.session.user)
+		doc.proposed_updates = json.dumps(updates, ensure_ascii=False)
+		previous = frappe.flags.intake_ai_write
+		try:
+			frappe.flags.intake_ai_write = True
+			doc.save()
+		finally:
+			frappe.flags.intake_ai_write = previous
+	return dict(state="Reviewed", pending=sum(not row.get("reviewed_at") for row in updates))
 
 
 @frappe.whitelist()
@@ -14,6 +42,8 @@ def intake_link_query(doctype, txt, searchfield, start, page_len, filters):
 		"Customer": ["name", "customer_name", "business_legal_name", "client_code"],
 		"Sales Employee": ["name", "sales_employee_name", "employee_code"],
 		"WhatsApp Account": ["name"],
+		"Tally Item": ["name", "item_name"],
+		"Tally Godown": ["name", "godown_name"],
 		"WhatsApp Message": ["name", "profile_name", "from", "creation"],
 	}
 	if doctype not in columns:
