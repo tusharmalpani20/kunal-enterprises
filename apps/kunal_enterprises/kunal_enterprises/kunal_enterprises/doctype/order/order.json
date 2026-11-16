@@ -29,7 +29,8 @@
   "items",
   "godown_allocations",
   "tally_reconciliation_managed",
-  "quick_order_request"
+  "quick_order_request",
+  "order_intake_request"
  ],
  "fields": [
   {
@@ -188,6 +189,15 @@
    "label": "Quick Order Request",
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "order_intake_request",
+   "label": "Order Intake Request",
+   "fieldtype": "Link",
+   "options": "Order Intake Request",
+   "read_only": 1,
+   "no_copy": 1,
+   "unique": 1
   }
  ],
  "links": [],

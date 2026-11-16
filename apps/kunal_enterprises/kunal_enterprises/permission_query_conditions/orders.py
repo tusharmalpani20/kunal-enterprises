@@ -31,6 +31,12 @@ def get_permission_query_conditions(user=None):
 			f"where request.{_column('order')} = {_table('Order')}.{_column('name')} "
 			f"and request.{_column('status')} = 'Converted to Order')"
 		)
+		global_conditions.append(
+			f"exists (select 1 from {_table('Order Intake Request')} request "
+			f"where request.{_column('order')} = {_table('Order')}.{_column('name')} "
+			f"and request.{_column('name')} = {_table('Order')}.{_column('order_intake_request')} "
+			f"and request.{_column('status')} = 'Converted to Order')"
+		)
 	if not roles.intersection(BRANCH_ORDER_ROLES):
 		if len(global_conditions) == 1:
 			return global_conditions[0]
@@ -79,6 +85,10 @@ def has_permission(doc, user=None, permission_type=None):
 
 	if ORDER_COORDINATOR_ROLE in roles and permission_type in (None, "read", "select"):
 		if frappe.db.exists("Quick Order Request", {"order": doc.name, "status": "Converted to Order"}):
+			return True
+		if doc.get("order_intake_request") and frappe.db.exists("Order Intake Request", {
+			"name": doc.order_intake_request, "order": doc.name, "status": "Converted to Order",
+		}):
 			return True
 
 	if GODOWN_ALLOCATOR_ROLE in roles:

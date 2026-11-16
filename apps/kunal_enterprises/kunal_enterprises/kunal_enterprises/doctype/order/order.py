@@ -10,6 +10,7 @@ from frappe.model.document import Document
 class Order(Document):
 	def validate(self):
 		self._validate_quick_order_link()
+		self._validate_intake_order_link()
 		self._validate_cancellation_reason()
 		self._validate_confirmed_lines_are_immutable()
 		self._validate_quantity_only_order()
@@ -30,6 +31,23 @@ class Order(Document):
 		request = frappe.get_doc("Quick Order Request", self.quick_order_request)
 		if request.customer != self.customer or request.status != "In Review" or request.order:
 			frappe.throw(_("Quick Order request must be unconverted and belong to this customer"))
+
+	def _validate_intake_order_link(self):
+		previous = None if self.is_new() else self.get_doc_before_save()
+		old = previous.get('order_intake_request') if previous else None
+		if (self.order_intake_request or None) == (old or None):
+			if old and any((self.get(field) or None) != (previous.get(field) or None)
+				for field in ('customer', 'sales_employee', 'order_source')):
+				frappe.throw(_('Confirmed intake Order customer, salesperson and source cannot be changed'))
+			return
+		if old or not self.flags.in_order_intake_conversion or self.quick_order_request:
+			frappe.throw(_('Intake links can only be set while converting a request'), frappe.PermissionError)
+		from kunal_enterprises.api.quick_orders import _require_reviewer
+		_require_reviewer()
+		request = frappe.get_doc('Order Intake Request', self.order_intake_request)
+		if request.customer != self.customer or request.request_type != 'Order' or request.status not in {
+			'Pending Review', 'In Review', 'Awaiting Confirmation'} or request.order:
+			frappe.throw(_('Intake request must be an open Order request for this customer'))
 
 	def validate_processing_godowns(self):
 		"""Portal transitions recheck master activity; historical Tally quantities remain valid."""
