@@ -7,9 +7,20 @@
  "standard": "Yes",
  "system_page": 0,
  "roles": [
-  {"role": "Owner"},
-  {"role": "Admin"},
-  {"role": "Order Coordinator"},
-  {"role": "System Manager"}
+  {
+   "role": "Owner"
+  },
+  {
+   "role": "Admin"
+  },
+  {
+   "role": "Order Coordinator"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Sales Portal User"
+  }
  ]
 }

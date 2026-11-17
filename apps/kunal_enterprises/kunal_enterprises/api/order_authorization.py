@@ -14,6 +14,9 @@ ORDER_ROLE_PRIORITY = (OWNER_ROLE, ADMIN_ROLE, "Godown Allocator", "Order Coordi
 
 
 def effective_order_role(allowed_roles, role_hint=None, message="Required role is missing", title="Permission Required"):
+	from kunal_enterprises.permission_guards.sales_portal import is_sales_user
+	if is_sales_user():
+		frappe.throw("Sales portal users cannot change Orders.", frappe.PermissionError)
 	allowed_roles = tuple(allowed_roles)
 	if frappe.session.user == "Administrator":
 		if role_hint:

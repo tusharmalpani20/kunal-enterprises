@@ -56,6 +56,12 @@
     "parentfield": "roles",
     "parenttype": "Workspace",
     "role": "Order Coordinator"
+   },
+   {
+    "parent": "Operation",
+    "parentfield": "roles",
+    "parenttype": "Workspace",
+    "role": "Sales Portal User"
    }
   ],
   "sequence_id": 1.0,

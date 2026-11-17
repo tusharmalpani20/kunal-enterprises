@@ -17,6 +17,9 @@ REVIEWER_ROLES = {"Owner", "Admin", "Order Coordinator"}
 
 
 def _require_reviewer():
+	from kunal_enterprises.permission_guards.sales_portal import is_sales_user
+	if is_sales_user():
+		frappe.throw("Sales portal users cannot process or convert requests.", frappe.PermissionError)
 	if frappe.session.user == "Administrator":
 		return
 	if not REVIEWER_ROLES.intersection(frappe.get_roles(frappe.session.user)):

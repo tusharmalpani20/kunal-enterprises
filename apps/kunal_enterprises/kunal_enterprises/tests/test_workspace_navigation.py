@@ -12,7 +12,7 @@ WORKSPACE_NAMES = {"Operation", "Admin"}
 ADMIN_NAVIGATION_DOCTYPES = {"User", "Role", "Role Profile"}
 WORKSPACE_METADATA = {
 	"Operation": {
-		"roles": {"Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator"},
+		"roles": {"Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator", "Sales Portal User"},
 		"icon": "list",
 		"indicator_color": "blue",
 	},
@@ -132,7 +132,7 @@ class TestWorkspaceNavigation(FrappeTestCase):
 	def test_boot_session_workspace_filter_is_registered(self):
 		self.assertEqual(
 			hooks.boot_session,
-			["kunal_enterprises.desk_navigation.limit_workspaces"],
+			["kunal_enterprises.desk_navigation.limit_workspaces", "kunal_enterprises.permission_guards.exports.boot_session"],
 		)
 		self.assertEqual(
 			hooks.override_whitelisted_methods["frappe.desk.desktop.get_workspace_sidebar_items"],
@@ -222,6 +222,7 @@ class TestWorkspaceNavigation(FrappeTestCase):
 	def test_boot_workspace_filter_keeps_only_kunal_workspaces_for_kunal_roles(self):
 		self.assert_workspace_filter(["Godown Allocator"], ["Operation"])
 		self.assert_workspace_filter(["Order Coordinator"], ["Operation"])
+		self.assert_workspace_filter(["Sales Portal User"], ["Operation"])
 		self.assert_workspace_filter(
 			["Owner"],
 			["Operation", "Admin"],
@@ -254,6 +255,7 @@ class TestWorkspaceNavigation(FrappeTestCase):
 		self.assert_workspace_page_filter(["Branch Employee"], all_workspaces, ["Operation"])
 		self.assert_workspace_page_filter(["Godown Allocator"], all_workspaces, ["Operation"])
 		self.assert_workspace_page_filter(["Order Coordinator"], all_workspaces, ["Operation"])
+		self.assert_workspace_page_filter(["Sales Portal User"], all_workspaces, ["Operation"])
 
 	def test_workspace_content_references_existing_unique_shortcuts(self):
 		for workspace in self._workspace_fixtures().values():

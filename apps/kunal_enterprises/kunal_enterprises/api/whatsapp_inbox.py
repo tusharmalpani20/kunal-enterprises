@@ -12,8 +12,8 @@ from kunal_enterprises.integrations.order_intake_ai_state import OWNED_WARNINGS,
 from kunal_enterprises.kunal_enterprises.doctype.order_intake_request.order_intake_request import _sender_key
 
 DT = 'WhatsApp Message'
-ROLES = {'Owner', 'Admin', 'Order Coordinator', 'System Manager'}
-FIELDS = ['name', 'creation', 'message_id', 'from', 'profile_name', 'message', 'content_type',
+ROLES = {'Owner', 'Admin', 'Order Coordinator', 'System Manager', 'Sales Portal User'}
+FIELDS = ['name', 'type', 'creation', 'message_id', 'from', 'profile_name', 'message', 'content_type',
 	'intake_original_type', 'intake_received_at', 'intake_sender_key']
 
 
@@ -76,8 +76,12 @@ def _sender_expression(alias):
 def _base(account):
 	# Let Frappe apply shares, User Permissions and permission-query hooks before
 	# grouping; aggregating unrestricted rows would leak inaccessible chats.
-	return frappe.get_list(DT, fields=FIELDS, filters={'type': 'Incoming', 'whatsapp_account': account},
+	base = frappe.get_list(DT, fields=FIELDS, filters={'type': 'Incoming', 'whatsapp_account': account},
 		order_by='', limit_page_length=0, run=False)
+	from kunal_enterprises.permission_guards.sales_portal import is_sales_user, scope_condition
+	if is_sales_user():
+		return f"SELECT scoped.* FROM ({base}) scoped WHERE {scope_condition(DT, alias='scoped')}"
+	return base
 
 
 def _phone_match(alias):

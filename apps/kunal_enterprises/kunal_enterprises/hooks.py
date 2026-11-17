@@ -82,7 +82,7 @@ website_context = {
 # app_include_js = "/assets/kunal_enterprises/js/kunal_enterprises.js"
 app_include_js = ["/assets/kunal_enterprises/js/export_policy.js"]
 # Unlike before_request, auth_hooks sees the authenticated API-token user.
-auth_hooks = ["kunal_enterprises.permission_guards.exports.guard_request"]
+auth_hooks = ["kunal_enterprises.permission_guards.exports.guard_request", "kunal_enterprises.permission_guards.sales_portal.guard_list_shares", "kunal_enterprises.permission_guards.sales_portal.guard_side_effect_request"]
 after_request = ["kunal_enterprises.permission_guards.exports.guard_response"]
 
 # include js, css files in header of web template
@@ -150,8 +150,10 @@ boot_session = [
 # ------------
 
 # before_install = "kunal_enterprises.install.before_install"
-after_install = "kunal_enterprises.integrations.order_intake_schema.setup"
-after_migrate = "kunal_enterprises.integrations.order_intake_schema.setup"
+after_install = ["kunal_enterprises.integrations.order_intake_schema.setup", "kunal_enterprises.permission_guards.sales_portal.setup"]
+after_migrate = ["kunal_enterprises.integrations.order_intake_schema.setup", "kunal_enterprises.permission_guards.sales_portal.setup"]
+# Fresh installs import role fixtures after after_install; install grants only then.
+after_sync = "kunal_enterprises.permission_guards.sales_portal.setup"
 
 # Uninstallation
 # ------------
@@ -186,7 +188,18 @@ after_migrate = "kunal_enterprises.integrations.order_intake_schema.setup"
 # Permissions evaluated in scripted ways
 
 permission_query_conditions = {
-	"Order": "kunal_enterprises.permission_query_conditions.orders.get_permission_query_conditions",
+	"*": "kunal_enterprises.permission_guards.sales_portal.other_business_query",
+	"Order": "kunal_enterprises.permission_guards.sales_portal.orders_query",
+	"Order Intake Request": "kunal_enterprises.permission_guards.sales_portal.intake_query",
+	"Quick Order Request": "kunal_enterprises.permission_guards.sales_portal.quick_orders_query",
+	"Customer": "kunal_enterprises.permission_guards.sales_portal.customer_query",
+	"Sales Employee": "kunal_enterprises.permission_guards.sales_portal.employee_query",
+	"WhatsApp Message": "kunal_enterprises.permission_guards.sales_portal.messages_query",
+	"WhatsApp Account": "kunal_enterprises.permission_guards.sales_portal.accounts_query",
+	"Order PDF": "kunal_enterprises.permission_guards.sales_portal.pdf_query",
+	"File": "kunal_enterprises.permission_guards.sales_portal.files_query",
+	"Tally Item": "kunal_enterprises.permission_guards.sales_portal.items_query",
+	"Tally Godown": "kunal_enterprises.permission_guards.sales_portal.godowns_query",
 	"User": "kunal_enterprises.permission_guards.owner_admin.user_query",
 	"User Permission": "kunal_enterprises.permission_guards.owner_admin.user_permission_query",
 	"Role": "kunal_enterprises.permission_guards.owner_admin.role_query",
@@ -194,7 +207,19 @@ permission_query_conditions = {
 }
 
 has_permission = {
-	"Order": "kunal_enterprises.permission_query_conditions.orders.has_permission",
+	"*": "kunal_enterprises.permission_guards.sales_portal.deny_generic_mutations",
+	"Order": "kunal_enterprises.permission_guards.sales_portal.order_permission",
+	"Order Intake Request": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"Quick Order Request": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"Customer": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"Sales Employee": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"WhatsApp Message": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"WhatsApp Account": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"Order PDF": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"File": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"Tally Item": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+	"Tally Godown": "kunal_enterprises.permission_guards.sales_portal.has_permission",
+
 	"User": "kunal_enterprises.permission_guards.owner_admin.has_user_permission",
 	"User Permission": "kunal_enterprises.permission_guards.owner_admin.has_user_permission_doc",
 	"Role": "kunal_enterprises.permission_guards.owner_admin.has_role_permission",
@@ -217,11 +242,33 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
+	"Quick Order Request": {
+		"before_validate": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_insert": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_cancel": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_update_after_submit": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"on_trash": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+	},
+	"Order Intake Request": {
+		"before_validate": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_insert": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_cancel": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_update_after_submit": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"on_trash": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+	},
+	"Comment": {"before_validate": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "before_insert": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "on_trash": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write"},
+	"Communication": {"before_validate": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "before_insert": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "on_trash": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write"},
+	"ToDo": {"before_validate": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "before_insert": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "on_trash": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write"},
+	"DocShare": {"before_validate": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "before_insert": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "on_trash": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write"},
+	"Document Follow": {"before_validate": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "before_insert": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "on_trash": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write"},
+
 	"Auto Email Report": {
 		"before_validate": "kunal_enterprises.permission_guards.exports.guard_auto_email_report",
 	},
 	"File": {
-		"before_validate": "kunal_enterprises.permission_guards.exports.keep_report_file_private",
+		"before_insert": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write",
+		"on_trash": "kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write",
+		"before_validate": ["kunal_enterprises.permission_guards.sales_portal.deny_side_effect_write", "kunal_enterprises.permission_guards.exports.keep_report_file_private"],
 	},
 	"WhatsApp Message": {
 		"before_validate": [
@@ -233,10 +280,14 @@ doc_events = {
 		"on_trash": "kunal_enterprises.integrations.whatsapp_inbox.changed",
 	},
 	"Order": {
+		"before_validate": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_insert": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_cancel": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
+		"before_update_after_submit": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
 		"on_update": ["kunal_enterprises.integrations.reconciliation_queue.invalidate_order",
 			"kunal_enterprises.integrations.order_intake_learning.order_changed"],
 		"on_cancel": "kunal_enterprises.integrations.order_intake_learning.order_changed",
-		"on_trash": "kunal_enterprises.integrations.reconciliation_queue.invalidate_order",
+		"on_trash": ["kunal_enterprises.permission_guards.sales_portal.guard_business_write", "kunal_enterprises.integrations.reconciliation_queue.invalidate_order"],
 	},
 	"Customer": {
 		"on_update": "kunal_enterprises.integrations.reconciliation_queue.invalidate_customer",
@@ -316,6 +367,7 @@ doc_events = {
 # ------------------------------
 #
 override_whitelisted_methods = {
+	"frappe.desk.form.utils.get_next": "kunal_enterprises.permission_guards.sales_portal.get_next",
 	"frappe_whatsapp.utils.bulk_messaging.retry_failed": "kunal_enterprises.permission_guards.whatsapp.retry_failed",
 	"frappe_whatsapp.utils.webhook.webhook": "kunal_enterprises.integrations.order_intake_webhook.webhook",
 	"frappe.core.doctype.user.user.get_all_roles": "kunal_enterprises.permission_guards.owner_admin.get_all_roles",
