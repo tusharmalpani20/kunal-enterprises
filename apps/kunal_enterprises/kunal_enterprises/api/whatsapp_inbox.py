@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import cint, get_datetime
 
 from kunal_enterprises.api.order_intake_conversation import _message, _sender_identity
+from kunal_enterprises.integrations.order_intake_ai_state import OWNED_WARNINGS, REVIEW_PREFIX
 from kunal_enterprises.kunal_enterprises.doctype.order_intake_request.order_intake_request import _sender_key
 
 DT = 'WhatsApp Message'
@@ -228,6 +229,10 @@ def _format_messages(sources):
 	formatted = []
 	for source in sources:
 		item = _message(source, SimpleNamespace(name=None), names, provider_names)
+		# Intake interpretation belongs on the request's current review section,
+		# not on original WhatsApp chat bubbles. Preserve real capture/media errors.
+		item['warnings'] = [warning for warning in item['warnings']
+			if warning not in OWNED_WARNINGS and not warning.startswith(REVIEW_PREFIX)]
 		item['creation'] = str(source.creation)
 		if item.get('attachment') and item['attachment'].get('available'):
 			if not item['attachment'].get('file_type') or item['attachment']['file_type'] == 'application/octet-stream':

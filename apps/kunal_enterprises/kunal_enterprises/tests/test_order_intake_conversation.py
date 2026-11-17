@@ -56,6 +56,28 @@ class TestOrderIntakeConversation(FrappeTestCase):
 		self.assertEqual(by_name[second.name]['warnings'],['Needs review'])
 		self.assertEqual(result['sender_profile_name'], 'WhatsApp profile')
 
+	def test_review_questions_are_request_scoped_and_source_ai_labels_are_not_repeated(self):
+		first, second = self.source('First'), self.source('Second')
+		for source in (first, second):
+			frappe.db.set_value('WhatsApp Message', source.name, 'intake_attention',
+				'AI: Needs review: Old grouping question\nAttachment unreadable', update_modified=False)
+		doc = self.request([first, second])
+		result = messages(doc.name)
+		self.assertEqual(result['review_questions'], ['The customer was not identified. Select the customer.'])
+		for message in result['messages']:
+			self.assertEqual(message['warnings'], ['Attachment unreadable'])
+		self.assertNotIn('Old grouping question', str(result))
+		self.assertEqual(result['review_warnings'], ['Attachment unreadable'])
+		# A problem on an older source remains visible before its page loads.
+		for index, source in enumerate((first, second)):
+			frappe.db.set_value('WhatsApp Message', source.name, 'intake_received_at',
+				datetime(2026, 1, 1) + timedelta(minutes=index), update_modified=False)
+		frappe.db.set_value('WhatsApp Message', second.name, 'intake_attention',
+			'AI: Needs review: Old grouping question', update_modified=False)
+		limited = messages(doc.name, limit=1)
+		self.assertEqual(limited['messages'][0]['warnings'], [])
+		self.assertEqual(limited['review_warnings'], ['Attachment unreadable'])
+
 	def test_sender_identity_uses_phone_not_selected_order_customer_and_handles_ambiguity(self):
 		number = '9' + str(uuid4().int)[:9]
 		self.sender = '91' + number

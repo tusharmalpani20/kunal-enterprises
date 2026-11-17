@@ -264,3 +264,9 @@ test('recovery polling skips in-flight requests and cannot re-arm after hide',as
  const flow=pollingFixture();await flow.inbox.show();const before=flow.calls.length;flow.inbox.listLoading=true;await flow.tick();assert.equal(flow.calls.length,before);flow.inbox.listLoading=false;
  let finish;flow.inbox.refresh=()=>new Promise(resolve=>{finish=resolve;});const polling=flow.tick();flow.inbox.hide();finish();await polling;assert.equal(flow.timers.size,0);
 });
+
+
+test('chat hides stale intake AI labels while retaining genuine attachment failures',()=>{
+ const flow=setup();flow.inbox.messages=[{...message('M'),warnings:['AI: Needs review: Old customer question','Attachment download failed']}];
+ const html=flow.inbox.messageHTML();assert.doesNotMatch(html,/Old customer question|AI: Needs review/);assert.match(html,/Attachment download failed/);
+});

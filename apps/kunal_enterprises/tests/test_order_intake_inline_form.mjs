@@ -225,3 +225,24 @@ test('a deleted or failed thumbnail falls back to the original attachment action
   assert.match(host.innerHTML,/href="\/private\/files\/original.pdf"/);
   onError();assert.match(host.textContent,/Preview unavailable. Open the attachment below/);
 });
+
+test('current questions appear once above the chat; historical AI labels never appear on message bubbles', async()=>{
+  const stale='AI: Needs review: Are these separate scopes?';
+  const question='Select the product or variant for “102 HG”.';
+  const payload={...data,review_questions:[question,question,'  '+question+'  '],messages:[
+    {...data.messages[0],warnings:[stale,'Attachment unavailable']},
+    {...data.messages[0],name:'MSG-3',warnings:[stale,'Attachment unavailable']}]};
+  const flow=setup(payload);await flow.context.refresh_intake_messages(flow.frm);
+  const html=flow.html.at(-1);
+  assert.equal((html.match(/class="intake-review-section"/g)||[]).length,1);
+  assert.equal((html.match(/Select the product or variant/g)||[]).length,1);
+  assert.equal((html.match(/Attachment unavailable/g)||[]).length,1);
+  assert.ok(html.indexOf('Please review')<html.indexOf('intake-chat-sender-summary'));
+  assert.doesNotMatch(html,/separate scopes|AI: Needs review|class="intake-chat-warning"/);
+});
+
+test('review section is absent when nothing needs review, and question text is escaped',()=>{
+  const flow=setup();assert.equal(flow.context.intake_review_html({...data,review_questions:[]}), '');
+  const html=flow.context.intake_review_html({...data,review_questions:['<img src=x onerror=bad()>']});
+  assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+});

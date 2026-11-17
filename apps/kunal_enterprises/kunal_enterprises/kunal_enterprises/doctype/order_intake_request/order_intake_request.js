@@ -38,11 +38,8 @@ frappe.ui.form.on("Order Intake Request", {
 		}
 		const escape = value => frappe.utils.escape_html(value || "");
 		const estimate = frm.doc.estimated_interpretation;
-		const questions = frm.doc.unresolved_questions;
-		frm.fields_dict.interpretation_display.$wrapper.html((
-			estimate || questions
-				? `<div style="white-space: pre-wrap; overflow-wrap: anywhere">${escape(estimate)}${questions ? `<hr><strong>${__("Please check")}</strong><br>${escape(questions)}` : ""}</div>`
-				: ""
+		frm.fields_dict.interpretation_display.$wrapper.html((estimate
+			? `<div style="white-space: pre-wrap; overflow-wrap: anywhere">${escape(estimate)}</div>` : ""
 		) + intake_proposals_html(frm.doc.proposed_updates, frm.doc));
 		const pending = (intake_proposals(frm.doc.proposed_updates) || []).filter(({proposal}) => !proposal.reviewed_at);
 		if (pending.length && !frm.is_new() && !intake_is_converted(frm)) {
@@ -121,7 +118,7 @@ function intake_section_has_content(frm, section) {
 		return has_text(["delivery_address", "delivery_contact_name", "delivery_contact_number"]);
 	}
 	if (section === "references_section") return Boolean(frm.doc.attachments?.length);
-	return has_text(["estimated_interpretation", "unresolved_questions", "interpretation_notes"]) || Boolean(intake_proposals_html(frm.doc.proposed_updates));
+	return has_text(["estimated_interpretation", "interpretation_notes"]) || Boolean(intake_proposals_html(frm.doc.proposed_updates));
 }
 
 function intake_proposals(value) {
@@ -432,6 +429,22 @@ function intake_sender_html(data) {
 		(otherNames ? `<div style="font-size:11px;opacity:.85">${escape(otherNames)}</div>` : "") + `</div><span style="margin-left:auto;flex-shrink:0;font-size:10px;opacity:.75">${__("Read-only")}</span></div>`;
 }
 
+function intake_review_html(data) {
+	// Source AI labels can belong to an earlier run or another request sharing
+	// the message. Review only the current request; keep real capture/media issues.
+	const values = [...(Array.isArray(data.review_questions) ? data.review_questions : []),
+		...(Array.isArray(data.review_warnings) ? data.review_warnings : []),
+		...(data.messages || []).flatMap(message => (message.warnings || []).filter(value => !/^AI:/i.test(String(value).trim())))];
+	const seen = new Set();
+	const questions = values.filter(value => typeof value === "string").map(value => value.trim().replace(/\s+/g, " "))
+		.filter(value => value && !seen.has(value.toLocaleLowerCase()) && seen.add(value.toLocaleLowerCase()));
+	if (!questions.length) return "";
+	const escape = value => frappe.utils.escape_html(value);
+	return `<section class="intake-review-section" aria-label="${__("Please review")}" style="border:1px solid var(--border-color);border-radius:8px;padding:12px 16px;margin-bottom:16px;background:var(--subtle-fg)">` +
+		`<strong>${__("Please review")}</strong><ul style="margin:8px 0 0;padding-left:20px">` +
+		questions.map(question => `<li style="margin:4px 0;overflow-wrap:anywhere">${escape(question)}</li>`).join("") + "</ul></section>";
+}
+
 function render_intake_messages(frm, chat, latest = false) {
 	if (frm.__intake_chat !== chat || frm.doc.name !== chat.request) return;
 	const escape = value => frappe.utils.escape_html(String(value ?? ""));
@@ -441,7 +454,7 @@ function render_intake_messages(frm, chat, latest = false) {
 	if (chat.data?.references?.length) controls.push(button("attachments", __("Review attachments")));
 	if (!chat.stale && !frm.is_new()) controls.push(button("refresh", chat.error ? __("Retry") : __("Refresh messages")));
 	const content = chat.error ? `<p class="text-muted" role="status">${escape(chat.error)}</p>` : chat.data
-		? intake_sender_html(chat.data) + intake_conversation_html(chat.data, true) : `<p class="text-muted" role="status">${escape(frm.is_new() ? __("Messages will appear here after this request is saved and source messages are linked.") : __("Loading messages…"))}</p>`;
+		? intake_review_html(chat.data) + intake_sender_html(chat.data) + intake_conversation_html(chat.data, true) : `<p class="text-muted" role="status">${escape(frm.is_new() ? __("Messages will appear here after this request is saved and source messages are linked.") : __("Loading messages…"))}</p>`;
 	const wrapper = frm.fields_dict.conversation_display?.$wrapper;
 	for (const cleanup of frm.__intake_map_cleanups || []) cleanup();
 	frm.__intake_map_cleanups = [];
@@ -629,7 +642,6 @@ function intake_conversation_html(data, previews = false) {
 			(message.text ? `<div class="intake-chat-text">${escape(message.text)}</div>` : "") +
 			(attachment ? intake_conversation_file(attachment, previews ? message.name : null, message.content_type) : "") +
 			(location ? intake_location_html(location, message.name) : "") +
-			(message.warnings || []).map(warning => `<div class="intake-chat-warning">${escape(warning)}</div>`).join("") +
 			`<div class="intake-chat-meta"><a href="/app/whatsapp-message/${escape(encodeURIComponent(message.name))}" target="_blank" rel="noopener noreferrer" title="${__("Open original message")}">${__("Original")}</a>` +
 			`<time datetime="${escape(stamp)}">${escape(parsed?.[2] || stamp.replace(/\.\d+$/, ""))}</time></div></div>`;
 	}).join("");
@@ -661,7 +673,6 @@ function intake_conversation_html(data, previews = false) {
 		.intake-chat-history .intake-chat-file p{margin:0}
 		.intake-chat-history .intake-chat-location,.intake-chat-history .intake-chat-reply{padding:7px 9px;margin-top:5px;background:#f4f5f5;border-radius:5px;font-size:12px}
 		.intake-chat-history .intake-chat-reply{border-left:3px solid #56a899;color:#667781;font-size:11px}
-		.intake-chat-history .intake-chat-warning{font-size:11px;color:#926825;margin-top:5px}
 		.intake-chat-history .intake-chat-empty{color:#667781;text-align:center;margin:20px 0;font-size:12px}
 		[data-theme="dark"] .intake-chat-history{background-color:#0b141a;color:#e9edef}
 		[data-theme="dark"] .intake-chat-history .intake-chat-bubble,[data-theme="dark"] .intake-chat-history .intake-chat-date span{background:#202c33;color:#e9edef}
@@ -670,7 +681,6 @@ function intake_conversation_html(data, previews = false) {
 		[data-theme="dark"] .intake-chat-history .intake-chat-file a{color:#b5cbd4}
 		[data-theme="dark"] .intake-chat-history .intake-chat-preview{background:#182229}
 		[data-theme="dark"] .intake-chat-history .intake-chat-preview small{color:#b5cbd4}
-		[data-theme="dark"] .intake-chat-history .intake-chat-warning{color:#e7b56c}
 		[data-theme="dark"] :is(.intake-chat-history,.intake-review-location) .intake-chat-map,[data-theme="dark"] :is(.intake-chat-history,.intake-review-location) .intake-chat-map>a{background:#233b31;color:#e9edef}
 		@media(max-width:640px){.intake-chat-history{padding:14px 14px}.intake-chat-history .intake-chat-bubble{max-width:92%}}
 	</style><div class="intake-chat-history" tabindex="0" role="region" aria-label="${escape(__("Linked WhatsApp messages"))}" style="max-height:480px;overflow-y:auto">` +

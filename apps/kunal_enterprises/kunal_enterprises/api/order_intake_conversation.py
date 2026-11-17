@@ -8,6 +8,8 @@ import frappe
 from frappe.utils import cint, get_datetime
 
 from kunal_enterprises.api.quick_orders import _require_reviewer
+from kunal_enterprises.integrations.order_intake_ai_review import current_review_questions
+from kunal_enterprises.integrations.order_intake_ai_state import OWNED_WARNINGS, REVIEW_PREFIX
 from kunal_enterprises.kunal_enterprises.doctype.order_intake_request.order_intake_request import _sender_key
 
 MAX_SOURCES = 1000
@@ -221,6 +223,11 @@ def _messages(request, cursor=None, limit=50, revision=None, expected_modified=N
 			item['manual_review'] = not row.page_count or row.page_count > pdf_limit or row.review_status == 'Needs Manual Review'
 		references.append(item)
 	formatted = [_message(source, doc, names, provider_names) for source in page]
+	# Source attention is historical and may cover multiple requests. The saved
+	# request owns current review questions; keep capture/media failures visible.
+	for message in formatted:
+		message['warnings'] = [warning for warning in message['warnings']
+			if warning not in OWNED_WARNINGS and not warning.startswith(REVIEW_PREFIX)]
 	by_name = {source.name: source for source in sources}
 	for item in formatted:
 		# A quote may refer to another page, but never to an unlinked source.
@@ -233,6 +240,11 @@ def _messages(request, cursor=None, limit=50, revision=None, expected_modified=N
 		sender_number=doc.sender_number or '', sender_name=doc.sender_name or '',
 		sender_profile_name=next((source.profile_name for source in reversed(sources) if source.profile_name), ''),
 		sender_identity=_sender_identity(doc.sender_number),
-		messages=formatted, references=references,
+		messages=formatted, references=references, review_questions=current_review_questions(doc),
+		# Older-page capture/media problems must not disappear from the summary.
+		review_warnings=list(dict.fromkeys(line for source in sources
+			for field in ('intake_attention', 'intake_media_note')
+			for line in (source.get(field) or '').splitlines()
+			if line and line not in OWNED_WARNINGS and not line.startswith(REVIEW_PREFIX))),
 		has_more=len(sources_page) > len(page), next_cursor=page[0].name if page and len(sources_page) > len(page) else None,
 		pdf_page_limit=pdf_limit)

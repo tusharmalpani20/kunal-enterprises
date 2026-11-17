@@ -79,13 +79,13 @@ test('delivery details, attachments and a manual interpretation show their secti
   for (const section of optionalSections) assertVisible(flow, section, true);
 });
 
-test('unresolved questions are visible even without an estimated interpretation', () => {
+test('raw unresolved questions do not duplicate the current chat review section', () => {
   const flow = setup({ unresolved_questions: 'Which warehouse did the sender mean?' });
   flow.handlers.refresh(flow.frm);
-  assertVisible(flow, 'interpretation_section', true);
+  assertVisible(flow, 'interpretation_section', false);
   assertVisible(flow, 'delivery_section', false);
   assertVisible(flow, 'references_section', false);
-  assert.match(flow.html.get('interpretation_display'), /Which warehouse/);
+  assert.doesNotMatch(flow.html.get('interpretation_display'), /Which warehouse/);
 });
 
 test('Add Details reveals the requested empty section without changing draft data', async () => {
@@ -138,7 +138,7 @@ test('AI interpretation text is displayed literally rather than inserted as exec
   assertVisible(flow, 'interpretation_section', true);
   const rendered = flow.html.get('interpretation_display');
   assert.match(rendered, /&lt;img/);
-  assert.match(rendered, /&lt;script&gt;/);
+  assert.doesNotMatch(rendered, /bad/);
   assert.doesNotMatch(rendered, /<img|<script>/);
   assert.equal(flow.frm.doc.estimated_interpretation, estimate);
   assert.equal(flow.frm.doc.unresolved_questions, questions);
@@ -167,7 +167,7 @@ test('late-message suggestions are readable and escaped without replacing review
   assert.match(rendered, /Message updates/);
   assert.match(rendered, /21317 MR/);
   assert.match(rendered, /Unread attachment/);
-  assert.match(rendered, /&lt;script&gt;/);
+  assert.doesNotMatch(rendered, /bad/);
   assert.doesNotMatch(rendered, /<script>/);
   assert.equal(JSON.stringify(flow.frm.doc), before);
 });

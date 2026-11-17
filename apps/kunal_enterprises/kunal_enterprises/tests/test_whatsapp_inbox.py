@@ -122,6 +122,14 @@ class TestWhatsAppInbox(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):api.conversations(self.other.name,cursor=first['next_cursor'])
 		with self.assertRaises(frappe.ValidationError):api.conversations(self.account.name,search='different',cursor=first['next_cursor'])
 
+	def test_chat_keeps_download_problems_but_not_historical_intake_ai_labels(self):
+		source = self.source('Caption')
+		attention = 'AI: Needs review: Old customer question\nAttachment download needs attention'
+		frappe.db.set_value('WhatsApp Message', source.name, 'intake_attention', attention, update_modified=False)
+		result = api.messages(self.account.name, self.number)
+		self.assertEqual(result['messages'][0]['warnings'], ['Attachment download needs attention'])
+		self.assertEqual(frappe.get_value('WhatsApp Message', source.name, 'intake_attention'), attention)
+
 	def test_history_before_after_pages_and_empty_after_keep_canonical_profile(self):
 		sources=[self.source(str(index),profile='Known profile' if index==0 else '') for index in range(4)]
 		for index,source in enumerate(sources):
