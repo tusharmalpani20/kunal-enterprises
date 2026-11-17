@@ -8,15 +8,15 @@ from frappe.tests.utils import FrappeTestCase
 from kunal_enterprises.api import quick_orders
 from kunal_enterprises.api.orders import submit_order
 from kunal_enterprises.api.token_verification import issue_token
-from kunal_enterprises.tests.test_foundation import TestOrderSubmission as Helpers
+from kunal_enterprises.tests import test_foundation as foundation_helpers
 from kunal_enterprises.kunal_enterprises.doctype.quick_order_request.quick_order_request import QuickOrderRequest
 
 
 class TestQuickOrders(FrappeTestCase):
-	_create_product_group = Helpers._create_product_group
-	_create_item = Helpers._create_item
-	_create_active_customer = Helpers._create_active_customer
-	_create_role_user = Helpers._create_role_user
+	_create_product_group = foundation_helpers.TestOrderSubmission._create_product_group
+	_create_item = foundation_helpers.TestOrderSubmission._create_item
+	_create_active_customer = foundation_helpers.TestOrderSubmission._create_active_customer
+	_create_role_user = foundation_helpers.TestOrderSubmission._create_role_user
 
 	def setUp(self):
 		frappe.set_user('Administrator')

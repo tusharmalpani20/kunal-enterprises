@@ -7,7 +7,7 @@ from frappe.tests.utils import FrappeTestCase
 from kunal_enterprises.api import quick_orders
 from kunal_enterprises.api.token_verification import issue_token
 from kunal_enterprises.patches import backfill_quick_order_party_details as backfill
-from kunal_enterprises.tests.test_quick_orders import TestQuickOrders as Helpers
+from kunal_enterprises.tests import test_quick_orders as quick_order_helpers
 
 
 CUSTOMER_FETCHES = {
@@ -25,12 +25,12 @@ EMPLOYEE_FETCHES = {
 
 
 class TestQuickOrderPartyDetails(FrappeTestCase):
-	_create_product_group = Helpers._create_product_group
-	_create_item = Helpers._create_item
-	_create_active_customer = Helpers._create_active_customer
-	setUp = Helpers.setUp
-	tearDown = Helpers.tearDown
-	_request = Helpers._request
+	_create_product_group = quick_order_helpers.TestQuickOrders._create_product_group
+	_create_item = quick_order_helpers.TestQuickOrders._create_item
+	_create_active_customer = quick_order_helpers.TestQuickOrders._create_active_customer
+	setUp = quick_order_helpers.TestQuickOrders.setUp
+	tearDown = quick_order_helpers.TestQuickOrders.tearDown
+	_request = quick_order_helpers.TestQuickOrders._request
 
 	def _sales_request(self):
 		employee = frappe.get_doc({'doctype': 'Sales Employee',
