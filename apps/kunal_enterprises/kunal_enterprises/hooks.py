@@ -80,6 +80,7 @@ website_context = {
 # include js, css files in header of desk.html
 # app_include_css = "/assets/kunal_enterprises/css/kunal_enterprises.css"
 # app_include_js = "/assets/kunal_enterprises/js/kunal_enterprises.js"
+app_include_js = ["/assets/kunal_enterprises/js/export_policy.js"]
 # Unlike before_request, auth_hooks sees the authenticated API-token user.
 auth_hooks = ["kunal_enterprises.permission_guards.exports.guard_request"]
 after_request = ["kunal_enterprises.permission_guards.exports.guard_response"]
