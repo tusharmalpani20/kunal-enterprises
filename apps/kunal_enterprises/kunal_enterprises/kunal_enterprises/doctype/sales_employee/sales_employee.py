@@ -6,8 +6,30 @@ from frappe.model.document import Document
 class SalesEmployee(Document):
 	def validate(self):
 		self._normalize_mobile_number()
+		self._validate_portal_user()
 		self._validate_mobile_number_is_global_identity()
 		self._validate_product_group_access()
+
+	def _validate_portal_user(self):
+		self.portal_user = str(self.portal_user or "").strip() or None
+		if not self.portal_user:
+			return
+		# Lock the shared login before checking ownership; the unique column also
+		# protects concurrent links made through other writers.
+		user = frappe.db.get_value("User", self.portal_user,
+			["enabled", "user_type"], as_dict=True, for_update=True)
+		before = self.get_doc_before_save()
+		link_changed = self.is_new() or not before or self.portal_user != before.portal_user
+		if link_changed:
+			if not user or not user.enabled or user.user_type != "System User":
+				frappe.throw(_("Portal User must be an enabled System User."))
+			if "Sales Portal User" not in frappe.get_roles(self.portal_user):
+				frappe.throw(_("Portal User must have the Sales Portal User role or role profile."))
+		# An existing login can later be disabled or lose its role without breaking
+		# independent mobile OTP verification or employee maintenance. Live portal
+		# scope still rejects that login; never relax one-to-one ownership below.
+		if frappe.db.exists("Sales Employee", {"portal_user": self.portal_user, "name": ("!=", self.name or "")}):
+			frappe.throw(_("This Portal User is already linked to another Sales Employee."))
 
 	def _normalize_mobile_number(self):
 		if self.mobile_number:

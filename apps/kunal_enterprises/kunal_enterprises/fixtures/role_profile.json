@@ -118,5 +118,19 @@
     "role": "Godown Allocator"
    }
   ]
+ },
+ {
+  "doctype": "Role Profile",
+  "name": "Sales Portal User",
+  "role_profile": "Sales Portal User",
+  "docstatus": 0,
+  "roles": [
+   {
+    "parent": "Sales Portal User",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Sales Portal User"
+   }
+  ]
  }
 ]

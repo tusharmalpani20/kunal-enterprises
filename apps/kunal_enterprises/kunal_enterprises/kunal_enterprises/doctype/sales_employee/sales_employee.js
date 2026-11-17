@@ -2,6 +2,10 @@ frappe.ui.form.on("Sales Employee", {
 	refresh(frm) {
 		set_sales_employee_read_only_fields(frm);
 		set_active_product_group_query(frm);
+		frm.set_query("portal_user", () => ({
+			query: "kunal_enterprises.api.sales_portal_users.available_users",
+			filters: {sales_employee: frm.is_new() ? "" : frm.doc.name},
+		}));
 
 		if (!frm.is_new() && frm.doc.mobile_verified) {
 			add_sales_employee_access_buttons(frm);

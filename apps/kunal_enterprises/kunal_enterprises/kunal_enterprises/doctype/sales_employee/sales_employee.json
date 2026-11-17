@@ -9,6 +9,7 @@
  "field_order": [
   "sales_employee_name",
   "mobile_number",
+  "portal_user",
   "email_id",
   "employee_code",
   "status",
@@ -32,6 +33,14 @@
    "label": "Mobile Number",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "portal_user",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Portal User",
+   "unique": 1,
+   "description": "Optional Desk login for sales review. Mobile app access continues to use Mobile Number."
   },
   {
    "fieldname": "email_id",

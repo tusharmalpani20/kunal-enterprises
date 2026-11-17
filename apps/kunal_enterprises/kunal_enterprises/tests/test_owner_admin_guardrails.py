@@ -64,7 +64,7 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 	def test_role_lookup_methods_are_filtered_for_admin(self):
 		frappe.set_user(self.admin.name)
 
-		self.assertEqual(owner_admin.get_all_roles(), ["Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator"])
+		self.assertEqual(owner_admin.get_all_roles(), ["Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator", "Sales Portal User"])
 		self.assertEqual(
 			[row.role for row in owner_admin.get_role_profile("Branch Employee")],
 			["Branch Employee"],
@@ -85,7 +85,7 @@ class TestOwnerAdminAccountGuardrails(FrappeTestCase):
 	def test_role_lookup_methods_show_only_portal_roles_for_administrator(self):
 		frappe.set_user("Administrator")
 
-		self.assertEqual(owner_admin.get_all_roles(), ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator"])
+		self.assertEqual(owner_admin.get_all_roles(), ["Owner", "Admin", "Branch Manager", "Branch Employee", "Godown Allocator", "Order Coordinator", "Sales Portal User"])
 
 	def test_admin_can_create_standalone_allocator_without_management_privileges(self):
 		frappe.set_user(self.admin.name)
