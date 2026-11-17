@@ -80,6 +80,9 @@ website_context = {
 # include js, css files in header of desk.html
 # app_include_css = "/assets/kunal_enterprises/css/kunal_enterprises.css"
 # app_include_js = "/assets/kunal_enterprises/js/kunal_enterprises.js"
+# Unlike before_request, auth_hooks sees the authenticated API-token user.
+auth_hooks = ["kunal_enterprises.permission_guards.exports.guard_request"]
+after_request = ["kunal_enterprises.permission_guards.exports.guard_response"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/kunal_enterprises/css/kunal_enterprises.css"
@@ -122,7 +125,10 @@ doctype_list_js = {"WhatsApp Message": "public/js/order_intake_message_list.js"}
 # 	"Role": "home_page"
 # }
 
-boot_session = ["kunal_enterprises.desk_navigation.limit_workspaces"]
+boot_session = [
+	"kunal_enterprises.desk_navigation.limit_workspaces",
+	"kunal_enterprises.permission_guards.exports.boot_session",
+]
 
 # Generators
 # ----------
@@ -199,6 +205,7 @@ has_permission = {
 # Override standard doctype classes
 
 override_doctype_class = {
+	"File": "kunal_enterprises.permission_guards.export_files.ExportProtectedFile",
 	"WhatsApp Message": "kunal_enterprises.permission_guards.whatsapp.KunalWhatsAppMessage",
 	"WhatsApp Account": "kunal_enterprises.permission_guards.whatsapp.KunalWhatsAppAccount",
 	"Bulk WhatsApp Message": "kunal_enterprises.permission_guards.whatsapp.KunalBulkWhatsAppMessage",
@@ -209,6 +216,12 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
+	"Auto Email Report": {
+		"before_validate": "kunal_enterprises.permission_guards.exports.guard_auto_email_report",
+	},
+	"File": {
+		"before_validate": "kunal_enterprises.permission_guards.exports.keep_report_file_private",
+	},
 	"WhatsApp Message": {
 		"before_validate": [
 			"kunal_enterprises.permission_guards.whatsapp.guard_intake_fields",
