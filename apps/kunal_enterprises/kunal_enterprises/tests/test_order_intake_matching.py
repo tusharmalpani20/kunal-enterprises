@@ -293,6 +293,11 @@ class TestOrderIntakeMatching(FrappeTestCase):
 		reversed_result = search_candidates('godown', second + '/' + first)
 		self.assertEqual(reversed_result['selected'], second)
 
+	def test_tagged_warehouse_option_uses_first_available(self):
+		name = self.master('godown', self.prefix + ' Kukatpally')
+		result = search_candidates('godown', '@' + self.prefix + ' Kukatpally / Missingplace Godown')
+		self.assertEqual(result['selected'], name)
+
 	def test_missing_first_warehouse_option_uses_next_available(self):
 		second = self.master('godown', self.prefix + ' Kukatpally')
 		result = search_candidates('godown', 'UnlistedXYZ / ' + second + ' Godown')
@@ -307,3 +312,30 @@ class TestOrderIntakeMatching(FrappeTestCase):
 		whole = self.master('godown', self.prefix + ' North/South')
 		self.master('godown', self.prefix + ' North')
 		self.assertEqual(search_candidates('godown', whole)['selected'], whole)
+
+	def test_short_trading_name_typo_beats_short_unrelated_interior_party(self):
+		correct = self.master('customer', self.prefix + ' STEP IN INTERIORS INDIA PVT LTD - HYDERABAD')
+		self.master('customer', self.prefix + ' BIRAN INTERIOR')
+		result = search_candidates('customer', self.prefix + ' Step in Interiore')
+		self.assertEqual(result['selected'], correct)
+		self.assertTrue(result['review_required'])
+
+	def test_short_design_with_brand_and_variant_is_retrieved_before_unrelated_color(self):
+		correct = self.master('item', self.prefix + ' ASA HG 102', root_stock_group='MARIA DECOR')
+		self.master('item', self.prefix + ' EDGEBAND HG 102', root_stock_group='MARIA DECOR')
+		self.master('item', self.prefix + ' ASA HG 1102', root_stock_group='MARIA DECOR')
+		result = search_candidates('item', self.prefix + ' Maria Decor ASA HG 102')
+		self.assertEqual(result['selected'], correct)
+		self.assertTrue(result['review_required'])
+
+	def test_missing_colour_wording_preserves_brand_code_finish_candidates_for_review(self):
+		rows = [frappe._dict(name='Panel HG 102', item_name='Panel HG 102', root_stock_group='MARIA DECOR')]
+		wording = '102 Polar White Maria Decor HG'
+		with patch('kunal_enterprises.integrations.order_intake_matching._pool', return_value=(rows, False)):
+			result = search_candidates('item', wording)
+			self.assertEqual(result['selected'], 'Panel HG 102')
+			self.assertTrue(result['review_required'])
+			rows.append(frappe._dict(name='Edgeband HG 102', item_name='Edgeband HG 102', root_stock_group='MARIA DECOR'))
+			result = search_candidates('item', wording)
+			self.assertIsNone(result['selected'])
+			self.assertEqual({row['name'] for row in result['candidates']}, {'Panel HG 102', 'Edgeband HG 102'})

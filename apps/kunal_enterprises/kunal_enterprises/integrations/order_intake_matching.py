@@ -56,7 +56,7 @@ def _pool(doctype, fields, query):
 	# Keep item retrieval anchored to a design number when one was supplied;
 	# broader customer names must not introduce unrelated product codes.
 	numeric = [match[1].lstrip("0") or "0" for token in tokens
-		if (match := re.fullmatch(r"(\d{4,})[.,;:]?", token))] if doctype == "Tally Item" else []
+		if (match := re.fullmatch(r"(\d{3,})[.,;:]?", token))] if doctype == "Tally Item" else []
 	anchor = max(numeric or tokens, key=len)
 	columns = tuple(dict.fromkeys(("name", *fields)))
 	selected_columns = (*columns, 'root_stock_group') if doctype == 'Tally Item' else columns
@@ -110,6 +110,8 @@ def _core(kind, text):
 		# and literal catalogue names intact through the exact-name check below.
 		value = re.sub(r'(?:\s+[-–—]\s+|\s*[:=]\s*)\d+(?:\.\d+)?\s*(?:sheets?|nos\.?|pcs\.?|pieces?|units?|boxes?)\s*$', '', value)
 	elif kind == 'godown':
+		# WhatsApp tags often prefix a dispatch place with @; it is not part of the master name.
+		value = value.lstrip('@').strip()
 		value = re.sub(r"\b(?:godown|warehouse)\b", " ", value)
 	if kind in ('customer', 'godown'):
 		value = re.sub(r'\s+[–—]\s+', ' - ', value)
@@ -142,6 +144,21 @@ def _customer_short_name(query, label):
 	return query in (label, base, without_legal, full_without_separator)
 
 
+def _customer_name_prefix(query, label):
+	"""A misspelled short trading name can precede legal and branch details.
+
+	Compare every query word in order with the beginning of the master label.
+	This prevents a shorter unrelated party sharing only 'interior' from beating
+	'Step in Interiors India Pvt Ltd - Hyderabad' for 'Step in Interiore'.
+	"""
+	words, target = query.split(), label.split()
+	if len(words) < 2 or len(target) < len(words):
+		return False
+	return all(word == option or (len(word) >= 4 and len(option) >= 4
+		and SequenceMatcher(None, word, option).ratio() >= .85)
+		for word, option in zip(words, target))
+
+
 def _compatible_words(query, alias):
 	"""Short variants/units must agree; longer words may have small typos.
 
@@ -163,8 +180,8 @@ def _item_code_variant(query, label, root_group):
 	need the normal uniqueness margin before filling an editable draft.
 	"""
 	words, label_words = set(query.split()), set(label.split())
-	designs = {word.lstrip('0') or '0' for word in words if word.isdigit() and len(word) >= 4}
-	label_designs = {word.lstrip('0') or '0' for word in label_words if word.isdigit() and len(word) >= 4}
+	designs = {word.lstrip('0') or '0' for word in words if word.isdigit() and len(word) >= 3}
+	label_designs = {word.lstrip('0') or '0' for word in label_words if word.isdigit() and len(word) >= 3}
 	variants = {word for word in words if re.fullmatch(r'[a-z]{1,3}\+?', word)}
 	if not designs or not designs <= label_designs or not variants or not variants <= label_words:
 		return False
@@ -176,12 +193,30 @@ def _item_code_variant(query, label, root_group):
 	return all(word in context or word in descriptive or word.isdigit() for word in words)
 
 
+def _partial_catalogue_identity(query, label, root_group):
+	"""Retain brand/code/finish candidates when colour prose is absent in Tally.
+
+	A complete root-group brand and explicit finish must be supported. Missing
+	wording is never an alias; equal candidates from different families remain
+	unselected so the reviewer can decide from the original attachment.
+	"""
+	words, target = set(query.split()), set(label.split())
+	brand = {word for word in normalized(root_group).split() if word.isalpha() and len(word) >= 4}
+	codes = {word.lstrip('0') or '0' for word in words if word.isdigit() and len(word) >= 3}
+	target_codes = {word.lstrip('0') or '0' for word in target if word.isdigit() and len(word) >= 3}
+	variants = {word for word in words if re.fullmatch(r'[a-z]{1,3}\+?', word)}
+	return bool(len(brand) >= 2 and brand <= words and codes and codes <= target_codes
+		and variants and variants <= target)
+
+
 def _best(candidates, truncated, kind):
 	if not candidates:
 		return None
 	top = candidates[0]
 	# Intake fields are editable suggestions, not identity decisions. A close
 	# tie or bounded search is a reason to review, rather than leave work blank.
+	if kind == 'item' and top.get('incomplete_wording') and any(row.get('reasonable') and row['score'] >= top['score'] for row in candidates[1:]):
+		return None
 	if kind in {'customer', 'item', 'godown'}:
 		return top['name'] if top.get('reasonable') and top['score'] >= 60 else None
 	if truncated:
@@ -249,15 +284,21 @@ def search_candidates(kind, text, limit=5):
 		if kind == 'item' and not is_exact and _measurements(query) - _measurements(normalized(row.get(label_field))):
 			continue
 		short_customer = kind == 'customer' and _customer_short_name(query, normalized(row.get(label_field)))
+		prefix_customer = kind == 'customer' and _customer_name_prefix(query, normalized(row.get(label_field)))
 		code_variant = kind == 'item' and _item_code_variant(query, normalized(row.get(label_field)), row.get('root_stock_group'))
+		partial_catalogue = kind == 'item' and _partial_catalogue_identity(query, normalized(row.get(label_field)), row.get('root_stock_group'))
 		if is_exact:
 			score, reason = 100, "Exact name or code"
 		elif query in aliases:
 			score, reason = 99, "Closest wording; please review"
 		elif short_customer:
 			score, reason = 95, "Short trading name; please review the party and branch"
+		elif prefix_customer:
+			score, reason = 93, "Short trading name with minor spelling difference; please review the party and branch"
 		elif code_variant:
 			score, reason = 90, "Brand, design and variant match; please review the item"
+		elif partial_catalogue:
+			score, reason = 80, "Brand, code and finish match; remaining wording needs review"
 		else:
 			similarity = max(SequenceMatcher(None, query, alias).ratio() for alias in aliases)
 			if kind in {'customer', 'godown'}:
@@ -270,7 +311,7 @@ def search_candidates(kind, text, limit=5):
 			if score < 35:
 				continue
 			reason = "Closest wording; please review"
-		compatible = is_exact or short_customer or code_variant or any(_numbers(query) <= _numbers(alias) and _compatible_words(query, alias) for alias in aliases)
+		compatible = is_exact or short_customer or prefix_customer or code_variant or partial_catalogue or any(_numbers(query) <= _numbers(alias) and _compatible_words(query, alias) for alias in aliases)
 		if kind == 'customer' and score >= 60:
 			compatible = True
 		if kind == 'godown' and any(re.search(r'(?<!\w)' + re.escape(alias) + r'(?!\w)', query) for alias in aliases):
@@ -279,7 +320,7 @@ def search_candidates(kind, text, limit=5):
 			score = min(score, 74)
 			reason = "Some wording or variant differs; please check"
 		candidates.append(dict(name=row.name, label=row.get(label_field) or row.name, score=score, reason=reason,
-			reasonable=compatible))
+			reasonable=compatible, incomplete_wording=bool(partial_catalogue and not code_variant and not is_exact)))
 	candidates.sort(key=lambda row: (not row["reasonable"] if kind != "sales_employee" else False, -row["score"], row["label"].casefold(), row["name"]))
 	selected = _best(candidates, truncated, kind)
 	return dict(candidates=candidates[:limit], selected=selected,
