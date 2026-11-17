@@ -27,6 +27,11 @@ frappe.ui.form.on("Order Intake Request", {
 	},
 	refresh(frm) {
 		frm.set_intro("");
+		if (globalThis.kunal_sales_portal_user?.()) {
+			refresh_intake_messages(frm);
+			update_intake_sections(frm);
+			return;
+		}
 		intake_processing_controls(frm);
 		intake_sender_link_controls(frm);
 		refresh_intake_messages(frm);
@@ -642,7 +647,7 @@ function intake_conversation_html(data, previews = false) {
 			(message.text ? `<div class="intake-chat-text">${escape(message.text)}</div>` : "") +
 			(attachment ? intake_conversation_file(attachment, previews ? message.name : null, message.content_type) : "") +
 			(location ? intake_location_html(location, message.name) : "") +
-			`<div class="intake-chat-meta"><a href="/app/whatsapp-message/${escape(encodeURIComponent(message.name))}" target="_blank" rel="noopener noreferrer" title="${__("Open original message")}">${__("Original")}</a>` +
+			`<div class="intake-chat-meta">` + (message.can_open_original === false ? "" : `<a href="/app/whatsapp-message/${escape(encodeURIComponent(message.name))}" target="_blank" rel="noopener noreferrer" title="${__("Open original message")}">${__("Original")}</a>`) +
 			`<time datetime="${escape(stamp)}">${escape(parsed?.[2] || stamp.replace(/\.\d+$/, ""))}</time></div></div>`;
 	}).join("");
 	return `<style>
@@ -728,7 +733,7 @@ async function view_intake_messages(frm, initialTab = "messages") {
 		return;
 	}
 	const references = data.references || [];
-	const canReview = !intake_is_converted(frm);
+	const canReview = !intake_is_converted(frm) && !globalThis.kunal_sales_portal_user?.();
 	const safe_cell = value => frappe.utils.escape_html(String(value ?? ""));
 	// Dialogs do not have a Form instance; native Form Tab Break controls
 	// require one. These scoped switches keep the review in a single dialog.
@@ -740,7 +745,7 @@ async function view_intake_messages(frm, initialTab = "messages") {
 		{fieldname: "conversation", fieldtype: "HTML", options: intake_conversation_html(data)},
 		...(references.length ? [
 			{fieldname: "references_display", fieldtype: "HTML", options: intake_reference_html(references, data.pdf_page_limit)},
-			{fieldname: "review_help", fieldtype: "HTML", options: `<p class="text-muted">${canReview ? __("Update the review status or notes below, then choose Done. Save the request to keep your changes.") : __("This request has been converted. Review details are read-only.")}</p>`},
+			{fieldname: "review_help", fieldtype: "HTML", options: `<p class="text-muted">${canReview ? __("Update the review status or notes below, then choose Done. Save the request to keep your changes.") : __("Review details are read-only for this request or user.")}</p>`},
 		] : []),
 	];
 	if (references.length) fields.push({fieldname: "reviews", fieldtype: "Table", label: __("Attachment review"), in_place_edit: true,

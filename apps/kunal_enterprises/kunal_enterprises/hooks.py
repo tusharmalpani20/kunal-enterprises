@@ -80,7 +80,7 @@ website_context = {
 # include js, css files in header of desk.html
 # app_include_css = "/assets/kunal_enterprises/css/kunal_enterprises.css"
 # app_include_js = "/assets/kunal_enterprises/js/kunal_enterprises.js"
-app_include_js = ["/assets/kunal_enterprises/js/export_policy.js"]
+app_include_js = ["/assets/kunal_enterprises/js/export_policy.js", "/assets/kunal_enterprises/js/sales_portal.js"]
 # Unlike before_request, auth_hooks sees the authenticated API-token user.
 auth_hooks = ["kunal_enterprises.permission_guards.exports.guard_request", "kunal_enterprises.permission_guards.sales_portal.guard_list_shares", "kunal_enterprises.permission_guards.sales_portal.guard_side_effect_request"]
 after_request = ["kunal_enterprises.permission_guards.exports.guard_response"]
@@ -104,6 +104,7 @@ doctype_js = {
 	"User": "public/js/user.js",
 	"WhatsApp Message": "public/js/order_intake_message.js",
 	"WhatsApp Account": "public/js/whatsapp_account_permissions.js",
+	"Order Intake Request": "public/js/sales_portal_intake.js",
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 doctype_list_js = {"WhatsApp Message": "public/js/order_intake_message_list.js"}

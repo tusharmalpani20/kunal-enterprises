@@ -246,3 +246,13 @@ test('review section is absent when nothing needs review, and question text is e
   const html=flow.context.intake_review_html({...data,review_questions:['<img src=x onerror=bad()>']});
   assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
 });
+
+test('request-linked evidence remains readable without offering a forbidden original-document link', async()=>{
+  const payload={...data,messages:[{...data.messages[0],can_open_original:false},
+    {...data.messages[0],name:'MSG-OWN',text:'Own sender message',can_open_original:true}]};
+  const flow=setup(payload);await flow.context.refresh_intake_messages(flow.frm);
+  const html=flow.html.at(-1);
+  assert.match(html,/21317 MR 4 NOS/);
+  assert.doesNotMatch(html,/href="\/app\/whatsapp-message\/MSG-2"/);
+  assert.match(html,/href="\/app\/whatsapp-message\/MSG-OWN"/);
+});
