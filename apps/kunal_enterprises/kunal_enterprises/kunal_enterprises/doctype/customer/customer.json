@@ -11,6 +11,7 @@
   "business_legal_name",
   "gstin",
   "mobile_number",
+  "contacts",
   "email_id",
   "date_of_birth",
   "date_of_anniversary",
@@ -146,6 +147,13 @@
    "fieldtype": "Table",
    "label": "Product Group Access",
    "options": "Customer Product Group Access"
+  },
+  {
+   "fieldname": "contacts",
+   "fieldtype": "Table",
+   "label": "Customer Contacts",
+   "options": "Customer Contact",
+   "description": "People who can send WhatsApp orders for this Customer. Mobile-app login stays on the main number."
   }
  ],
  "links": [],

@@ -73,8 +73,20 @@ def get_active_tally_client_codes(client_codes=None, parent_groups=None):
 
 
 class Customer(Document):
+	def insert(self, *args, **kwargs):
+		from kunal_enterprises.integrations.customer_contacts import lock_customer_numbers
+		lock_customer_numbers()
+		return super().insert(*args, **kwargs)
+
+	def _save(self, *args, **kwargs):
+		from kunal_enterprises.integrations.customer_contacts import lock_customer_numbers
+		lock_customer_numbers()
+		return super()._save(*args, **kwargs)
+
 	def validate(self):
 		self._normalize_identity_fields()
+		from kunal_enterprises.integrations.customer_contacts import validate_customer_numbers
+		validate_customer_numbers(self)
 		self._validate_mobile_number_requirement()
 		self._validate_mobile_number_is_global_identity()
 		self._validate_rejected_customer_mobile_reuse()

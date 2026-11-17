@@ -1,0 +1,36 @@
+{
+ "doctype": "DocType",
+ "name": "Customer Contact",
+ "module": "Kunal Enterprises",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": [
+  "contact_name",
+  "mobile_number",
+  "designation"
+ ],
+ "fields": [
+  {
+   "fieldname": "contact_name",
+   "label": "Person Name",
+   "fieldtype": "Data",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "mobile_number",
+   "label": "Mobile Number",
+   "fieldtype": "Data",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "designation",
+   "label": "Role / Designation",
+   "fieldtype": "Data",
+   "in_list_view": 1
+  }
+ ],
+ "permissions": [],
+ "engine": "InnoDB"
+}

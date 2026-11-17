@@ -17,3 +17,5 @@ kunal_enterprises.patches.simplify_order_intake_items
 kunal_enterprises.patches.simplify_order_intake_capture
 kunal_enterprises.patches.normalize_order_intake_sources
 kunal_enterprises.patches.private_whatsapp_attachments
+
+kunal_enterprises.patches.audit_customer_contact_numbers
