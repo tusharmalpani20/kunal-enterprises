@@ -14,6 +14,16 @@ This app implements:
 
 The mobile app must consume this Frappe API boundary only. It must not read the raw Tally PostgreSQL mirror.
 
+## Bulk export access
+
+Owner, Admin, System Manager and the special Administrator account retain their existing permissions. All other users are denied list/report exports, import-data downloads, prepared-report downloads/conversions, immediate report emails, bulk contact cards, multi-document PDFs, report PDFs and attachment ZIPs. Individual document print views and PDFs retain their normal permission checks.
+
+The app enforces this after cookie/API-key/OAuth authentication, across legacy commands and REST v1/v2 routes, before export jobs can be queued. Generic list/search requests accept at most 200 rows per request; ordinary pagination remains available. This does not prevent copying or paging through data users may legitimately view.
+
+Export files (CSV, Excel, ODS, ZIP, JSON and generated report attachments) are kept private before their content is written, since public files bypass application authentication. Restricted accounts cannot download those artifacts. Desk also hides the corresponding export/bulk-print controls and oversized page choices. No Frappe source changes or role-grant changes are required. Clear the site cache after deployment and refresh Desk assets. When deploying onto another site, review existing public export artifacts before enabling the policy; the current local site had none.
+
+Regression checks: `tests/test_export_guard.py` (Python unittest) and `tests/test_export_policy.mjs` (Node). Live role walkthrough evidence is separate from these automated checks.
+
 ## Tally Customer Auto-Onboarding
 
 Before enabling it, an Owner or Admin can call `kunal_enterprises.api.sync_admin.preview_tally_customer_onboarding` to review the non-mutating preview, including counts grouped by unclassified Tally parent. This installation contains accounting ledgers alongside customer ledgers, and the source does not provide a dependable customer-type flag, so auto-onboarding also requires an explicit ancestor-group allowlist. A ledger is eligible when its immediate parent or any ancestor matches a configured group. Configure only the reviewed Tally parent groups:
