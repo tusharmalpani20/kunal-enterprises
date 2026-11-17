@@ -87,6 +87,15 @@ def _phone_match(alias):
 	return f"(s.sender REGEXP '^[0-9]+$' AND ({phone} = s.sender OR (CHAR_LENGTH(s.sender)=10 AND {phone}=CONCAT({quoted_code},s.sender)) OR (LEFT(s.sender,{len(code)})={quoted_code} AND CHAR_LENGTH(s.sender)={len(code)+10} AND {phone}=SUBSTRING(s.sender,{len(code)+1}))))"
 
 
+def _customer_phone_match(alias='c'):
+	# Count Customer parents, not contact rows. A contact and the primary phone
+	# referring to the same Customer must not make its sender look ambiguous.
+	from kunal_enterprises.integrations.customer_contacts import phone_sql
+
+	sender_phone = phone_sql('s.sender', international=True)
+	return f"({sender_phone} REGEXP '^[0-9]+$' AND ({phone_sql(alias+'.mobile_number')}={sender_phone} OR EXISTS (SELECT 1 FROM `tabCustomer Contact` cc WHERE cc.parent={alias}.name AND cc.parenttype='Customer' AND cc.parentfield='contacts' AND {phone_sql('cc.mobile_number')}={sender_phone})))"
+
+
 def _like(value):
 	# An explicit escape character keeps percent/underscore/backslash literal.
 	return '%' + value.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
@@ -113,7 +122,7 @@ def conversations(account, search='', sender_type='All', cursor=None, limit=30):
 	base = _base(account)
 	profile_order = "CASE WHEN TRIM(COALESCE(incoming.profile_name,''))<>'' THEN 0 ELSE 1 END,incoming.creation DESC,incoming.name DESC"
 	latest = f"SELECT ranked.* FROM (SELECT incoming.*, ROW_NUMBER() OVER (PARTITION BY incoming.sender ORDER BY incoming.creation DESC,incoming.name DESC) inbox_rank, FIRST_VALUE(incoming.profile_name) OVER (PARTITION BY incoming.sender ORDER BY {profile_order}) chat_profile, FIRST_VALUE(incoming.name) OVER (PARTITION BY incoming.sender ORDER BY {profile_order}) profile_message FROM (SELECT original.*, {_sender_expression('original')} sender FROM ({base}) original) incoming) ranked WHERE ranked.inbox_rank=1"
-	customer_match, employee_match = _phone_match('c'), _phone_match('e')
+	customer_match, employee_match = _customer_phone_match(), _phone_match('e')
 	counts = f"SELECT s.*, (SELECT COUNT(*) FROM `tabCustomer` c WHERE {customer_match}) customer_count, (SELECT COUNT(*) FROM `tabSales Employee` e WHERE {employee_match}) employee_count FROM ({latest}) s"
 	conditions = []
 	if sender_type == 'Clients':

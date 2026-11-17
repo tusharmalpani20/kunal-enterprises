@@ -21,7 +21,10 @@ def event_key(phone_id, message_id):
 def _identity(sender):
 	"""Recognise identity, never grant order authorization or choose a sales customer's identity."""
 	key = _sender_key(sender)
-	if not key.isdigit():
+	from kunal_enterprises.integrations.customer_contacts import find_customer_matches
+
+	customers = {row['name']: row for row in find_customer_matches(sender)}
+	if not key.isdigit() and not customers:
 		return dict(identity_type="Unknown", identity_status="Unknown", customer=None, sales_employee=None,
 			identity_candidates="[]")
 	code = frappe.db.get_single_value("Order Intake Settings", "default_country_calling_code")
@@ -32,8 +35,12 @@ def _identity(sender):
 			variants.add(code + key)
 		elif key.startswith(code) and len(key) == len(code) + 10:
 			variants.add(key[len(code):])
-	candidates = []
-	for doctype, label in (("Customer", "customer_name"), ("Sales Employee", "sales_employee_name")):
+	# A contact identifies its parent Customer, never another customer record or
+	# a salesperson. Deduplicate parents even if historical rows repeat a phone.
+	candidates = [dict(row, doctype="Customer") for row in customers.values()]
+	for doctype, label in (("Sales Employee", "sales_employee_name"),):
+		if not key.isdigit():
+			continue
 		# Exact normalized matches only. SQL parameters contain user values; table/field names are fixed.
 		expression = "COALESCE(mobile_number, '')"
 		for character in ("+", " ", "-", "(", ")"):

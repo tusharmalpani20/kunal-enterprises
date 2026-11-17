@@ -21,7 +21,7 @@ FIELDS = ("name", "type", "whatsapp_account", "from", "profile_name", "message",
 	"reply_to_message_id", "intake_received_at", "intake_sender_key", "intake_media_filename", "intake_media_id",
 	"intake_original_type", "intake_has_location", "intake_latitude", "intake_longitude", "intake_location_address",
 	"intake_location_name", "intake_raw_payload", "intake_legacy_evidence", "intake_ai_coverage",
-	"intake_sent_at", "intake_media_mime", "intake_identity_type")
+	"intake_sent_at", "intake_media_mime", "intake_identity_type", "intake_identity_candidates", "intake_customer")
 
 
 def _json(value):

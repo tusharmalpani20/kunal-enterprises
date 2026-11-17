@@ -85,6 +85,31 @@ class TestWhatsAppInbox(FrappeTestCase):
 		self.assertEqual(row['identity']['status'],'Unknown')
 		self.assertFalse(api.conversations(self.account.name,sender_type='Clients')['conversations'])
 
+	def test_customer_contact_is_a_client_for_search_history_and_filters(self):
+		customer = self.customer(number='8'+str(uuid4().int)[:9], label='Contact parent '+uuid4().hex)
+		customer.append('contacts', dict(contact_name='Purchase contact', mobile_number=self.number[2:], designation='Buyer'))
+		customer.save()
+		self.source('Order from customer employee')
+		clients = api.conversations(self.account.name, sender_type='Clients')['conversations']
+		self.assertEqual(len(clients), 1)
+		self.assertEqual(clients[0]['identity']['matches'][0]['name'], customer.name)
+		self.assertFalse(api.conversations(self.account.name, sender_type='Unknown')['conversations'])
+		self.assertEqual(len(api.conversations(self.account.name, search=customer.customer_name)['conversations']), 1)
+		history = api.messages(self.account.name, self.number)
+		self.assertEqual(history['sender_identity']['matches'][0]['contact_name'], 'Purchase contact')
+
+	def test_legacy_duplicate_contact_rows_do_not_count_as_two_customer_matches(self):
+		customer = self.customer(number='8'+str(uuid4().int)[:9])
+		# Simulate historical imported rows bypassing normal validation. Recognition
+		# must count parent Customers even when legacy contact rows repeat.
+		for name in ('One', 'Two'):
+			frappe.get_doc(dict(doctype='Customer Contact', name=uuid4().hex, parent=customer.name,
+				parenttype='Customer', parentfield='contacts', contact_name=name, mobile_number=self.number)).db_insert()
+		self.source('Historical source')
+		clients = api.conversations(self.account.name, sender_type='Clients')['conversations']
+		self.assertEqual(len(clients), 1)
+		self.assertEqual(clients[0]['identity']['status'], 'Matched')
+
 	def test_conversation_cursor_is_stable_with_ties_and_new_activity(self):
 		for index in range(3):
 			source=self.source(str(index),sender='91900000001'+str(index))

@@ -32,6 +32,18 @@ def model_messages(messages):
 	result = []
 	for source in messages:
 		row = {key: source.get(key) for key in FIELDS if source.get(key) is not None}
+		# Pass only the uniquely matched Customer/contact, never the full table.
+		if source.get('intake_identity_type') == 'Customer':
+			try:
+				candidates = source.get('intake_identity_candidates') or []
+				candidates = json.loads(candidates) if isinstance(candidates, str) else candidates
+			except (TypeError, ValueError):
+				candidates = []
+			if isinstance(candidates, list) and len(candidates) == 1 and isinstance(candidates[0], dict):
+				candidate = candidates[0]
+				if candidate.get('doctype') == 'Customer' and candidate.get('name') == source.get('intake_customer'):
+					keys = ('doctype', 'name', 'label') + tuple(key for key in ('contact_name', 'designation') if candidate.get(key))
+					row['recognized_sender'] = {key: str(candidate.get(key) or '')[:140] for key in keys}
 		kind = str(source.get('intake_original_type') or source.get('content_type') or '').lower()
 		raw = _object(source.get('intake_raw_payload'))
 		message = _object(raw.get('message', raw))

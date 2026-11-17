@@ -103,7 +103,7 @@ def _sender_identity(number):
 	# a record match, not mobile approval or permission to place an Order.
 	from kunal_enterprises.integrations.order_intake_capture import _identity
 	identity = _identity(number)
-	matches = [{key: row.get(key) for key in ('doctype', 'name', 'label')}
+	matches = [{key: row.get(key) for key in ('doctype', 'name', 'label', 'contact_name', 'designation') if row.get(key) is not None}
 		for row in frappe.parse_json(identity['identity_candidates'])]
 	return dict(status='Matched' if len(matches) == 1 else 'Ambiguous' if matches else 'Unknown', matches=matches)
 

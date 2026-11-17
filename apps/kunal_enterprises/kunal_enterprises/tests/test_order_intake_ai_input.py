@@ -68,3 +68,15 @@ class TestOrderIntakeAIInput(unittest.TestCase):
 		result=model_messages([dict(name='BAD',content_type='contact',intake_original_type='contacts',intake_raw_payload=json.dumps(dict(message=dict(contacts={'unexpected':'object'}))))])[0]
 		self.assertEqual(result['contacts'],[])
 		self.assertIn('Contact card',result['manual_review_reason'])
+
+	def test_recognized_customer_contact_sends_only_the_unique_parent_and_contact(self):
+		source = dict(name='M-contact', content_type='text', message='Four sheets',
+			intake_identity_type='Customer', intake_customer='CUST-1',
+			intake_identity_candidates=json.dumps([dict(doctype='Customer', name='CUST-1', label='ABC Interiors',
+				contact_name='Ramesh', designation='Purchase Manager', unrelated_phone='private')]))
+		row = model_messages([source])[0]
+		self.assertEqual(row['recognized_sender'], dict(doctype='Customer', name='CUST-1', label='ABC Interiors',
+			contact_name='Ramesh', designation='Purchase Manager'))
+		self.assertNotIn('unrelated_phone', str(row))
+		source['intake_customer'] = 'CUST-other'
+		self.assertNotIn('recognized_sender', model_messages([source])[0])

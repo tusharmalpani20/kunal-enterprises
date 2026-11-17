@@ -49,6 +49,20 @@ class TestOrderIntakeCapture(FrappeTestCase):
 		self.assertEqual(doc.intake_sales_employee, employee.name)
 		self.assertFalse(doc.intake_customer)
 
+	def test_customer_contact_sender_matches_parent_without_replacing_primary_mobile(self):
+		primary = '8' + str(uuid4().int)[:9]
+		customer = foundation.TestOrderSubmission._create_active_customer(self, primary, 'Contact '+uuid4().hex)
+		customer.append('contacts', dict(contact_name='Ramesh', mobile_number='+91 (999) 888-7776', designation='Purchase Manager'))
+		customer.save()
+		doc = self.source()
+		self.assertEqual(doc.intake_identity_type, 'Customer')
+		self.assertEqual(doc.intake_customer, customer.name)
+		self.assertFalse(doc.intake_sales_employee)
+		self.assertEqual(frappe.db.get_value('Customer', customer.name, 'mobile_number'), primary)
+		candidate = frappe.parse_json(doc.intake_identity_candidates)[0]
+		self.assertEqual(candidate['name'], customer.name)
+		self.assertEqual(candidate['contact_name'], 'Ramesh')
+
 	def test_unknown_and_ambiguous_senders_are_preserved(self):
 		doc = self.source()
 		self.assertEqual(doc.intake_identity_type, "Unknown")
