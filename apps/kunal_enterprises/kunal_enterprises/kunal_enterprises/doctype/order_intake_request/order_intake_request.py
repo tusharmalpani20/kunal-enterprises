@@ -19,8 +19,11 @@ class OrderIntakeRequest(Document):
 				row.quantity = None
 
 	def validate(self):
-		_require_reviewer()
+		if not frappe.flags.sales_portal_write:
+			_require_reviewer()
 		before = None if self.is_new() else self.get_doc_before_save()
+		from kunal_enterprises.api.sales_portal_intake import guard_approval
+		guard_approval(self, before)
 		# Older open browser forms may omit this newly added hidden field. Keep
 		# the server baseline; an omitted value must never erase it on save.
 		if before and before.get("ai_initial_values") and not self.get("ai_initial_values"):
@@ -52,6 +55,9 @@ class OrderIntakeRequest(Document):
 				self.matching_json = None
 				for row in self.items:
 					row.match_score = 0
+
+		from kunal_enterprises.api.sales_portal_intake import finalize_approval
+		finalize_approval(self, before)
 
 	def _validate_processing_boundary(self, before):
 		conversion = bool(self.flags.in_order_intake_conversion)

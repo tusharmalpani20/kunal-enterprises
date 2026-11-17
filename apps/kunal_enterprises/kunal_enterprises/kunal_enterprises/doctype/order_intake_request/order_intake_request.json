@@ -53,7 +53,13 @@
   "manual_match_fields",
   "reviewed_by",
   "processed_at",
-  "ai_initial_values"
+  "ai_initial_values",
+  "sales_approval_section",
+  "sales_approval_status",
+  "sales_approved_by",
+  "sales_approved_at",
+  "sales_approval_fingerprint",
+  "sales_approval_history"
  ],
  "fields": [
   {
@@ -375,6 +381,53 @@
    "hidden": 1,
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "sales_approval_section",
+   "fieldtype": "Section Break",
+   "label": "Sales Review"
+  },
+  {
+   "fieldname": "sales_approval_status",
+   "fieldtype": "Select",
+   "label": "Sales Approval",
+   "options": "Not Approved\nApproved\nNeeds Reapproval",
+   "default": "Not Approved",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Records the salesperson\u2019s review. Approval is not required for order conversion."
+  },
+  {
+   "fieldname": "sales_approved_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Sales Approved By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "sales_approved_at",
+   "fieldtype": "Datetime",
+   "label": "Sales Approved At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "sales_approval_fingerprint",
+   "fieldtype": "Data",
+   "label": "Approved Content Fingerprint",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "sales_approval_history",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Sales Approval History",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
   }
  ],
  "permissions": [
