@@ -265,3 +265,26 @@ class TestOrderIntakeConversation(FrappeTestCase):
 		frappe.db.set_value('File', file.name, dict(file_name='renamed.png', file_type='PNG'), update_modified=False)
 		with self.assertRaises(frappe.TimestampMismatchError):
 			messages(doc.name, revision=initial['revision'])
+
+	def test_sales_transcript_does_not_offer_an_inaccessible_original_document(self):
+		tag = 'conversation-sales-' + uuid4().hex[:12]
+		user = frappe.get_doc(dict(doctype='User', email=tag+'@example.com', first_name=tag,
+			user_type='System User', send_welcome_email=0, roles=[dict(role='Sales Portal User')])).insert(ignore_permissions=True)
+		customer = frappe.get_doc(dict(doctype='Customer', customer_name=tag, business_legal_name=tag,
+			mobile_number='7'+str(uuid4().int)[:9])).insert()
+		employee = frappe.get_doc(dict(doctype='Sales Employee', sales_employee_name=tag,
+			mobile_number='8'+str(uuid4().int)[:9], portal_user=user.name,
+			assigned_customers=[dict(customer=customer.name)])).insert()
+		source = self.source('Exact linked evidence from another salesperson')
+		doc = self.request([source], customer=customer.name)
+		frappe.set_user(user.name)
+		result = messages(doc.name)
+		self.assertEqual(result['messages'][0]['text'], source.message)
+		self.assertFalse(result['messages'][0]['can_open_original'])
+		with self.assertRaises(frappe.PermissionError):
+			frappe.get_doc('WhatsApp Message', source.name).check_permission('read')
+		frappe.set_user('Administrator')
+		employee.mobile_number = self.sender
+		employee.save()
+		frappe.set_user(user.name)
+		self.assertTrue(messages(doc.name)['messages'][0]['can_open_original'])

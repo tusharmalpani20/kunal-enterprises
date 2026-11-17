@@ -31,7 +31,9 @@ def _file_evidence(doc, sources, lock=False):
 
 
 def _authorized(request, lock=False):
-	_require_reviewer()
+	from kunal_enterprises.permission_guards.sales_portal import is_sales_user
+	if not is_sales_user():
+		_require_reviewer()
 	doc = frappe.get_doc('Order Intake Request', request, for_update=lock)
 	doc.check_permission('read')
 	names = list(dict.fromkeys(row.message for row in doc.source_messages if row.message))
@@ -40,7 +42,10 @@ def _authorized(request, lock=False):
 	sources = []
 	for name in sorted(names):
 		source = frappe.get_doc('WhatsApp Message', name, for_update=lock)
-		source.check_permission('read')
+		# A scoped request authorizes its exact linked evidence, even when a
+		# different salesperson sent it. This does not expose that sender's Inbox.
+		if not is_sales_user():
+			source.check_permission('read')
 		if source.type != 'Incoming' or source.whatsapp_account != doc.whatsapp_account or _sender_key(source.get('from')) != _sender_key(doc.sender_number):
 			frappe.throw('A linked message belongs to a different chat. Correct the request sources before reviewing.', frappe.PermissionError)
 		sources.append(source)
@@ -172,6 +177,9 @@ def preview(request, name, revision, expected_modified):
 	# This service also rechecks account/message/File access and ownership,
 	# derives thumbnails locally, and never downloads external media.
 	from kunal_enterprises.integrations.whatsapp_inbox_previews import get_preview
+	from kunal_enterprises.permission_guards.sales_portal import is_sales_user
+	if is_sales_user():
+		return get_preview(doc.whatsapp_account, doc.sender_number, name, authorized_request=doc)
 	return get_preview(doc.whatsapp_account, doc.sender_number, name)
 
 
@@ -229,6 +237,10 @@ def _messages(request, cursor=None, limit=50, revision=None, expected_modified=N
 		message['warnings'] = [warning for warning in message['warnings']
 			if warning not in OWNED_WARNINGS and not warning.startswith(REVIEW_PREFIX)]
 	by_name = {source.name: source for source in sources}
+	from kunal_enterprises.permission_guards.sales_portal import is_sales_user, can_access
+	if is_sales_user():
+		for message in formatted:
+			message['can_open_original'] = can_access(by_name[message['name']])
 	for item in formatted:
 		# A quote may refer to another page, but never to an unlinked source.
 		target = by_name.get(item.get('reply_to'))

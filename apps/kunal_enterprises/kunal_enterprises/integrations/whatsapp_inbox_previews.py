@@ -69,17 +69,28 @@ def _render(data, kind):
         return _png(target.with_suffix(".png").read_bytes())
 
 
-def get_preview(account, sender, name):
-    _account(account)
+def get_preview(account, sender, name, authorized_request=None):
+    if authorized_request is None:
+        _account(account)
+    else:
+        # Only the request endpoint supplies this locked, authorized document.
+        # Recheck scope and exact source membership; never open the whole chat.
+        from kunal_enterprises.permission_guards.sales_portal import is_sales_user, can_access
+        if (not is_sales_user() or not can_access(authorized_request)
+                or authorized_request.whatsapp_account != account
+                or _sender_key(authorized_request.sender_number) != _sender_key(sender)
+                or name not in {row.message for row in authorized_request.source_messages}):
+            frappe.throw("Message is not linked to a permitted intake request.", frappe.PermissionError)
     if not isinstance(name, str) or not name or len(name) > 140 or not isinstance(sender, str) or len(sender) > 200:
         frappe.throw("Invalid message.")
     # Query filters (including permission-query hooks) and document permissions
     # are both required, matching the incoming history endpoint's boundary.
-    if not frappe.get_list("WhatsApp Message", filters={"name": name,
+    if authorized_request is None and not frappe.get_list("WhatsApp Message", filters={"name": name,
             "type": "Incoming", "whatsapp_account": account}, fields=["name"], limit_page_length=1):
         frappe.throw("Message is outside this chat or is not permitted.", frappe.PermissionError)
     source = frappe.get_doc("WhatsApp Message", name)
-    source.check_permission("read")
+    if authorized_request is None:
+        source.check_permission("read")
     if source.type != "Incoming" or source.whatsapp_account != account or _sender_key(source.get("from")) != _sender_key(sender):
         frappe.throw("Message is outside this chat.", frappe.PermissionError)
     owned = _owned_file(source.attach, source)
@@ -92,7 +103,8 @@ def get_preview(account, sender, name):
         # Serialize generation across requests until commit/rollback; no source mutation.
         locked = frappe.db.sql("SELECT * FROM `tabWhatsApp Message` WHERE name=%s FOR UPDATE", source.name, as_dict=True)
         source.update(locked[0])
-        source.check_permission("read")
+        if authorized_request is None:
+            source.check_permission("read")
         if source.type != "Incoming" or source.whatsapp_account != account or _sender_key(source.get("from")) != _sender_key(sender):
             return dict(UNAVAILABLE)
         owned = _owned_file(source.attach, source)
@@ -125,7 +137,12 @@ def get_preview(account, sender, name):
             attached_to_doctype="WhatsApp Message", attached_to_name=source.name, content=content))
         # Derived previews must not add chat activity, comments or notifications.
         created.create_attachment_record = lambda: None
-        created.insert(ignore_permissions=True, set_name=cache_name)
+        previous_preview = frappe.flags.sales_portal_preview_write
+        try:
+            frappe.flags.sales_portal_preview_write = True
+            created.insert(ignore_permissions=True, set_name=cache_name)
+        finally:
+            frappe.flags.sales_portal_preview_write = previous_preview
         reference = _owned_file(created.file_url, source)
         if not reference:
             raise ValueError("Preview unavailable")
