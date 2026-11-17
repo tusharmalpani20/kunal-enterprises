@@ -56,7 +56,7 @@ def match_document(doc, autofill=True):
 		result = _search(kind, text, doc)
 		# A salesperson sender is never automatically used as the customer.
 		# Explicit customer wording takes precedence over the sender's identity.
-		if not text and identity.get(field):
+		if identity.get(field) and (not text or kind == 'sales_employee'):
 			name = identity[field]
 			label_field = 'customer_name' if kind == 'customer' else 'sales_employee_name'
 			result.update(candidates=[dict(name=name, label=frappe.db.get_value(
@@ -65,6 +65,10 @@ def match_document(doc, autofill=True):
 		results[kind] = result
 		if autofill and field not in protected and not doc.get(field) and result.get('selected'):
 			doc.set(field, result['selected']); count += 1
+			if kind == 'sales_employee' and identity.get(field) == result['selected'] and (not doc.name or doc.is_new()):
+				# The unique sender phone is evidence; a booking/contact name
+				# guessed by AI must not teach a false salesperson alias later.
+				doc.salesperson_text = result['candidates'][0]['label']
 	results['items'] = []
 	for row in doc.items:
 		entry = dict(row_key=row.row_key)

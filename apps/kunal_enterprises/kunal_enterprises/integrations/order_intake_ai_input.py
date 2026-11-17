@@ -32,8 +32,12 @@ def model_messages(messages):
 	result = []
 	for source in messages:
 		row = {key: source.get(key) for key in FIELDS if source.get(key) is not None}
-		# Pass only the uniquely matched Customer/contact, never the full table.
-		if source.get('intake_identity_type') == 'Customer':
+		# Expose the unique captured sender identity, never the whole candidate
+		# ledger or mobile-app authorization flags. Profile/document names may
+		# differ from this confirmed phone-to-master match. Only the one matched
+		# contact enters the prompt; the Customer's contact table stays local.
+		identity_type = source.get('intake_identity_type')
+		if identity_type in {'Sales Employee', 'Customer'}:
 			try:
 				candidates = source.get('intake_identity_candidates') or []
 				candidates = json.loads(candidates) if isinstance(candidates, str) else candidates
@@ -41,8 +45,11 @@ def model_messages(messages):
 				candidates = []
 			if isinstance(candidates, list) and len(candidates) == 1 and isinstance(candidates[0], dict):
 				candidate = candidates[0]
-				if candidate.get('doctype') == 'Customer' and candidate.get('name') == source.get('intake_customer'):
-					keys = ('doctype', 'name', 'label') + tuple(key for key in ('contact_name', 'designation') if candidate.get(key))
+				identity_field = 'intake_sales_employee' if identity_type == 'Sales Employee' else 'intake_customer'
+				if candidate.get('doctype') == identity_type and candidate.get('name') == source.get(identity_field):
+					keys = ('doctype', 'name', 'label')
+					if identity_type == 'Customer':
+						keys += tuple(key for key in ('contact_name', 'designation') if candidate.get(key))
 					row['recognized_sender'] = {key: str(candidate.get(key) or '')[:140] for key in keys}
 		kind = str(source.get('intake_original_type') or source.get('content_type') or '').lower()
 		raw = _object(source.get('intake_raw_payload'))

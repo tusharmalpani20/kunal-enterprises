@@ -171,3 +171,19 @@ class TestOrderIntakeMatchRequests(FrappeTestCase):
 		self.assertEqual([row.godown for row in doc.items], [first.name, second.name])
 		self.assertEqual([row.quantity for row in doc.items], [4,7])
 		self.assertEqual(frappe.db.count('Order Intake Match Evidence'), before)
+
+	def test_recognized_sender_beats_unverified_salesperson_wording_on_new_draft(self):
+		doc=frappe.get_doc(dict(doctype='Order Intake Request',sender_number='919000000099',salesperson_text='Booking contact',items=[]))
+		identity={'sales_employee':'SENDER-EMPLOYEE','identity_type':'Sales Employee'}
+		with patch('kunal_enterprises.integrations.order_intake_match_requests._identity',return_value=identity), patch('kunal_enterprises.integrations.order_intake_match_requests._search',return_value={'candidates':[],'selected':None,'overflow':False}), patch.object(frappe.db,'get_value',return_value='Recognized Sender'):
+			match_document(doc)
+		self.assertEqual(doc.sales_employee,'SENDER-EMPLOYEE')
+		self.assertEqual(doc.salesperson_text,'Recognized Sender')
+		self.assertFalse(doc.customer)
+
+	def test_sender_prefill_does_not_replace_a_manually_selected_salesperson(self):
+		doc=frappe.get_doc(dict(doctype='Order Intake Request',sender_number='919000000099',salesperson_text='Manual Employee',sales_employee='HUMAN',manual_match_fields='["sales_employee"]',items=[]))
+		with patch('kunal_enterprises.integrations.order_intake_match_requests._identity',return_value={'sales_employee':'SENDER-EMPLOYEE'}), patch('kunal_enterprises.integrations.order_intake_match_requests._search',return_value={'candidates':[],'selected':None,'overflow':False}), patch.object(frappe.db,'get_value',return_value='Recognized Sender'):
+			match_document(doc)
+		self.assertEqual(doc.sales_employee,'HUMAN')
+		self.assertEqual(doc.salesperson_text,'Manual Employee')

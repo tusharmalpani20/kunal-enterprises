@@ -7,6 +7,7 @@ from frappe.utils import get_datetime
 
 from kunal_enterprises.integrations.order_intake_ai_models import AIProblem
 from kunal_enterprises.integrations.order_intake_contacts import contacts_from_source
+from kunal_enterprises.integrations.order_intake_ai_input import model_messages
 from kunal_enterprises.integrations.order_intake_ai_review import preserve_existing_items, review_questions
 from kunal_enterprises.integrations.order_intake_ai_state import coverage_attention, TRANSFER_NOTE
 from kunal_enterprises.integrations.order_intake_ai_updates import (
@@ -16,6 +17,7 @@ from kunal_enterprises.integrations.order_intake_ai_updates import (
 
 def attachments(messages, warnings, media_metadata=None):
 	result = []
+	business_text = {row["name"]: row.get("message") or "" for row in model_messages(messages)}
 	for message in messages:
 		name = message["name"]
 		if message.get("attach"):
@@ -38,7 +40,7 @@ def attachments(messages, warnings, media_metadata=None):
 					result.append(dict(reference_type="Contact", label=contact['name'] or "Shared contact",
 						contact_name=contact['name'], contact_number=phone.get('phone') or phone.get('wa_id'),
 						source_message=name, review_status="Not Reviewed"))
-		for url in dict.fromkeys(re.findall(r'https?://[^\s<>"\x00-\x20]+', message.get("message") or "")):
+		for url in dict.fromkeys(re.findall(r'https?://[^\s<>"\x00-\x20]+', business_text.get(name, ""))):
 			result.append(dict(reference_type="External Link", external_url=url, label="Shared link (not opened)",
 				source_message=name, review_status="Not Reviewed"))
 	# A payload may repeat a card or URL; one reference per source identity suffices.
