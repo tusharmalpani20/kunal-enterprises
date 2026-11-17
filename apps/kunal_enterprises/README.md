@@ -24,6 +24,14 @@ Export files (CSV, Excel, ODS, ZIP, JSON and generated report attachments) are k
 
 Regression checks: `tests/test_export_guard.py` (Python unittest) and `tests/test_export_policy.mjs` (Node). Live role walkthrough evidence is separate from these automated checks.
 
+## Customer WhatsApp contacts
+
+Customer Contacts stores a person's name, phone and optional designation. WhatsApp intake recognizes both these contacts and the Customer's existing main mobile number. Contacts do not become mobile-app login identities or Sales Employee records. Intake reviewers can use **Link sender to Customer** on a saved, open WhatsApp request; the action verifies its incoming source messages, records the contact and fills a blank Customer selection. Correct an already different Customer selection before linking.
+
+Customer saves prevent normalized phone duplicates across main numbers and contacts, including repeats within the same Customer. Ten-digit national numbers use the default country calling code in Order Intake Settings; explicit `+`/`00` country prefixes are preserved. WhatsApp sender IDs already include their country code and are not prefixed again. Main login numbers retain their stored format. Customer inserts/saves acquire a transaction lock before the document row lock, and duplicate checks use current reads; a conflicting stale transaction asks the user to reload rather than retrying part of a save. Contact rows must be edited through their parent Customer or the scoped intake action.
+
+`bench migrate` installs the child table and audits existing phone ownership. Legacy collisions stop the audit with the affected Customer IDs; it never merges Customers or rewrites login numbers automatically.
+
 ## Tally Customer Auto-Onboarding
 
 Before enabling it, an Owner or Admin can call `kunal_enterprises.api.sync_admin.preview_tally_customer_onboarding` to review the non-mutating preview, including counts grouped by unclassified Tally parent. This installation contains accounting ledgers alongside customer ledgers, and the source does not provide a dependable customer-type flag, so auto-onboarding also requires an explicit ancestor-group allowlist. A ledger is eligible when its immediate parent or any ancestor matches a configured group. Configure only the reviewed Tally parent groups:

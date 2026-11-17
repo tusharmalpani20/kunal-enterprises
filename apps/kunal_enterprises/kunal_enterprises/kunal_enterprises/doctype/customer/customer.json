@@ -7,25 +7,36 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
+  "customer_details_section",
   "customer_name",
   "business_legal_name",
+  "customer_details_column",
   "gstin",
+  "client_code",
+  "contact_details_section",
   "mobile_number",
-  "contacts",
+  "contact_details_column",
   "email_id",
-  "date_of_birth",
-  "date_of_anniversary",
-  "onboarding_source",
-  "tally_guid",
+  "whatsapp_contacts_section",
+  "contacts",
   "access_section",
   "status",
-  "mobile_verified",
-  "mobile_verified_at",
   "admin_approved",
-  "client_code",
+  "access_column",
+  "mobile_verified",
   "customer_app_access",
   "sales_employee_order_access",
-  "product_group_access"
+  "product_access_section",
+  "product_group_access",
+  "personal_details_section",
+  "date_of_birth",
+  "personal_details_column",
+  "date_of_anniversary",
+  "system_details_section",
+  "onboarding_source",
+  "tally_guid",
+  "system_details_column",
+  "mobile_verified_at"
  ],
  "fields": [
   {
@@ -90,7 +101,7 @@
   {
    "fieldname": "access_section",
    "fieldtype": "Section Break",
-   "label": "Access"
+   "label": "Access & Approval"
   },
   {
    "default": "Pending OTP",
@@ -154,6 +165,60 @@
    "label": "Customer Contacts",
    "options": "Customer Contact",
    "description": "People who can send WhatsApp orders for this Customer. Mobile-app login stays on the main number."
+  },
+  {
+   "fieldname": "customer_details_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Details"
+  },
+  {
+   "fieldname": "customer_details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contact_details_section",
+   "fieldtype": "Section Break",
+   "label": "Contact Details"
+  },
+  {
+   "fieldname": "contact_details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "whatsapp_contacts_section",
+   "fieldtype": "Section Break",
+   "label": "WhatsApp Contacts"
+  },
+  {
+   "fieldname": "access_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "product_access_section",
+   "fieldtype": "Section Break",
+   "label": "Product Access"
+  },
+  {
+   "fieldname": "personal_details_section",
+   "fieldtype": "Section Break",
+   "label": "Personal Details",
+   "collapsible": 1,
+   "collapsible_depends_on": ""
+  },
+  {
+   "fieldname": "personal_details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "system_details_section",
+   "fieldtype": "Section Break",
+   "label": "System Details",
+   "collapsible": 1,
+   "collapsible_depends_on": ""
+  },
+  {
+   "fieldname": "system_details_column",
+   "fieldtype": "Column Break"
   }
  ],
  "links": [],
