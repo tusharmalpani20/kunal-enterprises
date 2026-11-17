@@ -109,6 +109,83 @@ class TestOrderIntakeAIModels(TestCase):
 			self.assertFalse(raised.exception.retry)
 			self.assertNotIn("private", raised.exception.note)
 
+	def test_shared_contact_reference_stays_linked_with_sole_order_even_if_role_unclear(self):
+		self.payload['messages'].append(dict(name='CONTACT-1', content_type='contacts',
+			contacts=[dict(name='Site person', phones=[dict(phone='919000000001')]),
+				dict(name='Alternate contact', phones=[dict(phone='919000000002')])]))
+		calls = []
+		async def provider(history, info):
+			calls.append(history)
+			return ModelResponse(parts=[TextPart(json.dumps(dict(groups=[dict(
+				message_ids=['MSG-1'] if len(calls) == 1 else ['MSG-1', 'CONTACT-1'],
+				target_request=None, request_hint='One product order')], unresolved_message_ids=['CONTACT-1'])))])
+		result = self.run_group(provider)
+		self.assertEqual(result.groups[0].message_ids, ['MSG-1', 'CONTACT-1'])
+		self.assertEqual(result.unresolved_message_ids, ['CONTACT-1'])
+		self.assertEqual(self.budget.used, 2)
+
+	def test_contact_reference_does_not_choose_among_orders_or_override_explicit_reply(self):
+		messages = [dict(name='M1', content_type='text'), dict(name='M2', content_type='text'),
+			dict(name='C1', content_type='contacts', contacts=[dict(name='Person', phones=[])])]
+		result = models.Grouping(groups=[models.Group(message_ids=[name], target_request=None, request_hint=name)
+			for name in ('M1', 'M2')], unresolved_message_ids=['C1'])
+		self.assertEqual(models._unlinked_contact_references(result, messages), [])
+		result.groups = [models.Group(message_ids=['M1', 'M2'], target_request=None, request_hint='One order')]
+		messages[-1]['reply_to_message_id'] = 'another-thread'
+		self.assertEqual(models._unlinked_contact_references(result, messages), [])
+
+	def test_printed_person_does_not_replace_recognized_salesperson(self):
+		self.payload['messages'][0]['recognized_sender'] = dict(doctype='Sales Employee', name='SE-1', label='Matched salesperson')
+		calls = []
+		async def extracted(history, info):
+			calls.append(history)
+			return ModelResponse(parts=[TextPart(json.dumps(dict(request_type='Order', summary='Product order',
+				customer_text=None, salesperson_text='Printed document person' if len(calls) == 1 else 'Matched salesperson',
+				delivery_address=None, delivery_contact_name=None, delivery_contact_number=None,
+				items=[], unresolved_questions=[], unresolved_message_ids=[])))])
+		model = models.BoundedModel(FunctionModel(extracted, profile=ModelProfile(supports_json_schema_output=True)), self.budget, 0)
+		with patch.object(models, 'make_model', return_value=model):
+			result = models.extract(self.config, self.payload, {}, self.budget)
+		self.assertEqual(result.salesperson_text, 'Matched salesperson')
+		self.assertEqual(self.budget.used, 2)
+
+	def test_project_heading_cannot_be_published_as_customer_and_repair_keeps_real_doubts(self):
+		self.payload['messages'] = [dict(name='IMAGE', content_type='image', message=''),
+			dict(name='CORRECTION', message='For this order make 2200 SF quantity 5 instead of 20.')]
+		calls = []
+		async def extracted(history, info):
+			calls.append(history)
+			return ModelResponse(parts=[TextPart(json.dumps(dict(request_type='Order', summary='Project title: East Tower',
+				customer_text='East Tower' if len(calls) == 1 else None, customer_basis='document_heading',
+				salesperson_text=None, delivery_address=None, delivery_contact_name=None, delivery_contact_number=None,
+				items=[dict(original_text='2200 SF', source_message='IMAGE', quantity=5, unit='Sheets',
+					warehouse_text=None, warehouse_source_message=None, notes='Project heading: East Tower')],
+				unresolved_questions=['Which existing order is being corrected?', 'Confirm the delivery contact.'],
+				unresolved_message_ids=['CORRECTION'])))])
+		model = models.BoundedModel(FunctionModel(extracted, profile=ModelProfile(supports_json_schema_output=True)), self.budget, 0)
+		with patch.object(models, 'make_model', return_value=model):
+			result = models.extract(self.config, self.payload, {}, self.budget)
+		self.assertIsNone(result.customer_text)
+		self.assertEqual(result.items[0].quantity, 5)
+		self.assertIn('East Tower', result.items[0].notes)
+		self.assertEqual(result.unresolved_questions, ['Which existing order is being corrected?', 'Confirm the delivery contact.'])
+		self.assertEqual(self.budget.used, 2)
+		self.assertTrue(any(isinstance(part, RetryPromptPart) for message in calls[1] for part in message.parts))
+
+	def test_genuine_document_customer_and_legacy_unspecified_basis_remain_valid(self):
+		self.payload['messages'] = [dict(name='IMAGE', content_type='image', message='')]
+		for basis in ('party_reference', None):
+			budget = models.RequestBudget(2)
+			async def extracted(history, info):
+				return ModelResponse(parts=[TextPart(json.dumps(dict(request_type='Order', summary='Order for Harbor Interiors',
+					customer_text='Harbor Interiors', customer_basis=basis, salesperson_text=None, delivery_address=None,
+					delivery_contact_name=None, delivery_contact_number=None, items=[], unresolved_questions=[], unresolved_message_ids=[])))])
+			model = models.BoundedModel(FunctionModel(extracted, profile=ModelProfile(supports_json_schema_output=True)), budget, 0)
+			with patch.object(models, 'make_model', return_value=model):
+				result = models.extract(self.config, self.payload, {}, budget)
+			self.assertEqual(result.customer_text, 'Harbor Interiors')
+			self.assertEqual(budget.used, 1)
+
 	def test_two_requests_with_same_source_require_distinct_extraction_scope(self):
 		calls = []
 		async def provider(messages, info):
