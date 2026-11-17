@@ -28,6 +28,7 @@ frappe.ui.form.on("Order Intake Request", {
 	refresh(frm) {
 		frm.set_intro("");
 		intake_processing_controls(frm);
+		intake_sender_link_controls(frm);
 		refresh_intake_messages(frm);
 		if (!frm.is_new() && intake_matching_editable(frm)) {
 			frm.page.add_menu_item(__("Find matches"), () => find_intake_matches(frm));
@@ -211,6 +212,54 @@ function keep_references_open(frm) {
 
 function intake_matching_editable(frm) {
 	return !frm.doc.order && !["Converted to Order", "Resolved", "Dismissed"].includes(frm.doc.status);
+}
+
+function intake_sender_link_controls(frm) {
+	const reviewer = frappe.session?.user === "Administrator" || (frappe.user_roles || [])
+		.some(role => ["Owner", "Admin", "Order Coordinator"].includes(role));
+	if (!reviewer || frm.is_new() || !intake_matching_editable(frm) || (frm.has_perm && !frm.has_perm("write"))
+		|| frm.doc.source !== "WhatsApp" || !frm.doc.sender_number || !frm.doc.whatsapp_account) return;
+	frm.add_custom_button(__("Link sender to Customer"), () => link_intake_sender(frm));
+}
+
+function link_intake_sender(frm) {
+	if (frm.is_dirty()) {
+		frappe.msgprint(__("Save your changes before linking this sender."));
+		return;
+	}
+	const request = frm.doc.name, expected_modified = frm.doc.modified, sender = frm.doc.sender_number;
+	const dialog = new frappe.ui.Dialog({
+		title: __("Link sender to Customer"),
+		fields: [
+			{fieldname: "sender_number", fieldtype: "Data", label: __("WhatsApp number"), read_only: 1, default: sender},
+			{fieldname: "customer", fieldtype: "Link", options: "Customer", label: __("Customer"), reqd: 1,
+				default: frm.doc.customer, ignore_link_validation: true,
+				get_query: () => ({query: "kunal_enterprises.api.order_intake.intake_link_query"})},
+			{fieldname: "contact_name", fieldtype: "Data", label: __("Person's name"), reqd: 1, default: frm.doc.sender_name},
+			{fieldname: "designation", fieldtype: "Data", label: __("Designation")},
+		],
+		primary_action_label: __("Link sender"),
+		async primary_action(values) {
+			if (dialog.__linking) return;
+			if (frm.is_dirty() || frm.doc.name !== request || frm.doc.modified !== expected_modified || frm.doc.sender_number !== sender) {
+				frappe.msgprint(__("The request changed. Save and reopen the link dialog."));
+				return;
+			}
+			dialog.__linking = true;
+			try {
+				await frappe.call({method: "kunal_enterprises.api.customer_contacts.link_sender", freeze: true,
+					args: {request, expected_modified, customer: values.customer,
+						contact_name: values.contact_name, designation: values.designation || ""}});
+				dialog.hide();
+				frm.__intake_chat = null;
+				await frm.reload_doc();
+				frappe.show_alert?.({message: __("Sender linked to Customer."), indicator: "green"});
+			} finally {
+				dialog.__linking = false;
+			}
+		},
+	});
+	dialog.show();
 }
 
 async function find_intake_matches(frm) {
