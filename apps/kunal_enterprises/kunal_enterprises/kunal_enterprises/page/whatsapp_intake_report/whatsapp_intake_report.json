@@ -1,0 +1,32 @@
+{
+ "doctype": "Page",
+ "name": "whatsapp-intake-report",
+ "page_name": "whatsapp-intake-report",
+ "title": "WhatsApp Intake Report",
+ "module": "Kunal Enterprises",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {
+   "role": "Owner"
+  },
+  {
+   "role": "Admin"
+  },
+  {
+   "role": "Order Coordinator"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Sales Portal User"
+  },
+  {
+   "role": "Branch Manager"
+  },
+  {
+   "role": "Branch Employee"
+  }
+ ]
+}
