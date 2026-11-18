@@ -208,6 +208,16 @@ class TestSalesPortalScope(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError):
             source.check_permission('read')
 
+        frappe.set_user('Administrator')
+        frappe.db.set_value('WhatsApp Message', source.name, 'from', '')
+        frappe.db.set_value('Order Intake Request', request.name, 'sender_number', '')
+        source.reload()
+        request.reload()
+        frappe.set_user(self.user)
+        self.assertFalse(scope.can_read_intake_source(source, request))
+        with self.assertRaises(frappe.PermissionError):
+            files[0].check_permission('read')
+
     def test_aggregate_realtime_rooms_cannot_disclose_unrelated_record_ids(self):
         frappe.set_user(self.user)
         for method, doctype in (('frappe.realtime.can_subscribe_doctype', 'Order'),

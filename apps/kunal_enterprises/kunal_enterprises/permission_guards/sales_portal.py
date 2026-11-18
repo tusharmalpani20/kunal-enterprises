@@ -71,7 +71,8 @@ def _message_condition(employee, alias=None):
     exists = (f'EXISTS (SELECT 1 FROM {_table("Customer")} c WHERE {customers} AND '
               f'({phone}={sender} OR EXISTS (SELECT 1 FROM {_table("Customer Contact")} cc '
               f"WHERE cc.parent=c.name AND cc.parenttype='Customer' AND cc.parentfield='contacts' AND {contact}={sender})))")
-    return f"({table}.type='Incoming' AND ({sender}={frappe.db.escape(own)} OR {exists}))" if own else f"({table}.type='Incoming' AND {exists})"
+    matching_number = f"({sender}={frappe.db.escape(own)} OR {exists})" if own else exists
+    return f"({table}.type='Incoming' AND {sender}<>'' AND {matching_number})"
 
 
 def _account_condition(employee, alias=None):
@@ -366,7 +367,7 @@ def evidence_message_condition(employee, alias='sd'):
     from kunal_enterprises.integrations.customer_contacts import phone_sql
     request_sender = phone_sql('sir.sender_number', international=True)
     source_sender = phone_sql(alias + '.' + _column('from'), international=True)
-    return (f"({alias}.type='Incoming' AND EXISTS (SELECT 1 FROM {_table('Order Intake Source Message')} sism "
+    return (f"({alias}.type='Incoming' AND {source_sender}<>'' AND EXISTS (SELECT 1 FROM {_table('Order Intake Source Message')} sism "
             f"JOIN {_table('Order Intake Request')} sir ON sir.name=sism.parent "
             f"WHERE sism.parenttype='Order Intake Request' AND sism.parentfield='source_messages' "
             f"AND sism.message={alias}.name AND sir.whatsapp_account={alias}.whatsapp_account "
@@ -375,9 +376,10 @@ def evidence_message_condition(employee, alias='sd'):
 
 def can_read_intake_source(source, doc, user=None):
     from kunal_enterprises.kunal_enterprises.doctype.order_intake_request.order_intake_request import _sender_key
+    sender = _sender_key(source.get('from'))
     return bool(doc.doctype == 'Order Intake Request' and can_access(doc, user) and source.type == 'Incoming'
         and source.whatsapp_account == doc.whatsapp_account
-        and _sender_key(source.get('from')) == _sender_key(doc.sender_number)
+        and sender and sender == _sender_key(doc.sender_number)
         and source.name in {row.message for row in doc.get('source_messages') or []})
 
 
