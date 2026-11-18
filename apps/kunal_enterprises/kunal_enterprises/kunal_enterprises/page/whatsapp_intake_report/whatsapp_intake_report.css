@@ -169,6 +169,17 @@
 .wir-table th, .wir-table td { padding: 8px 10px; border-bottom: 1px solid var(--wir-line); white-space: nowrap; text-align: left; }
 .wir-table th { position: sticky; top: 0; z-index: 1; background: var(--subtle-fg, var(--wir-surface)); font-size: 12px; color: var(--wir-muted); }
 .wir-scroll .wir-table td { height: 44px; max-width: 310px; overflow: hidden; text-overflow: ellipsis; }
+.wir-message-list .wir-table { table-layout: fixed; }
+.wir-message-list th:last-child { width: 36%; }
+.wir-message-list .wir-table td { height: 58px; padding-block: 5px; }
+.wir-message-list .wir-link, .wir-message-meta, .wir-message-status {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.wir-message-meta { color: var(--wir-muted); font-size: 12px; }
 .wir-scroll .wir-table .wir-spacer td { padding: 0; border: 0; }
 .wir-page-status, .wir-retry-status { color: var(--wir-muted); margin: 8px 0 0; font-size: 13px; }
 .wir-page-status:empty, .wir-retry-status:empty { display: none; }

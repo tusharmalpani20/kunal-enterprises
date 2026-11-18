@@ -59,9 +59,26 @@ test('only the selected message is labeled and only site file paths are opened',
   const context = {name: 'WA-2', attachment: {available: true, url: '/files/../external'}};
   const selectedHtml = instance.bubble(selected, 'WA-1');
   const contextHtml = instance.bubble(context, 'WA-1');
-  assert.match(selectedHtml, /Selected message · WA-1/);
+  assert.match(selectedHtml, />Selected message<\/strong>/);
+  assert.doesNotMatch(selectedHtml, /Selected message · WA-1/);
   assert.match(selectedHtml, /2026-11-19 00:15/);
   assert.match(selectedHtml, /&lt;script&gt;/);
   assert.match(selectedHtml, /href="\/private\/files\/attachment\.png"/);
   assert.doesNotMatch(contextHtml, /Selected message|href=/);
+});
+
+test('message rows show readable previews and keep internal IDs out of the list', () => {
+  const instance = report();
+  instance.paged = (_host, config) => {
+    assert.deepEqual([...config.columns], ['Message', 'Status']);
+    const text = config.row({name: 'hidden-message-id', preview: 'Send <4> sheets', sender_name: 'Sender',
+      received_at: '2026-11-19 00:15:09', coverage: 'waiting', status: 'Waiting to process', reason: 'Processing is pending.'}, 0);
+    assert.match(text, /Send &lt;4&gt; sheets/);
+    assert.match(text, /Sender · 2026-11-19 00:15/);
+    assert.doesNotMatch(text, /hidden-message-id|Processing is pending/);
+    assert.match(config.row({message_kind: 'image'}, 1), />Photo<\/button>/);
+    assert.match(config.row({message_kind: 'restricted'}, 2), />Restricted message<\/button>/);
+    assert.match(config.row({coverage: 'failed', reason: 'Attachment download failed.'}, 3), /Attachment download failed/);
+  };
+  instance.messageList(null, {}, () => true, () => {});
 });

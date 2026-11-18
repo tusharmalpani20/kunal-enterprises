@@ -33,6 +33,17 @@ DIMENSIONS = {
 }
 PAGE_SIZE = 50
 UNASSIGNED = "__unassigned__"
+# A message can cover multiple intakes or lines. Do not show its text to a
+# godown viewer unless every linked intake and line is in scope.
+GODOWN_PREVIEW_SCOPE = """NOT EXISTS (
+    SELECT 1 FROM verified_links v WHERE v.message=m.name AND (
+        NOT EXISTS (SELECT 1 FROM dimensions d WHERE d.intake=v.intake)
+        OR EXISTS (SELECT 1 FROM locations l WHERE l.intake=v.intake AND NOT EXISTS (
+            SELECT 1 FROM dimensions d WHERE d.intake=l.intake
+                AND d.item <=> l.item AND d.godown <=> l.godown
+        ))
+    )
+)"""
 
 
 def _access():
@@ -372,33 +383,23 @@ def _reason(row):
 
 def _message_detail(cte, params, filters, scope, roles):
     params["message"] = filters.get("message")
-    rows = frappe.db.sql(cte + """
+    can_preview = GODOWN_PREVIEW_SCOPE if scope == "godown" else "1"
+    rows = frappe.db.sql(cte + f"""
         SELECT name, account, `from` sender, profile_name, received_at, coverage,
-               intake_media_state,intake_prepare_state,intake_ai_state
-        FROM messages WHERE name=%(message)s
+               intake_media_state,intake_prepare_state,intake_ai_state,{can_preview} can_preview
+        FROM messages m WHERE name=%(message)s
     """, params, as_dict=True)
     if not rows:
         frappe.throw("This message is outside the report view.", frappe.PermissionError)
     row = rows[0]
     if scope == "godown":
-        # A single source can contain orders or lines for multiple godowns.
-        # Only show original text if every linked intake and line is in scope.
         from kunal_enterprises.api.whatsapp_inbox import _display_text
-        outside_scope = frappe.db.sql(cte + """
-            SELECT 1 FROM verified_links v WHERE v.message=%(message)s AND (
-                NOT EXISTS (SELECT 1 FROM dimensions d WHERE d.intake=v.intake)
-                OR EXISTS (SELECT 1 FROM locations l WHERE l.intake=v.intake AND NOT EXISTS (
-                    SELECT 1 FROM dimensions d WHERE d.intake=l.intake
-                        AND d.item <=> l.item AND d.godown <=> l.godown
-                ))
-            ) LIMIT 1
-        """, params)
         source = frappe.get_doc("WhatsApp Message", row.name)
         kind = source.get("intake_original_type") or source.content_type
         target = {
             "name": row.name, "sender_name": row.profile_name or "",
             "received_at": str(row.received_at), "content_type": kind,
-            "text": ("Message preview is restricted for this godown." if outside_scope else
+            "text": ("Message preview is restricted for this godown." if not row.can_preview else
                      _display_text(source) if kind == "text" else "Attachment preview is restricted for this godown."),
         }
         result = {"target": target, "messages": [target], "context_only": True}
@@ -484,12 +485,18 @@ def read(filters=None, view="summary", cursor=None, search=None, field=None):
     params["metric"] = metric
     condition = {"received": "1=1", "processed": "processed=1",
                  "unaccounted": "coverage IN ('review','failed','waiting')"}.get(metric, "coverage=%(metric)s")
-    sender_name = "profile_name" if scope == "godown" else "COALESCE(NULLIF(profile_name,''),`from`)"
+    sender_name = "m.profile_name" if scope == "godown" else "COALESCE(NULLIF(m.profile_name,''),m.`from`)"
+    can_preview = GODOWN_PREVIEW_SCOPE if scope == "godown" else "1"
+    kind = "LOWER(COALESCE(NULLIF(s.intake_original_type,''),s.content_type,''))"
     result = _page(cte, f"""
-        SELECT name,received_at,{sender_name} sender_name,account,coverage,
-               intake_media_state,intake_prepare_state,intake_ai_state
-        FROM messages WHERE {condition}
+        SELECT m.name,m.received_at,{sender_name} sender_name,m.account,m.coverage,
+               m.intake_media_state,m.intake_prepare_state,m.intake_ai_state,
+               CASE WHEN {can_preview} THEN {kind} ELSE 'restricted' END message_kind,
+               CASE WHEN {kind}='text' AND {can_preview} THEN LEFT(s.message, 240) END preview
+        FROM messages m JOIN `tabWhatsApp Message` s ON s.name=m.name WHERE {condition}
     """, params, cursor, ("received_at", "name"), newest_first=True)
     for row in result["rows"]:
-        row.update(status=COVERAGE[row.coverage], reason=_reason(row))
+        preview = " ".join((row.preview or "").split())
+        row.update(status=COVERAGE[row.coverage], reason=_reason(row),
+                   preview=preview[:119] + "…" if len(preview) > 120 else preview)
     return result

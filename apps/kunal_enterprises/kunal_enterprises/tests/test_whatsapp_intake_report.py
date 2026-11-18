@@ -102,6 +102,16 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
         self.assertNotIn(next_page["rows"][0].name, {row.name for row in first["rows"]})
         self.assertIsNone(next_page["next_cursor"])
 
+    def test_message_list_previews_bound_text_and_omit_media_payloads(self):
+        text = self.message()
+        image = self.message(intake_original_type="image")
+        frappe.db.set_value("WhatsApp Message", text.name, "message", "Send\n four sheets " + "x" * 200)
+        frappe.db.set_value("WhatsApp Message", image.name, "message", '{"id":"provider-media-id"}')
+        rows = {row.name: row for row in self.read("messages")["rows"]}
+        self.assertTrue(rows[text.name].preview.startswith("Send four sheets "))
+        self.assertEqual(len(rows[text.name].preview), 120)
+        self.assertEqual((rows[image.name].message_kind, rows[image.name].preview), ("image", ""))
+
     def test_sales_phone_scope_applies_to_totals_drilldown_and_context(self):
         user = self.user("Sales Portal User")
         self.customer.mobile_number = "8" + str(uuid4().int)[:9]
@@ -158,6 +168,9 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
             rows = self.read("messages")["rows"]
             self.assertEqual({row.name for row in rows}, allowed | {shared.name, split.name})
             self.assertFalse(next(row.sender_name for row in rows if row.name == shared.name))
+            self.assertEqual(next(row.preview for row in rows if row.name == visible.name), "Sample text")
+            self.assertTrue(all((row.message_kind, row.preview) == ("restricted", "")
+                                for row in rows if row.name in {shared.name, split.name}))
             self.assertEqual(self.read(godown=UNASSIGNED)["totals"]["received"], 0)
             self.assertEqual(self.read(sales_employee="unrelated")["totals"], self.read()["totals"])
             self.assertEqual(self.read("breakdown", group="sales_employee")["rows"], [])

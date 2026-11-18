@@ -14,6 +14,12 @@
 	const count = (value, attrs) => `<button type="button" class="wir-link" ${attrs}>${number(value)}</button>`;
 	// Display the same site-local dates used to build the report cohort.
 	const receivedDateTime = value => value ? String(value).replace("T", " ").slice(0, 16) : "";
+	const MESSAGE_LABELS = new Map([
+		["image", __("Photo")], ["document", __("Document")], ["audio", __("Audio message")],
+		["video", __("Video")], ["sticker", __("Sticker")], ["location", __("Shared location")],
+		["contact", __("Shared contact")], ["contacts", __("Shared contacts")],
+		["restricted", __("Restricted message")],
+	]);
 	const siteToday = () => new Intl.DateTimeFormat("en-CA", {
 		timeZone: frappe.boot?.time_zone?.system || "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
 	}).format(new Date());
@@ -44,13 +50,13 @@
 
 	/* Fixed-height rows keep the DOM bounded even after loading several pages. */
 	class ReportRows {
-		constructor(container, labels, renderRow, openRow) {
+		constructor(container, labels, renderRow, openRow, rowHeight = 44) {
 			this.container = container;
 			this.columns = labels.length;
 			this.renderRow = renderRow;
 			this.items = [];
 			this.window = "";
-			this.rowHeight = 44;
+			this.rowHeight = rowHeight;
 			container.innerHTML = `<table class="wir-table">${headers(labels)}<tbody></tbody></table>`;
 			this.body = container.querySelector("tbody");
 			this.nodes = new Map();
@@ -516,9 +522,10 @@
 			host.innerHTML = `<div class="wir-scroll" tabindex="0"></div>
 				<p class="wir-page-status" role="status"></p><button class="wir-load-more" type="button" hidden>${escape(__("Load more"))}</button>`;
 			const scroll = host.querySelector(".wir-scroll");
+			if (config.view === "messages") scroll.classList.add("wir-message-list");
 			const more = host.querySelector(".wir-load-more");
 			const status = host.querySelector(".wir-page-status");
-			const table = new ReportRows(scroll, config.columns, config.row, config.open || (() => {}));
+			const table = new ReportRows(scroll, config.columns, config.row, config.open || (() => {}), config.rowHeight);
 			let rows = [], cursor = null, loading = false;
 			const load = async () => {
 				if (loading) return;
@@ -583,10 +590,17 @@
 		messageList(host, filter, current, open) {
 			return this.paged(host, {
 				view: "messages", filter, current, open,
-				columns: [__("Message"), __("Received"), __("Sender"), __("Status"), __("Reason")],
-				row: (row, i) => `<tr><td><button type="button" class="wir-link" data-row="${i}">${escape(row.name)}</button></td>
-					<td>${escape(receivedDateTime(row.received_at))}</td><td>${escape(row.sender_name || row.sender || "—")}</td>
-					<td>${escape(row.status || "—")}</td><td title="${escape(row.reason || "")}">${escape(row.reason || "—")}</td></tr>`,
+				columns: [__("Message"), __("Status")], rowHeight: 58,
+				row: (row, i) => {
+					const label = row.preview || MESSAGE_LABELS.get(row.message_kind) || __("Open message");
+					const meta = [row.sender_name, receivedDateTime(row.received_at)].filter(Boolean).join(" · ");
+					const reason = row.coverage === "failed" ? row.reason :
+						row.coverage === "review" && row.intake_ai_state === "Drafted" ? __("Check intake link") : "";
+					return `<tr><td><button type="button" class="wir-link" data-row="${i}" title="${escape(label)}">${escape(label)}</button>
+						<span class="wir-message-meta" title="${escape(meta)}">${escape(meta)}</span></td>
+						<td><span class="wir-message-status">${escape(row.status || "—")}</span>
+						${reason ? `<span class="wir-message-meta" title="${escape(reason)}">${escape(reason)}</span>` : ""}</td></tr>`;
+				},
 			});
 		}
 
@@ -658,8 +672,7 @@
 							</div>
 						</section>
 						<aside class="wir-message-review">
-							<h3>${escape(__("Selected message"))}</h3>
-							<p>${escape(target.name)}</p>
+							<h3>${escape(__("Message details"))}</h3>
 							<p>${escape(receivedDateTime(target.received_at || row.received_at))}</p>
 							${data.status || row.status ? `<p><strong>${escape(data.status || row.status)}</strong></p>` : ""}
 							${data.reason || row.reason ? `<p>${escape(data.reason || row.reason)}</p>` : ""}
@@ -701,7 +714,7 @@
 			const coords = location?.latitude != null && location?.longitude != null &&
 				Number.isFinite(latitude) && Number.isFinite(longitude) ? `${latitude}, ${longitude}` : "";
 			return `<article class="wir-bubble${message.name === selected ? " wir-selected" : ""}">
-				${message.name === selected ? `<strong class="wir-selected-label">${escape(__("Selected message"))} · ${escape(message.name)}</strong>` : ""}
+				${message.name === selected ? `<strong class="wir-selected-label">${escape(__("Selected message"))}</strong>` : ""}
 				${quote ? `<p class="wir-quote">${escape(quote.summary || __("Reply"))}</p>` : ""}
 				${file}${location ? `<p class="wir-quote">${escape(location.name || __("Shared location"))}${location.address || coords ? "<br>" + escape(location.address || coords) : ""}</p>` : ""}
 				${message.text ? `<p class="wir-message-text">${escape(message.text)}</p>` : ""}
