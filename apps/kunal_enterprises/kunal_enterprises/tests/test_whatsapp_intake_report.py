@@ -71,7 +71,7 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
         order = self.convert(request, [("ITEM-A", self.godown_a.name), ("ITEM-B", self.godown_b.name)])
         self.intake([first], final="Price Inquiry")
         summary = self.read()
-        self.assertEqual(summary["totals"], dict(received=5, processed=2, intakes=2, orders=1, unaccounted=3))
+        self.assertEqual(summary["totals"], dict(received=5, processed=2, intakes=2, orders=1, unaccounted=2))
         self.assertEqual([(r["key"], r["intakes"], r["orders"]) for r in summary["types"]],
                          [("Stock Inquiry", 1, 1), ("Original type unknown", 1, 0)])
         self.assertEqual([row.order for row in self.read("intakes", metric="orders", request_type="Stock Inquiry")["rows"]],
@@ -81,6 +81,21 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
         self.assertEqual(self.read(godown=self.godown_a.name, item="ITEM-B")["totals"]["received"], 0)
         self.assertEqual(self.read(godown=UNASSIGNED)["totals"]["received"], 4)
         self.assertEqual(self.read(godown=UNASSIGNED)["totals"]["orders"], 0)
+
+    def test_linked_photos_are_accounted_for_while_intake_still_needs_review(self):
+        photos = [self.message(intake_original_type="image", intake_ai_state="Unresolved", intake_status="Needs Attention")
+                  for _ in range(2)]
+        unlinked = self.message(intake_ai_state="Unresolved", intake_status="Needs Attention")
+        question = 'What does "less 50/- sheets" mean?'
+        request = self.intake(photos, unresolved_questions=question)
+
+        linked = self.read("messages", metric="linked")["rows"]
+        self.assertEqual({row.name for row in linked}, {photo.name for photo in photos})
+        for photo in photos:
+            self.assertEqual(self.read("message", message=photo.name)["status"], "Linked to intake")
+        self.assertEqual([row.name for row in self.read("messages", metric="unaccounted")["rows"]], [unlinked.name])
+        self.assertEqual(self.read()["totals"], dict(received=3, processed=3, intakes=1, orders=0, unaccounted=1))
+        self.assertEqual(frappe.db.get_value(request.doctype, request.name, "unresolved_questions"), question)
 
     def test_mismatched_source_and_nonreciprocal_order_are_not_counted(self):
         one = self.message(intake_ai_state="Drafted")

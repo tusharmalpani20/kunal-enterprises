@@ -248,11 +248,11 @@ def _cohort(filters, params, scope, roles, *, sales_map=False):
         ),
         messages AS (
             SELECT m.*,
-                CASE WHEN m.intake_status='Duplicate' THEN 'skipped'
+                CASE WHEN EXISTS (SELECT 1 FROM matched_links x WHERE x.message=m.name) THEN 'linked'
+                     WHEN m.intake_status='Duplicate' THEN 'skipped'
                      WHEN m.intake_media_state='Failed' OR m.intake_prepare_state='Needs Attention'
                           OR m.intake_ai_state='Needs Attention' THEN 'failed'
                      WHEN m.intake_ai_state='Unresolved' OR m.intake_status='Needs Attention' THEN 'review'
-                     WHEN EXISTS (SELECT 1 FROM matched_links x WHERE x.message=m.name) THEN 'linked'
                      WHEN m.intake_ai_state='Drafted' THEN 'review'
                      ELSE 'waiting' END coverage,
                 CASE WHEN m.intake_ai_state IN ('Drafted','Unresolved')
