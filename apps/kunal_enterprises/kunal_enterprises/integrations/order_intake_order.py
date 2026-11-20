@@ -1,4 +1,4 @@
-"""Portal-confirmed intake Orders, without mobile eligibility or message dispatch."""
+"""Portal-confirmed intake Orders and their private customer confirmation PDFs."""
 import math
 
 import frappe
@@ -76,7 +76,7 @@ def intake_pdf_summary(order):
 
 
 def create_pdf(order):
-	"""Keep the normal private PDF, but do not queue/send a WhatsApp notification."""
+	"""Generate the private PDF separately from the sales alert."""
 	summary = intake_pdf_summary(order)
 	pdf = frappe.get_doc(dict(doctype='Order PDF', order=order.name, customer=order.customer,
 		status='Generated', summary_text=summary, generated_at=now_datetime())).insert(ignore_permissions=True)

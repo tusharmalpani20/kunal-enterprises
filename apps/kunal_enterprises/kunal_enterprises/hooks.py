@@ -41,7 +41,8 @@ fixtures = [
 scheduler_events = {
 	"daily_long": ["kunal_enterprises.cron.sync_history.cleanup_sync_history", "kunal_enterprises.integrations.order_intake_ai_log_retention.cleanup"],
 	"cron": {
-		"* * * * *": ["kunal_enterprises.integrations.order_intake_queue.tick", "kunal_enterprises.integrations.order_intake_ai.tick"],
+		"* * * * *": ["kunal_enterprises.integrations.order_intake_queue.tick", "kunal_enterprises.integrations.order_intake_ai.tick",
+			"kunal_enterprises.integrations.sales_order_whatsapp.tick"],
 		"*/5 * * * *": [
 			"kunal_enterprises.integrations.tally_postgres.enqueue_import_all",
 		],
@@ -281,6 +282,7 @@ doc_events = {
 		"on_trash": "kunal_enterprises.integrations.whatsapp_inbox.changed",
 	},
 	"Order": {
+		"after_insert": "kunal_enterprises.integrations.sales_order_whatsapp.queue_order",
 		"before_validate": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
 		"before_insert": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
 		"before_cancel": "kunal_enterprises.permission_guards.sales_portal.guard_business_write",
