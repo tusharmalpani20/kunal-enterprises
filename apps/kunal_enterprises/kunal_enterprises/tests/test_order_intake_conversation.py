@@ -288,3 +288,10 @@ class TestOrderIntakeConversation(FrappeTestCase):
 		employee.save()
 		frappe.set_user(user.name)
 		self.assertTrue(messages(doc.name)['messages'][0]['can_open_original'])
+
+		frappe.set_user('Administrator')
+		frappe.db.set_value('WhatsApp Message', source.name, 'from', '')
+		frappe.db.set_value('Order Intake Request', doc.name, 'sender_number', '')
+		frappe.set_user(user.name)
+		with self.assertRaises(frappe.PermissionError):
+			messages(doc.name)

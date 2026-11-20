@@ -39,6 +39,7 @@ def _authorized(request, lock=False):
 	names = list(dict.fromkeys(row.message for row in doc.source_messages if row.message))
 	if len(names) > MAX_SOURCES:
 		frappe.throw('This request has too many linked messages for this view. Review its source table directly.')
+	sender = _sender_key(doc.sender_number)
 	sources = []
 	for name in sorted(names):
 		source = frappe.get_doc('WhatsApp Message', name, for_update=lock)
@@ -46,7 +47,8 @@ def _authorized(request, lock=False):
 		# different salesperson sent it. This does not expose that sender's Inbox.
 		if not is_sales_user():
 			source.check_permission('read')
-		if source.type != 'Incoming' or source.whatsapp_account != doc.whatsapp_account or _sender_key(source.get('from')) != _sender_key(doc.sender_number):
+		if (not sender or not doc.whatsapp_account or source.type != 'Incoming'
+				or source.whatsapp_account != doc.whatsapp_account or _sender_key(source.get('from')) != sender):
 			frappe.throw('A linked message belongs to a different chat. Correct the request sources before reviewing.', frappe.PermissionError)
 		sources.append(source)
 	if any(row.source_message and row.source_message not in names for row in doc.attachments):
