@@ -66,9 +66,33 @@ class TestOrderIntakeProcessing(FrappeTestCase):
 		self.assertFalse(self.doc.items[0].quantity_unknown)
 		self.assertTrue(self.convert()['order'])
 
+	def test_whatsapp_sender_is_excluded_even_when_reviewer_selects_a_different_salesperson(self):
+		def employee(number):
+			return frappe.get_doc(dict(doctype='Sales Employee', sales_employee_name='Alert '+uuid4().hex,
+				mobile_number=number, status='Active',
+				assigned_customers=[dict(customer=self.customer.name)])).insert()
+		# Meta IDs already include the country code, even when they are 10 digits.
+		original = employee('+2981234567')
+		frappe.db.set_value('WhatsApp Message', self.source.name, 'from', '2981234567')
+		frappe.db.set_value('Order Intake Request', self.doc.name, 'sender_number', '2981234567')
+		self.doc.reload()
+		selected = employee('8'+str(uuid4().int)[:9])
+		self.doc.sales_employee = selected.name
+		self.doc.save()
+		order = self.convert()['order']
+		self.assertEqual(frappe.get_all('Order WhatsApp Notification', filters={'order': order},
+			pluck='recipient_sales_employee'), [selected.name])
+		from kunal_enterprises.integrations.sales_order_whatsapp import _placer_label
+		self.assertEqual(_placer_label(frappe.get_doc('Order', order)), original.sales_employee_name)
+
 	def test_learning_failure_rolls_back_pdf_order_and_sequence(self):
-		counts = {dt:frappe.db.count(dt) for dt in ('Order','Order PDF',learning.DT,'Order Reference Sequence')}
+		frappe.get_doc(dict(doctype='Sales Employee', sales_employee_name='Alert '+uuid4().hex,
+			mobile_number='8'+str(uuid4().int)[:9], status='Active',
+			assigned_customers=[dict(customer=self.customer.name)])).insert()
+		notifications = 'Order WhatsApp Notification'
+		counts = {dt:frappe.db.count(dt) for dt in ('Order','Order PDF',learning.DT,'Order Reference Sequence',notifications)}
 		def fail(*args):
+			self.assertEqual(frappe.db.count(notifications, {'order': args[1]}), 1)
 			learning.record_confirmation(*args)
 			raise RuntimeError('Synthetic failure after evidence')
 		with patch.object(api,'record_confirmation',fail), self.assertRaises(RuntimeError): self.convert()
