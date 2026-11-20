@@ -7,24 +7,45 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
+  "employee_details_section",
   "sales_employee_name",
-  "mobile_number",
-  "portal_user",
-  "email_id",
   "employee_code",
+  "contact_column",
+  "mobile_number",
+  "email_id",
+  "access_section",
+  "portal_user",
+  "access_status_column",
   "status",
   "mobile_verified",
   "mobile_verified_at",
+  "assigned_customers_section",
   "assigned_customers",
+  "product_access_section",
   "product_group_access"
  ],
  "fields": [
+  {
+   "fieldname": "employee_details_section",
+   "fieldtype": "Section Break",
+   "label": "Employee Details"
+  },
   {
    "fieldname": "sales_employee_name",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Sales Employee Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "employee_code",
+   "fieldtype": "Data",
+   "label": "Employee Code",
+   "unique": 1
+  },
+  {
+   "fieldname": "contact_column",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "mobile_number",
@@ -35,6 +56,17 @@
    "unique": 1
   },
   {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email ID",
+   "options": "Email"
+  },
+  {
+   "fieldname": "access_section",
+   "fieldtype": "Section Break",
+   "label": "Access and Verification"
+  },
+  {
    "fieldname": "portal_user",
    "fieldtype": "Link",
    "options": "User",
@@ -43,16 +75,8 @@
    "description": "Optional Desk login for sales review. Mobile app access continues to use Mobile Number."
   },
   {
-   "fieldname": "email_id",
-   "fieldtype": "Data",
-   "label": "Email ID",
-   "options": "Email"
-  },
-  {
-   "fieldname": "employee_code",
-   "fieldtype": "Data",
-   "label": "Employee Code",
-   "unique": 1
+   "fieldname": "access_status_column",
+   "fieldtype": "Column Break"
   },
   {
    "default": "Active",
@@ -76,10 +100,20 @@
    "read_only": 1
   },
   {
+   "fieldname": "assigned_customers_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Assignments"
+  },
+  {
    "fieldname": "assigned_customers",
    "fieldtype": "Table",
    "label": "Assigned Customers",
    "options": "Sales Employee Assigned Customer"
+  },
+  {
+   "fieldname": "product_access_section",
+   "fieldtype": "Section Break",
+   "label": "Product Access"
   },
   {
    "fieldname": "product_group_access",

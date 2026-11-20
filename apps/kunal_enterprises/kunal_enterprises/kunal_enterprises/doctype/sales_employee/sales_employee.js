@@ -6,6 +6,8 @@ frappe.ui.form.on("Sales Employee", {
 			query: "kunal_enterprises.api.sales_portal_users.available_users",
 			filters: {sales_employee: frm.is_new() ? "" : frm.doc.name},
 		}));
+		frm.set_df_property("portal_user", "filter_description",
+			__("Shows enabled Desk users with the Sales Portal User role who are available to link."));
 
 		if (!frm.is_new() && frm.doc.mobile_verified) {
 			add_sales_employee_access_buttons(frm);
