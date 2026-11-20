@@ -15,6 +15,7 @@
   "email_id",
   "access_section",
   "portal_user",
+  "sales_order_whatsapp_opt_out",
   "access_status_column",
   "status",
   "mobile_verified",
@@ -73,6 +74,13 @@
    "label": "Portal User",
    "unique": 1,
    "description": "Optional Desk login for sales review. Mobile app access continues to use Mobile Number."
+  },
+  {
+   "default": "0",
+   "fieldname": "sales_order_whatsapp_opt_out",
+   "fieldtype": "Check",
+   "label": "Mute WhatsApp Order Alerts",
+   "description": "Check only if this employee asks to stop receiving order alerts."
   },
   {
    "fieldname": "access_status_column",

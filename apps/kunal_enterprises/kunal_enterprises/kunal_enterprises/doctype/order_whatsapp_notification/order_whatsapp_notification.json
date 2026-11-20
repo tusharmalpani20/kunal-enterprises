@@ -11,9 +11,11 @@
   "recipient_type",
   "recipient_customer",
   "recipient_sales_employee",
+  "order_customer",
   "mobile_number",
   "order_pdf",
   "status",
+  "sales_dispatch_key",
   "skip_reason",
   "request_payload",
   "provider_response",
@@ -51,6 +53,14 @@
    "options": "Sales Employee"
   },
   {
+   "fieldname": "order_customer",
+   "fieldtype": "Link",
+   "label": "Order Customer",
+   "options": "Customer",
+   "read_only": 1,
+   "depends_on": "eval:doc.recipient_type === 'Sales Employee'"
+  },
+  {
    "fieldname": "mobile_number",
    "fieldtype": "Data",
    "label": "Mobile Number"
@@ -67,8 +77,16 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Queued\nSent\nFailed\nSkipped",
+   "options": "Queued\nSending\nSent\nFailed\nSkipped",
    "reqd": 1
+  },
+  {
+   "fieldname": "sales_dispatch_key",
+   "fieldtype": "Data",
+   "label": "Sales Dispatch Key",
+   "hidden": 1,
+   "read_only": 1,
+   "unique": 1
   },
   {
    "fieldname": "skip_reason",
