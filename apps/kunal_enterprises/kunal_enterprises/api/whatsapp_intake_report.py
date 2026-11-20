@@ -32,6 +32,7 @@ DIMENSIONS = {
     "item": ("Tally Item", "item_name", "d.item"),
 }
 PAGE_SIZE = 50
+REPORT_PAGE_SIZES = (PAGE_SIZE, 100, 500, 2000)
 UNASSIGNED = "__unassigned__"
 # A message can cover multiple intakes or lines. Do not show its text to a
 # godown viewer unless every linked intake and line is in scope.
@@ -264,7 +265,8 @@ def _cohort(filters, params, scope, roles, *, sales_map=False):
 
 def _page(cte, sql, params, cursor, keys, *, newest_first=False):
     """Continue after the last sort key even when new records reach the first page."""
-    params = {**params, "limit": PAGE_SIZE + 1}
+    page_size = params.get("page_size", PAGE_SIZE)
+    params = {**params, "limit": page_size + 1}
     columns = [f"`{key}`" for key in keys]
     predicate = ""
     if cursor not in (None, ""):
@@ -287,8 +289,8 @@ def _page(cte, sql, params, cursor, keys, *, newest_first=False):
     ordering = ", ".join(f"{column} {direction}" for column in columns)
     rows = frappe.db.sql(cte + f"SELECT * FROM ({sql}) report_page {predicate} ORDER BY {ordering} LIMIT %(limit)s",
                          params, as_dict=True)
-    token = frappe.as_json([str(rows[PAGE_SIZE - 1][key]) for key in keys]) if len(rows) > PAGE_SIZE else None
-    return {"rows": rows[:PAGE_SIZE], "next_cursor": token}
+    token = frappe.as_json([str(rows[page_size - 1][key]) for key in keys]) if len(rows) > page_size else None
+    return {"rows": rows[:page_size], "next_cursor": token}
 
 
 def _summary(cte, params, scope):
@@ -424,12 +426,20 @@ def _message_detail(cte, params, filters, scope, roles):
 
 
 @frappe.whitelist(methods=["GET"])
-def read(filters=None, view="summary", cursor=None, search=None, field=None):
+def read(filters=None, view="summary", cursor=None, search=None, field=None, page_size=None):
     """Return a summary, bounded drill-down or permitted conversation context."""
     scope, roles = _access()
     clean, params = _filters(filters)
     if view not in ("summary", "messages", "intakes", "message", "options", "breakdown"):
         frappe.throw("Invalid report view.")
+    if page_size is not None and view in ("messages", "intakes", "breakdown"):
+        try:
+            size = int(str(page_size))
+            if size not in REPORT_PAGE_SIZES:
+                raise ValueError
+        except (TypeError, ValueError):
+            frappe.throw("Invalid report page size.")
+        params["page_size"] = size
     if view == "options":
         if not isinstance(field, str) or field not in DIMENSIONS:
             frappe.throw("Invalid report filter.")

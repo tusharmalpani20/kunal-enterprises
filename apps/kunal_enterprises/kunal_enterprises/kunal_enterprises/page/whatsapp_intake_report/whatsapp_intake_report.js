@@ -79,7 +79,11 @@
 		}
 		set(items, reset) {
 			this.items = items;
-			if (reset) this.container.scrollTop = 0;
+			if (reset) {
+				for (const node of this.nodes.values()) node.remove();
+				this.nodes.clear();
+				this.container.scrollTop = 0;
+			}
 			this.window = "";
 			this.paint();
 		}
@@ -100,7 +104,8 @@
 				this.container.scrollTop = top + this.rowHeight - visibleHeight;
 			}
 			this.paint();
-			this.nodes.get(next)?.querySelector("button")?.focus({preventScroll: true});
+			const row = this.nodes.get(next);
+			(row?.querySelector("button") || row)?.focus({preventScroll: true});
 		}
 		paint() {
 			const start = Math.max(0, Math.floor(this.container.scrollTop / this.rowHeight) - 5);
@@ -124,6 +129,7 @@
 					template.innerHTML = this.renderRow(this.items[index], index);
 					node = template.content.firstElementChild;
 					node.dataset.index = index;
+					node.tabIndex = -1;
 					this.body.insertBefore(node, next);
 					this.nodes.set(index, node);
 				} else {
@@ -493,9 +499,8 @@
 				<section class="wir-panel wir-queue"><h2>${escape(__("Unaccounted messages"))}</h2><div class="wir-list-host"></div></section>`;
 			if (this.mode !== "overview") void this.breakdown(this.mode, epoch);
 			const queue = this.summary.querySelector(".wir-queue .wir-list-host");
-			if (Number(totals.unaccounted)) this.messageList(queue, {metric: "unaccounted"}, () => epoch === this.breakdownGeneration,
+			void this.messageList(queue, {metric: "unaccounted"}, () => epoch === this.breakdownGeneration,
 				(row, opener) => this.openMessage(row, null, opener));
-			else queue.textContent = __("No unaccounted messages for these filters.");
 		}
 
 		breakdown(group, epoch) {
@@ -519,53 +524,95 @@
 		}
 
 		paged(host, config) {
+			const sizes = [50, 100, 500, 2000];
 			host.innerHTML = `<div class="wir-scroll" tabindex="0"></div>
-				<p class="wir-page-status" role="status"></p><button class="wir-load-more" type="button" hidden>${escape(__("Load more"))}</button>`;
+				<div class="wir-pager"><p class="wir-page-status" role="status"></p>
+				<nav class="wir-page-actions" aria-label="${escape(__("Pagination"))}">
+					<button class="wir-page-button" type="button" data-previous aria-label="${escape(__("Previous page"))}" disabled>‹</button>
+					<span class="wir-page-number" aria-label="${escape(__("Page {0}", [1]))}">1</span>
+					<button class="wir-page-button" type="button" data-next aria-label="${escape(__("Next page"))}" disabled>›</button>
+				</nav>
+				<label class="wir-page-size">${escape(__("Rows per page"))}
+					<select>${sizes.map(size => `<option value="${size}">${number(size)}</option>`).join("")}</select>
+				</label></div>`;
 			const scroll = host.querySelector(".wir-scroll");
 			if (config.view === "messages") scroll.classList.add("wir-message-list");
-			const more = host.querySelector(".wir-load-more");
+			const actions = host.querySelector(".wir-page-actions");
+			const previous = host.querySelector("[data-previous]");
+			const next = host.querySelector("[data-next]");
+			const pageNumber = host.querySelector(".wir-page-number");
+			const pageSize = host.querySelector(".wir-page-size select");
 			const status = host.querySelector(".wir-page-status");
-			const table = new ReportRows(scroll, config.columns, config.row, config.open || (() => {}), config.rowHeight);
-			let rows = [], cursor = null, loading = false;
-			const load = async () => {
-				if (loading) return;
+			const starts = [{cursor: null, offset: 0}];
+			let currentPage = 0, size = sizes[0], retry = null, loading = false;
+			const table = new ReportRows(scroll, config.columns, config.row, (row, trigger) => {
+				if (!loading) config.open?.(row, trigger);
+			}, config.rowHeight);
+			const load = async (index, requestedSize = size) => {
+				const changingSize = requestedSize !== size;
+				const start = starts[index];
+				if (loading || !start) return;
 				loading = true;
-				more.setAttribute("aria-disabled", "true");
-				const previousCount = rows.length;
+				scroll.setAttribute("aria-busy", "true");
 				status.textContent = __("Loading…");
 				try {
-					const result = await this.call(config.view, config.filter, {cursor});
+					const {cursor, offset} = start;
+					const result = await this.call(config.view, config.filter, {cursor, page_size: requestedSize});
 					if (!config.current()) return;
-					rows = rows.concat(result.rows || []);
-					cursor = result.next_cursor;
-					if (!rows.length) {
-						scroll.hidden = true;
-						status.textContent = __("No records for these filters.");
+					const rows = result.rows || [];
+					const end = offset + rows.length;
+					const focusOnPager = actions.contains(document.activeElement);
+					retry = null;
+					next.textContent = "›";
+					next.setAttribute("aria-label", __("Next page"));
+					if (!rows.length && index > currentPage) {
+						// A live queue can shrink between page requests.
+						starts.length = index;
+						status.textContent = __("No more records.");
 					} else {
-						table.set(rows, false);
-						status.textContent = "";
-						if (document.activeElement === more) {
-							if (rows.length > previousCount) table.focusRow(previousCount);
-							else if (!cursor) scroll.focus({preventScroll: true});
-						}
+						size = requestedSize;
+						pageSize.value = String(size);
+						currentPage = index;
+						pageNumber.textContent = number(index + 1);
+						pageNumber.setAttribute("aria-label", __("Page {0}", [number(index + 1)]));
+						starts.length = index + 1;
+						if (result.next_cursor) starts.push({cursor: result.next_cursor, offset: end});
+						scroll.hidden = !rows.length;
+						table.set(rows, true);
+						const range = rows.length === 1 ? number(end) : `${number(offset + 1)}–${number(end)}`;
+						const total = result.next_cursor ? config.total : end;
+						status.textContent = !rows.length ? __("No records for these filters.") :
+							total == null || (result.next_cursor && total <= end) ? __("Showing {0}", [range]) :
+								__("Showing {0} of {1}", [range, number(total)]);
 					}
-					more.hidden = !cursor;
+					if (focusOnPager) scroll.focus({preventScroll: true});
+					previous.disabled = currentPage === 0;
+					next.disabled = !starts[currentPage + 1];
 				} catch (_) {
 					if (config.current()) {
-						status.textContent = __("Could not load records.");
-						more.textContent = __("Try again");
-						more.hidden = false;
+						status.textContent = changingSize ? __("Could not change page size.") : __("Could not load page.");
+						pageSize.value = String(size);
+						retry = {index, size: requestedSize};
+						previous.disabled = currentPage === 0;
+						next.disabled = false;
+						next.textContent = __("Try again");
+						next.setAttribute("aria-label", __("Try again"));
 					}
 				} finally {
 					loading = false;
-					more.removeAttribute("aria-disabled");
+					scroll.removeAttribute("aria-busy");
 				}
 			};
-			more.onclick = () => {
-				more.textContent = __("Load more");
-				load();
+			previous.onclick = () => load(currentPage - 1);
+			next.onclick = () => retry ? load(retry.index, retry.size) : load(currentPage + 1);
+			pageSize.onchange = () => {
+				if (loading) {
+					pageSize.value = size;
+					return;
+				}
+				return load(0, Number(pageSize.value));
 			};
-			return load();
+			return load(0);
 		}
 
 		closeDetail() {
@@ -590,6 +637,7 @@
 		messageList(host, filter, current, open) {
 			return this.paged(host, {
 				view: "messages", filter, current, open,
+				total: this.data?.totals[filter.metric] ?? this.data?.coverage?.find(row => row.key === filter.metric)?.count,
 				columns: [__("Message"), __("Status")], rowHeight: 58,
 				row: (row, i) => {
 					const label = row.preview || MESSAGE_LABELS.get(row.message_kind) || __("Open message");
@@ -635,6 +683,7 @@
 			});
 			void this.paged(host, {
 				view, filter, current,
+				total: (filter.request_type ? this.data?.types.find(row => row.key === filter.request_type) : this.data?.totals)?.[filter.metric],
 				columns: [__("Intake"), __("Customer"), __("Original type"), __("Order")],
 				row: row => `<tr><td>${doc(row.name, "Order Intake Request", row.can_open_intake)}</td><td>${escape(row.customer_name || row.customer || "—")}</td>
 					<td>${escape(row.original_type || __("Unknown"))}</td><td>${doc(row.order, "Order", row.can_open_order)}</td></tr>`,
@@ -705,9 +754,12 @@
 			const isMedia = ["image", "document", "audio", "video", "sticker"].includes(kind);
 			const preview = href && (kind === "image" || /^image\//.test(attachment.file_type || "") ||
 				/\.pdf$/i.test(attachment.file_name || "") || attachment.file_type === "application/pdf");
+			const fileName = attachment?.file_name;
+			const generatedName = fileName?.replace(/\.[^.]+$/, "") === `whatsapp-${message.name}`;
+			const useFileName = !generatedName && fileName && (!isMedia || kind === "document");
 			const file = href ? `<a class="wir-file" href="${escape(href)}" target="_blank" rel="noopener noreferrer">
 				${preview ? `<span class="wir-preview" data-preview-name="${escape(message.name)}"></span>` : ""}
-				${escape(attachment.file_name || __("Open attachment"))}</a>` :
+				${escape(useFileName ? fileName : __("Open attachment"))}</a>` :
 				(attachment || isMedia) ? `<p class="wir-quote">${escape(__("Attachment unavailable"))}</p>` : "";
 			const latitude = Number(location?.latitude);
 			const longitude = Number(location?.longitude);

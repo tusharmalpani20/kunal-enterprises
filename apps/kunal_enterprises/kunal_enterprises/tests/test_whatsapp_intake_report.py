@@ -109,10 +109,15 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
     def test_message_paging_survives_a_new_message_arriving(self):
         for _ in range(51):
             self.message(intake_received_at="2020-01-02 12:00:00")
-        first = self.read("messages")
+        filters = {**self.filters, "metric": "unaccounted"}
+        first = read(filters=filters, view="messages")
         self.assertEqual(len(first["rows"]), 50)
+        for size in ("100", 500, 2000):
+            full = read(filters=filters, view="messages", page_size=size)
+            self.assertEqual(len(full["rows"]), 51)
+            self.assertIsNone(full["next_cursor"])
         self.message()
-        next_page = read(filters=self.filters, view="messages", cursor=first["next_cursor"])
+        next_page = read(filters=filters, view="messages", cursor=first["next_cursor"])
         self.assertEqual(len(next_page["rows"]), 1)
         self.assertNotIn(next_page["rows"][0].name, {row.name for row in first["rows"]})
         self.assertIsNone(next_page["next_cursor"])
@@ -126,6 +131,16 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
         self.assertTrue(rows[text.name].preview.startswith("Send four sheets "))
         self.assertEqual(len(rows[text.name].preview), 120)
         self.assertEqual((rows[image.name].message_kind, rows[image.name].preview), ("image", ""))
+
+    def test_largest_page_has_a_distinct_continuation(self):
+        names = [f"{self.key}-page-{i:04}" for i in range(2001)]
+        frappe.db.bulk_insert("WhatsApp Message", ["name", "type", "whatsapp_account", "from", "intake_received_at"],
+                              [(name, "Incoming", self.account.name, "918001000001", "2020-01-02 12:00:00") for name in names])
+        first = read(filters=self.filters, view="messages", page_size=2000)
+        self.assertEqual([row.name for row in first["rows"]], names[:0:-1])
+        second = read(filters=self.filters, view="messages", cursor=first["next_cursor"], page_size=2000)
+        self.assertEqual([row.name for row in second["rows"]], names[:1])
+        self.assertIsNone(second["next_cursor"])
 
     def test_sales_phone_scope_applies_to_totals_drilldown_and_context(self):
         user = self.user("Sales Portal User")
@@ -247,6 +262,8 @@ class TestWhatsAppIntakeReport(FrappeTestCase):
             read(self.filters, view="options", field="password")
         with self.assertRaises(frappe.ValidationError):
             read(self.filters, view="messages", cursor='["invalid-date", "message"]')
+        with self.assertRaises(frappe.ValidationError):
+            read(self.filters, view="messages", page_size=51)
         frappe.set_user(self.user("Desk User"))
         with self.assertRaises(frappe.PermissionError):
             self.read()
